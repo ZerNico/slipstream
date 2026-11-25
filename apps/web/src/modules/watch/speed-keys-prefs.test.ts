@@ -38,6 +38,9 @@ describe("player keys", () => {
     expect(key("End")).toEqual({ kind: "live" });
     expect(key("ArrowUp")).toEqual({ kind: "volume", delta: 5 });
     expect(key("m")).toEqual({ kind: "mute" });
+    expect(key("r")).toEqual({ kind: "record" });
+    expect(key("R")).toEqual({ kind: "record" });
+    expect(key("r", { metaKey: true })).toBeUndefined();
     expect(key(">")).toEqual({ kind: "speed", direction: 1 });
     expect(key("<")).toEqual({ kind: "speed", direction: -1 });
     expect(key("a")).toEqual({ kind: "menu", menu: "audio" });

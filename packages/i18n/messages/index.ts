@@ -10,6 +10,7 @@
  * | home       | `home.ts`     | Home                                                         |
  * | guide      | `guide.ts`    | guide, programme sheet, record options                       |
  * | watch      | `watch.ts`    | player, timeline, watch choice, mini player                  |
+ * | record now | `record-now.ts` | Record in the player: the programme being watched          |
  * | library    | `library.ts`  | recordings, scheduled, problems, collections, detail         |
  * | series     | `series.ts`   | series recordings list and editor, phone hand-off            |
  * | settings   | `settings.ts` | settings sections, sources, channels, users and invites      |
@@ -33,6 +34,7 @@ import { home } from "./home.ts";
 import { library } from "./library.ts";
 import { lineup } from "./lineup.ts";
 import { reasons } from "./reasons.ts";
+import { recordNow } from "./record-now.ts";
 import { review } from "./review.ts";
 import { series } from "./series.ts";
 import { settings } from "./settings.ts";
@@ -46,6 +48,7 @@ export const areas = {
   home,
   guide,
   watch,
+  recordNow,
   library,
   series,
   settings,
@@ -62,6 +65,7 @@ export const en = {
   ...home.en,
   ...guide.en,
   ...watch.en,
+  ...recordNow.en,
   ...library.en,
   ...series.en,
   ...settings.en,
@@ -78,6 +82,7 @@ export const de: Translation<typeof en> = {
   ...home.de,
   ...guide.de,
   ...watch.de,
+  ...recordNow.de,
   ...library.de,
   ...series.de,
   ...settings.de,
@@ -94,6 +99,7 @@ export const samples = {
   ...home.samples,
   ...guide.samples,
   ...watch.samples,
+  ...recordNow.samples,
   ...library.samples,
   ...series.samples,
   ...settings.samples,

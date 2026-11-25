@@ -10,6 +10,7 @@ import type {
   RuleUpdate,
 } from "@slipstream/api";
 import type {
+  ChannelId,
   PlaybackSessionId,
   ProgrammeId,
   RecordingId,
@@ -58,6 +59,28 @@ export const apiQueries = (runtime: ApiRuntime) => ({
       ),
       10 * 60_000,
     ),
+  /** One channel's programmes in a window: the player's Record looks up the playhead's. */
+  channelGuide: (channelId: ChannelId | undefined, from: number, to: number) =>
+    queryOptions({
+      queryKey: queryKeys.channelGuide(channelId ?? "", from, to),
+      queryFn:
+        channelId === undefined
+          ? skipToken
+          : ({ signal }) =>
+              runtime.runPromise(
+                Effect.flatMap(Api, (api) =>
+                  api.guide.window({
+                    query: {
+                      from: DateTime.makeUnsafe(from),
+                      to: DateTime.makeUnsafe(to),
+                      channels: channelId,
+                    },
+                  }),
+                ),
+                { signal },
+              ),
+      staleTime: 5 * 60_000,
+    }),
   /** Where the guide data ends (`GET /guide/extent`): how wide the timeline is. */
   guideExtent: () =>
     apiQuery(
@@ -324,6 +347,9 @@ export const apiActions = {
     Effect.flatMap(Api, (api) =>
       api.recordings.update({ params: { recordingId }, payload: update }),
     ),
+  /** Ends a running recording now (the player's Stop recording). */
+  stopRecording: (recordingId: RecordingId) =>
+    Effect.flatMap(Api, (api) => api.recordings.stop({ params: { recordingId } })),
   /** "Skip this one": removes a scheduled recording from the schedule. */
   deleteRecording: (recordingId: RecordingId) =>
     Effect.flatMap(Api, (api) => api.recordings.remove({ params: { recordingId }, query: {} })),

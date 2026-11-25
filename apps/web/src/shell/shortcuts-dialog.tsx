@@ -57,6 +57,7 @@ const sections: ReadonlyArray<{
       { keys: ["I"], does: () => m.keys_player_panel() },
       { keys: ["Z"], does: () => m.keys_player_fit() },
       { keys: ["F"], does: () => m.player_fullscreen() },
+      { keys: ["R"], does: () => m.record_now_key() },
     ],
   },
 ];
