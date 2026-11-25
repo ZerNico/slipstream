@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, type ReactNode } from "react";
 import type { Api } from "~/api/client.ts";
 import { ApiProvider } from "~/api/context.tsx";
+import { HouseholdZone } from "~/api/household-zone.tsx";
 import type { MockOptions, MockServer } from "~/api/mock/server.ts";
 import { mockApi } from "~/api/mock/testing.ts";
 import { mount } from "~/test/dom.tsx";
@@ -66,7 +67,10 @@ export const mountGuide = async (
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const mounted = await mount(
     <QueryClientProvider client={client}>
-      <ApiProvider api={options.wrap?.(api) ?? api}>{ui}</ApiProvider>
+      <ApiProvider api={options.wrap?.(api) ?? api}>
+        {/* As in the app: times are written in the server's zone, whatever the machine's is. */}
+        <HouseholdZone>{ui}</HouseholdZone>
+      </ApiProvider>
     </QueryClientProvider>,
     options.url ?? "/guide",
   );
