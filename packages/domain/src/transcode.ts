@@ -236,6 +236,68 @@ export type HardwareCaps = typeof HardwareCaps.Type;
 /** No hardware acceleration: everything runs on the CPU. */
 export const softwareOnly: HardwareCaps = { encoders: [] };
 
+/**
+ * How many distinct picture conversions may be in use at once (Settings › Default quality,
+ * "Simultaneous picture conversions"): no limit (the default, like Plex), the server's own
+ * count for its encoder (`automaticPictureConversions`), or a fixed number from 1 to 10
+ * (as strings, like the quality caps).
+ * Converting only the sound is never limited by it.
+ */
+export const PictureConversionLimit = Schema.Literals([
+  "unlimited",
+  "auto",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+]).annotate({ identifier: "PictureConversionLimit" });
+export type PictureConversionLimit = typeof PictureConversionLimit.Type;
+
+/** Every choice of the setting in menu order: No limit, Automatic, then 1 to 10. */
+export const pictureConversionChoices: readonly PictureConversionLimit[] =
+  PictureConversionLimit.literals;
+
+/** What the setting is until an admin changes it. */
+export const defaultPictureConversionLimit: PictureConversionLimit = "unlimited";
+
+/**
+ * "Automatic": how many pictures the encoder converts at once without falling behind. Intel
+ * Quick Sync and VA-API handle about six streams; consumer NVIDIA cards cap encode sessions
+ * (three on older drivers); in software x264 spreads one conversion over about four cores.
+ */
+export const automaticPictureConversions = (encoder: Encoder, cores: number): number => {
+  switch (encoder) {
+    case "qsv":
+    case "vaapi":
+      return 6;
+    case "nvenc":
+      return 3;
+    case "software":
+      return Math.max(1, Math.floor(cores / 4));
+  }
+};
+
+/**
+ * How many distinct picture conversions on `encoder` may be in use at once under the setting;
+ * `undefined` for no limit.
+ */
+export const pictureConversionCount = (
+  limit: PictureConversionLimit,
+  encoder: Encoder,
+  cores: number,
+): number | undefined =>
+  limit === "unlimited"
+    ? undefined
+    : limit === "auto"
+      ? automaticPictureConversions(encoder, cores)
+      : Number(limit);
+
 /** How interlaced video is turned progressive: one frame per field (50p) or per frame (25p). */
 export const DeinterlaceMode = Schema.Literals(["field", "frame"]);
 export type DeinterlaceMode = typeof DeinterlaceMode.Type;

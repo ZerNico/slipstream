@@ -1,6 +1,6 @@
 import type { PlaybackSettings } from "@slipstream/api";
-import { qualityChoices } from "@slipstream/domain";
-import { m, qualityLabel } from "@slipstream/i18n";
+import { pictureConversionChoices, qualityChoices } from "@slipstream/domain";
+import { m, pictureConversionsLabel, qualityLabel } from "@slipstream/i18n";
 import { useQuery } from "@tanstack/react-query";
 import * as Haptics from "expo-haptics";
 import { useRouter } from "expo-router";
@@ -40,6 +40,7 @@ const PlaybackBody = ({
 }) => {
   const { colors } = useTheme();
   const [picking, setPicking] = useState<Situation | undefined>(undefined);
+  const [pickingConversions, setPickingConversions] = useState(false);
   const detected = value.detected;
   const automatic = value.hardwareAcceleration === "auto";
   const situations: readonly Situation[] = ["home", "away", "mobile"];
@@ -68,6 +69,12 @@ const PlaybackBody = ({
             />
           }
         />
+        <Row
+          title={m.settings_picture_conversions()}
+          label={`${m.settings_picture_conversions()}, ${pictureConversionsLabel(value.pictureConversions)}`}
+          end={<PickerValue text={pictureConversionsLabel(value.pictureConversions)} />}
+          onPress={() => setPickingConversions(true)}
+        />
       </Group>
       <Group title={m.settings_quality_title()}>
         {situations.map((situation) => (
@@ -94,6 +101,18 @@ const PlaybackBody = ({
           onClose={() => setPicking(undefined)}
         />
       )}
+      {pickingConversions ? (
+        <PickerSheet
+          title={m.settings_picture_conversions()}
+          choices={pictureConversionChoices.map((limit) => ({
+            value: limit,
+            label: pictureConversionsLabel(limit),
+          }))}
+          selected={value.pictureConversions}
+          onPick={(pictureConversions) => onChange({ ...value, pictureConversions })}
+          onClose={() => setPickingConversions(false)}
+        />
+      ) : null}
     </>
   );
 };
@@ -118,8 +137,9 @@ const DeviceQualityGroup = () => {
 
 /**
  * Settings › Default quality on a phone, the household's: hardware acceleration as a switch
- * (with what the server found) and the default quality at home, away and on mobile data, each
- * picked in a sheet, for every device left on "Household default". Changes save themselves.
+ * (with what the server found), how many pictures the server converts at once, and the default
+ * quality at home, away and on mobile data, each picked in a sheet, for every device left on
+ * "Household default". Changes save themselves.
  */
 const PlaybackPage = () => {
   const title = m.settings_section_default_quality();

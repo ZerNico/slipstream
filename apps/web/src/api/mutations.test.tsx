@@ -264,8 +264,11 @@ describe("every write the web makes, against the mock server", () => {
     expect(state.positionMillis).toBe(60_000);
     expect(removedFrom(client, keys.continueWatching)).toBe(true);
     const saved = await run((m) =>
-      m.useSavePlaybackSettings.mutateAsync({ ...server.data.playbackSettings, maxConversions: 3 }),
+      m.useSavePlaybackSettings.mutateAsync({
+        ...server.data.playbackSettings,
+        pictureConversions: "3",
+      }),
     );
-    expect(saved.maxConversions).toBe(3);
+    expect(saved.pictureConversions).toBe("3");
   });
 });

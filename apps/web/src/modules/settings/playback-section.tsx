@@ -1,11 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import type { PlaybackSettings } from "@slipstream/api";
-import { type QualityChoice, qualityChoices } from "@slipstream/domain";
+import {
+  defaultPictureConversionLimit,
+  pictureConversionChoices,
+  type QualityChoice,
+  qualityChoices,
+} from "@slipstream/domain";
 import { shapes, useKept } from "~/api/shape-cache.ts";
 import { DateTime } from "effect";
 import { useQueries } from "~/api/hooks.ts";
-import { m, qualityLabel } from "@slipstream/i18n";
+import { m, pictureConversionsLabel, qualityLabel } from "@slipstream/i18n";
 import { LoadingScope } from "~/ui/skeleton.tsx";
 import { Button } from "~/ui/primitives/button.tsx";
 import { Select } from "~/ui/primitives/select.tsx";
@@ -23,7 +28,7 @@ const placeholderPlayback: PlaybackSettings = {
     detail: "Hardware encoder details",
   },
   preference: "quality",
-  maxConversions: 2,
+  pictureConversions: defaultPictureConversionLimit,
   quality: { home: "original", away: "auto", mobile: "auto" },
 };
 
@@ -58,9 +63,10 @@ function QualityRow({
 }
 
 /**
- * Settings › Default quality (the household's): hardware acceleration and the default quality
- * at home, away and on mobile data, for every device left on "Household default". A note says
- * each device can choose its own under This device. Changes save themselves.
+ * Settings › Default quality (the household's): hardware acceleration, how many pictures the
+ * server converts at once, and the default quality at home, away and on mobile data, for every
+ * device left on "Household default". A note says each device can choose its own under This
+ * device. Changes save themselves.
  */
 export function PlaybackSection() {
   const queries = useQueries();
@@ -100,6 +106,23 @@ export function PlaybackSection() {
                   { value: "off", label: m.playback_software() },
                 ]}
                 onChange={(hardwareAcceleration) => set({ hardwareAcceleration })}
+              />
+            }
+          />
+          <ListRow
+            stackOnPhone
+            title={m.settings_picture_conversions()}
+            end={
+              <Select
+                aria-label={m.settings_picture_conversions()}
+                className="w-[13.5rem] max-w-full"
+                value={value.pictureConversions}
+                disabled={loading}
+                options={pictureConversionChoices.map((limit) => ({
+                  value: limit,
+                  label: pictureConversionsLabel(limit),
+                }))}
+                onChange={(pictureConversions) => set({ pictureConversions })}
               />
             }
           />

@@ -5,6 +5,7 @@ import {
   ExtraTimeDefaults,
   Instant,
   LiveKeep,
+  PictureConversionLimit,
   QualityChoice,
 } from "@slipstream/domain";
 import { Forbidden, InvalidInput, NotFound } from "../errors.ts";
@@ -59,7 +60,12 @@ export const PlaybackSettings = Schema.Struct({
     }),
   ),
   preference: Schema.Literals(["quality", "power"]),
-  maxConversions: Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 8 })),
+  /**
+   * "Simultaneous picture conversions": how many distinct picture conversions may be in use at
+   * once (`pictureConversionCount` in the domain). Over it, a device that plays the original
+   * picture gets it; one that cannot waits for a conversion. Read for every new session.
+   */
+  pictureConversions: PictureConversionLimit,
   /** What the player asks for in each situation (the domain's `QualityChoice`). */
   quality: Schema.Struct({ home: QualityChoice, away: QualityChoice, mobile: QualityChoice }),
 }).annotate({ identifier: "PlaybackSettings" });

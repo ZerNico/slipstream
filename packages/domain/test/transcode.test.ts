@@ -2,6 +2,7 @@ import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
 import type { MediaCapabilities, StreamInfo } from "../src/media.ts";
 import {
+  automaticPictureConversions,
   decideTranscode,
   type HardwareCaps,
   householdDefaultHint,
@@ -11,6 +12,8 @@ import {
   isHlsContainer,
   normaliseCodec,
   normaliseProfile,
+  pictureConversionChoices,
+  pictureConversionCount,
   resolveQuality,
   softwareOnly,
   type TranscodeContext,
@@ -391,5 +394,38 @@ describe("withOriginalVideo: the converter is busy", () => {
   it("leaves a plan that copies the video alone", () => {
     const plan = decide({ stream: dvbHd });
     expect(withOriginalVideo(plan)).toBe(plan);
+  });
+});
+
+describe("simultaneous picture conversions", () => {
+  it("offers no limit, automatic, then 1 to 10", () => {
+    expect(pictureConversionChoices).toEqual([
+      "unlimited",
+      "auto",
+      ...Array.from({ length: 10 }, (_, index) => String(index + 1)),
+    ]);
+  });
+
+  it("sets no limit by default", () => {
+    expect(pictureConversionCount("unlimited", "software", 4)).toBeUndefined();
+    expect(pictureConversionCount("unlimited", "nvenc", 4)).toBeUndefined();
+  });
+
+  it("counts automatically by encoder: six on Quick Sync and VA-API, three on NVENC", () => {
+    expect(automaticPictureConversions("qsv", 2)).toBe(6);
+    expect(automaticPictureConversions("vaapi", 2)).toBe(6);
+    expect(automaticPictureConversions("nvenc", 32)).toBe(3);
+    expect(pictureConversionCount("auto", "qsv", 2)).toBe(6);
+  });
+
+  it("allows one software conversion per four cores, at least one", () => {
+    expect(automaticPictureConversions("software", 16)).toBe(4);
+    expect(automaticPictureConversions("software", 7)).toBe(1);
+    expect(automaticPictureConversions("software", 2)).toBe(1);
+  });
+
+  it("takes a fixed number whatever the encoder", () => {
+    expect(pictureConversionCount("1", "qsv", 16)).toBe(1);
+    expect(pictureConversionCount("10", "software", 2)).toBe(10);
   });
 });

@@ -8521,10 +8521,8 @@
               "power"
             ]
           },
-          "maxConversions": {
-            "type": "integer",
-            "minimum": 1,
-            "maximum": 8
+          "pictureConversions": {
+            "$ref": "#/components/schemas/PictureConversionLimit"
           },
           "quality": {
             "type": "object",
@@ -8571,10 +8569,27 @@
         "required": [
           "hardwareAcceleration",
           "preference",
-          "maxConversions",
+          "pictureConversions",
           "quality"
         ],
         "additionalProperties": false
+      },
+      "PictureConversionLimit": {
+        "type": "string",
+        "enum": [
+          "unlimited",
+          "auto",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9",
+          "10"
+        ]
       },
       "ArtworkSettings": {
         "type": "object",

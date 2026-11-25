@@ -150,6 +150,8 @@ describe("This device", () => {
   });
 });
 
+const conversions = () => selectTrigger(document, "Simultaneous picture conversions");
+
 describe("Default quality", () => {
   it("names the server's choices as automatic and points to this device's own", async () => {
     const view = await mountWithMock(<PlaybackSection />);
@@ -161,6 +163,23 @@ describe("Default quality", () => {
       "Quality on this device",
     );
     expect(view.text()).not.toContain("Follows the server’s default");
+  });
+
+  it("limits simultaneous picture conversions: no limit first, then automatic and 1 to 10", async () => {
+    const view = await mountWithMock(<PlaybackSection />);
+    cleanup = view.cleanup;
+    await view.waitFor(() => expect(conversions()?.disabled).toBe(false));
+    expect(selectedText(conversions())).toBe("No limit");
+    expect(await optionLabels(conversions())).toEqual([
+      "No limit",
+      "Automatic",
+      ...Array.from({ length: 10 }, (_, index) => String(index + 1)),
+    ]);
+    await pickOption(conversions(), "2");
+    await view.settle(autosaveDelay + 200);
+    await view.waitFor(() =>
+      expect(view.server.data.playbackSettings.pictureConversions).toBe("2"),
+    );
   });
 });
 

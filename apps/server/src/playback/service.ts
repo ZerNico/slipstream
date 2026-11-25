@@ -465,8 +465,8 @@ const makePlayback = Effect.gen(function* () {
       // A live picture conversion is shared by everyone converting the channel the same way.
       const key = conversionKey(conversionStream(request, sessionId), variantName(planned) ?? "");
       if (planned.video._tag === "Encode") {
-        const onHardware = planned.video.encoder !== "software";
-        if (yield* transcoder.videoBusy(key, onHardware)) {
+        const { pictureConversions } = yield* settings.playback;
+        if (yield* transcoder.videoBusy(key, planned.video.encoder, pictureConversions)) {
           const original = withOriginalVideo(planned);
           yield* Effect.logWarning(
             original === undefined

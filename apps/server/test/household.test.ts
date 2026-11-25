@@ -464,17 +464,25 @@ describe("recording settings and record options", () => {
     expect(initial).toEqual({
       hardwareAcceleration: "auto",
       preference: "quality",
-      maxConversions: 2,
+      pictureConversions: "unlimited",
       quality: { home: "auto", away: "auto", mobile: "auto" },
     });
     const next = {
       hardwareAcceleration: "off",
       preference: "power",
-      maxConversions: 3,
+      pictureConversions: "3",
       quality: { home: "original", away: "4000", mobile: "2000" },
     };
     expect((await lisa.request("PUT", "/api/settings/playback", next)).status).toBe(403);
     expect((await admin.request("PUT", "/api/settings/playback", next)).json).toEqual(next);
+    expect((await lisa.request("GET", "/api/settings/playback")).json).toEqual(next);
+    // Only the offered choices: no limit, automatic, or 1 to 10.
+    for (const pictureConversions of ["0", "11", 2, "none"]) {
+      expect(
+        (await admin.request("PUT", "/api/settings/playback", { ...next, pictureConversions }))
+          .status,
+      ).toBe(400);
+    }
   });
 
   it("keeps live TV running and its rewind buffer as an admin sets it", async () => {
@@ -655,7 +663,7 @@ describe("typed client", () => {
     expect(answers.me.id).toBe(adminId);
     expect(answers.guests.map((guest) => guest.kind)).toEqual(["guest"]);
     expect(answers.settings.artworkOrder).toEqual(["frame", "guide"]);
-    expect(answers.playback.maxConversions).toBe(3);
+    expect(answers.playback.pictureConversions).toBe("3");
     expect(answers.streams[0]?.counts.maxStreams).toBe(1);
     expect(answers.options.status._tag).toBe("Recorded");
     expect(answers.artwork[0]?.artwork._tag).toBe("Generated");

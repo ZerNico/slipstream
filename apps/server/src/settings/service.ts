@@ -18,10 +18,12 @@ import {
 } from "@slipstream/api";
 import {
   defaultArtworkOrder,
+  defaultPictureConversionLimit,
   extraTimeDefaultsProblems,
   initialExtraTimeDefaults,
   initialLiveKeep,
   LiveKeep,
+  PictureConversionLimit,
   type User,
 } from "@slipstream/domain";
 import { requireAdmin } from "../auth/service.ts";
@@ -41,15 +43,26 @@ export const initialRecordingSettings: RecordingSettings = {
   artworkOrder: defaultArtworkOrder,
 };
 
-/** The stored part of the playback settings; `detected` comes from the hardware probe. */
-const StoredPlayback = PlaybackSettings.mapFields(({ detected: _detected, ...rest }) => rest);
+/**
+ * The stored part of the playback settings; `detected` comes from the hardware probe. A value
+ * saved before "Simultaneous picture conversions" existed reads as its default.
+ */
+const StoredPlayback = PlaybackSettings.mapFields(({ detected: _detected, ...rest }) => ({
+  ...rest,
+  pictureConversions: PictureConversionLimit.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(defaultPictureConversionLimit)),
+  ),
+}));
 type StoredPlayback = typeof StoredPlayback.Type;
 
-/** Playback defaults: hardware acceleration when it works, quality first, automatic quality. */
+/**
+ * Playback defaults: hardware acceleration when it works, quality first, no limit on picture
+ * conversions, automatic quality.
+ */
 export const initialPlaybackSettings: StoredPlayback = {
   hardwareAcceleration: "auto",
   preference: "quality",
-  maxConversions: 2,
+  pictureConversions: defaultPictureConversionLimit,
   quality: { home: "auto", away: "auto", mobile: "auto" },
 };
 
@@ -78,6 +91,12 @@ export const loadLiveKeep = (db: Database): Effect.Effect<LiveKeep> =>
 
 const RecordingJson = Schema.fromJsonString(Schema.toCodecJson(RecordingSettings));
 const StoredPlaybackJson = Schema.fromJsonString(Schema.toCodecJson(StoredPlayback));
+
+/** The saved playback settings, or the defaults (also for a value that no longer decodes). */
+export const readStoredPlayback = (value: string | undefined): StoredPlayback =>
+  Option.getOrUndefined(
+    value === undefined ? Option.none() : Schema.decodeUnknownOption(StoredPlaybackJson)(value),
+  ) ?? initialPlaybackSettings;
 
 /** The problems of a recording settings payload, paths as the form shows them. */
 export const recordingSettingsProblems = (input: RecordingSettings): Array<InputProblem> => [
@@ -165,11 +184,7 @@ const makeSettings = Effect.gen(function* () {
   });
 
   const playback = Effect.gen(function* () {
-    const value = yield* stored(PLAYBACK_KEY);
-    const saved =
-      Option.getOrUndefined(
-        value === undefined ? Option.none() : Schema.decodeUnknownOption(StoredPlaybackJson)(value),
-      ) ?? initialPlaybackSettings;
+    const saved = readStoredPlayback(yield* stored(PLAYBACK_KEY));
     const probe = yield* detected;
     return {
       ...saved,

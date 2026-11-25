@@ -174,14 +174,45 @@ describe("Transcoder", () => {
       Effect.gen(function* () {
         // One per four cores in software, at least one: fill it with distinct conversions.
         let filled = 0;
-        while (!(yield* transcoder.videoBusy(`ch${filled}/x`, false))) {
+        while (!(yield* transcoder.videoBusy(`ch${filled}/x`, "software", "auto"))) {
           yield* transcoder.touchVideo(`ch${filled}/x`);
           filled += 1;
         }
         assert.isAtLeast(filled, 1);
         // Another viewer of a conversion in use shares it; a new one is over the limit.
-        assert.isFalse(yield* transcoder.videoBusy("ch0/x", false));
-        assert.isTrue(yield* transcoder.videoBusy("other/x", false));
+        assert.isFalse(yield* transcoder.videoBusy("ch0/x", "software", "auto"));
+        assert.isTrue(yield* transcoder.videoBusy("other/x", "software", "auto"));
+      }),
+    ),
+  );
+
+  it.live("admits any number of picture conversions with no limit", () =>
+    withTranscoder((transcoder) =>
+      Effect.gen(function* () {
+        // More than "Automatic" allows on any encoder this machine could have.
+        const beyond = Math.max(6, Math.floor(availableParallelism() / 4)) + 2;
+        for (let index = 0; index < beyond; index += 1) {
+          assert.isFalse(yield* transcoder.videoBusy(`ch${index}/x`, "software", "unlimited"));
+          assert.isFalse(yield* transcoder.videoBusy(`ch${index}/x`, "qsv", "unlimited"));
+          yield* transcoder.touchVideo(`ch${index}/x`);
+        }
+        // The same conversions under a fixed limit are too many; a change applies at once.
+        assert.isTrue(yield* transcoder.videoBusy("next/x", "software", "3"));
+        assert.isFalse(yield* transcoder.videoBusy("next/x", "software", "unlimited"));
+      }),
+    ),
+  );
+
+  it.live("refuses a second distinct picture conversion under a limit of one", () =>
+    withTranscoder((transcoder) =>
+      Effect.gen(function* () {
+        assert.isFalse(yield* transcoder.videoBusy("ch1/x", "nvenc", "1"));
+        yield* transcoder.touchVideo("ch1/x");
+        // Its own viewers still share it; anything else is over the limit until it is freed.
+        assert.isFalse(yield* transcoder.videoBusy("ch1/x", "nvenc", "1"));
+        assert.isTrue(yield* transcoder.videoBusy("ch2/x", "nvenc", "1"));
+        yield* transcoder.releaseVideo("ch1/x");
+        assert.isFalse(yield* transcoder.videoBusy("ch2/x", "nvenc", "1"));
       }),
     ),
   );
@@ -213,18 +244,19 @@ describe("Transcoder", () => {
         const variant = "x";
         const keys = [conversionKey(conversionStream({ source: live }, "s1"), variant)];
         let filled = 0;
-        while (!(yield* transcoder.videoBusy(keys.at(-1) ?? "", false))) {
+        while (!(yield* transcoder.videoBusy(keys.at(-1) ?? "", "software", "auto"))) {
           yield* transcoder.touchVideo(keys.at(-1) ?? "");
           filled += 1;
           keys.push(conversionKey(`other${filled}`, variant));
         }
         // The same channel and variant played from a recording converts other segments.
         const fromRecording = conversionKey(conversionStream({ source: recording }, "s3"), variant);
-        assert.isTrue(yield* transcoder.videoBusy(fromRecording, false));
+        assert.isTrue(yield* transcoder.videoBusy(fromRecording, "software", "auto"));
         assert.isFalse(
           yield* transcoder.videoBusy(
             conversionKey(conversionStream({ source: live }, "s5"), variant),
-            false,
+            "software",
+            "auto",
           ),
         );
       }),
@@ -253,8 +285,9 @@ describe("Transcoder", () => {
   it.live("converts ahead only on a free job slot, never queueing before a request", () =>
     withTranscoder((transcoder, runs, root) =>
       Effect.gen(function* () {
-        // Every picture slot busy with segments someone waits for.
-        const slots = Math.max(1, Math.floor(availableParallelism() / 4));
+        // Two picture jobs at a time, as the setting says; both busy with segments someone waits for.
+        assert.isFalse(yield* transcoder.videoBusy("ch/x", "software", "2"));
+        const slots = 2;
         const waiting = yield* Effect.forEach(
           Array.from({ length: slots }, (_, index) => request(root, smaller, 10 + index)),
           (segment) => Effect.forkChild(transcoder.segment(segment, undefined)),
@@ -274,6 +307,7 @@ describe("Transcoder", () => {
   it.live("stops a queued conversion when its request leaves, look-ahead or not", () =>
     withTranscoder((transcoder, runs, root) =>
       Effect.gen(function* () {
+        assert.isFalse(yield* transcoder.videoBusy("ch/x", "software", "auto"));
         const slots = Math.max(1, Math.floor(availableParallelism() / 4));
         const busy = yield* Effect.forEach(
           Array.from({ length: slots }, (_, index) => request(root, smaller, 20 + index)),

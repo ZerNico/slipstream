@@ -24,13 +24,17 @@
  *   original's. A viewer paused or behind does not keep the live edge converting. Converting
  *   ahead never queues for a job slot: it runs on a free one or not at all, so it never holds
  *   up a segment someone waits for.
- * - **Bounded.** Audio jobs (cheap) run up to one per core. Picture jobs run up to
- *   {@link videoSessionLimit} at a time per encoder kind, and as many distinct picture
- *   conversions may be in use at once (`videoBusy`): what converts the same segments counts
- *   once (everyone watching a channel live at its edge in the same variant, `liveStream`), any
- *   other session counts on its own (`sessionStream`: a recording, a range, live behind the
- *   edge). A new one over the limit whose device plays the original picture gets the original
- *   (`withOriginalVideo` in the domain); one that cannot waits for a picture job.
+ * - **Bounded.** Audio jobs (cheap) run up to one per core. How many distinct picture
+ *   conversions may be in use at once is the server's "Simultaneous picture conversions"
+ *   setting (`pictureConversionCount` in the domain, `videoBusy`): what converts the same
+ *   segments counts once (everyone watching a channel live at its edge in the same variant,
+ *   `liveStream`), any other session counts on its own (`sessionStream`: a recording, a range,
+ *   live behind the edge). A new one over the limit whose device plays the original picture
+ *   gets the original (`withOriginalVideo` in the domain); one that cannot waits for a picture
+ *   job. Picture jobs run per encoder kind up to as many at a time as the setting allows
+ *   conversions; with no limit up to {@link UNLIMITED_HARDWARE_JOBS} on a hardware encoder
+ *   (beyond what any GPU encodes in real time) or one per core in software, so a busy server
+ *   slows every conversion down a little instead of starting an unbounded number of ffmpegs.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rename, rm, rmdir, stat, unlink } from "node:fs/promises";
@@ -49,6 +53,12 @@ import {
   Schedule,
   Semaphore,
 } from "effect";
+import {
+  defaultPictureConversionLimit,
+  type Encoder,
+  type PictureConversionLimit,
+  pictureConversionCount,
+} from "@slipstream/domain";
 import { FfmpegRunner } from "@slipstream/recorder";
 import { ServerConfig } from "../config.ts";
 import { parseSegmentProbe, probeArgs, segmentArgs } from "./args.ts";
@@ -71,13 +81,21 @@ const DIRECTORY_GRACE_MILLIS = 60_000;
 /** A segment job that takes longer than this is killed. */
 const JOB_TIMEOUT = Duration.minutes(2);
 
+/** Picture jobs at a time on a hardware encoder when the setting sets no limit. */
+export const UNLIMITED_HARDWARE_JOBS = 16;
+
 /**
- * How many distinct picture conversions may be in use at once, and how many picture jobs run
- * at a time: four on a hardware encoder (consumer GPUs allow a handful of encode sessions),
- * else one per four cores (x264 spreads one job over several).
+ * How many picture jobs of `encoder` run at a time under the setting: as many as conversions
+ * may be in use, or with no limit {@link UNLIMITED_HARDWARE_JOBS} on hardware and one per core
+ * in software.
  */
-export const videoSessionLimit = (hardware: boolean, cores: number): number =>
-  hardware ? 4 : Math.max(1, Math.floor(cores / 4));
+export const pictureJobSlots = (
+  limit: PictureConversionLimit,
+  encoder: Encoder,
+  cores: number,
+): number =>
+  pictureConversionCount(limit, encoder, cores) ??
+  (encoder === "software" ? Math.max(1, cores) : UNLIMITED_HARDWARE_JOBS);
 
 /** One segment to convert, as the segment route found it in the index. */
 export interface SegmentRequest {
@@ -169,8 +187,13 @@ const makeTranscoder = Effect.gen(function* () {
   yield* Effect.promise(() => mkdir(root, { recursive: true }));
 
   const audioJobs = yield* Semaphore.make(Math.max(2, cores));
-  const hardwareJobs = yield* Semaphore.make(videoSessionLimit(true, cores));
-  const softwareJobs = yield* Semaphore.make(videoSessionLimit(false, cores));
+  // Sized for the default setting until the first picture conversion is decided (`videoBusy`).
+  const hardwareJobs = yield* Semaphore.make(
+    pictureJobSlots(defaultPictureConversionLimit, "qsv", cores),
+  );
+  const softwareJobs = yield* Semaphore.make(
+    pictureJobSlots(defaultPictureConversionLimit, "software", cores),
+  );
   const jobs = new Map<string, Job>();
   /** The source segment of each converted file, so the sweep sees when it was purged. */
   const sources = new Map<string, string>();
@@ -443,11 +466,6 @@ const makeTranscoder = Effect.gen(function* () {
     /** Counts a picture conversion as in use from now on. */
     touchVideo,
     /**
-     * Whether as many other picture conversions as allowed are in use, so `key` should not
-     * start another (`videoSessionLimit`). A conversion already in use is never busy: its
-     * viewers share it.
-     */
-    /**
      * Frees a picture conversion's place at once (its last session ended), instead of after
      * `VIDEO_IDLE_MILLIS` without requests: someone switching channels gets a slot straight away.
      */
@@ -458,15 +476,28 @@ const makeTranscoder = Effect.gen(function* () {
         next.delete(key);
         return next;
       }),
-    videoBusy: (key: string, hardware: boolean) =>
+    /**
+     * Whether as many other picture conversions as the setting (`limit`, read live by the
+     * caller) allows are in use, so `key` should not start another on `encoder`; never with no
+     * limit. A conversion already in use is never busy: its viewers share it. It also sizes the
+     * encoder's picture job slots to the setting (`pictureJobSlots`), so a change applies to
+     * the next session without a restart.
+     */
+    videoBusy: (key: string, encoder: Encoder, limit: PictureConversionLimit) =>
       Effect.gen(function* () {
+        yield* (encoder === "software" ? softwareJobs : hardwareJobs).resize(
+          pictureJobSlots(limit, encoder, cores),
+        );
+        const allowed = pictureConversionCount(limit, encoder, cores);
+        if (allowed === undefined) return false;
         const now = yield* Clock.currentTimeMillis;
-        const active = [...(yield* Ref.get(inUse))].filter(
+        const conversions = yield* Ref.get(inUse);
+        const mine = conversions.get(key);
+        if (mine !== undefined && now - mine < VIDEO_IDLE_MILLIS) return false;
+        const active = [...conversions].filter(
           ([other, seen]) => now - seen < VIDEO_IDLE_MILLIS && other !== key,
         );
-        const mine = (yield* Ref.get(inUse)).get(key);
-        if (mine !== undefined && now - mine < VIDEO_IDLE_MILLIS) return false;
-        return active.length >= videoSessionLimit(hardware, cores);
+        return active.length >= allowed;
       }),
   };
 });

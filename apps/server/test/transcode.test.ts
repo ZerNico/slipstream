@@ -6,7 +6,7 @@ import {
   segmentArgs,
   type SegmentJob,
 } from "../src/transcode/args.ts";
-import { videoSessionLimit } from "../src/transcode/service.ts";
+import { pictureJobSlots, UNLIMITED_HARDWARE_JOBS } from "../src/transcode/service.ts";
 import { parseVariant, variantName, type Variant } from "../src/transcode/variant.ts";
 
 const aacStereo = {
@@ -244,9 +244,14 @@ describe("reading a segment's packets", () => {
 });
 
 describe("how many pictures convert at once", () => {
-  it("allows four on a hardware encoder and one per four cores in software", () => {
-    expect(videoSessionLimit(true, 2)).toBe(4);
-    expect(videoSessionLimit(false, 16)).toBe(4);
-    expect(videoSessionLimit(false, 2)).toBe(1);
+  it("runs as many picture jobs as the setting allows conversions", () => {
+    expect(pictureJobSlots("auto", "qsv", 2)).toBe(6);
+    expect(pictureJobSlots("auto", "software", 16)).toBe(4);
+    expect(pictureJobSlots("2", "nvenc", 16)).toBe(2);
+  });
+
+  it("bounds picture jobs generously with no limit", () => {
+    expect(pictureJobSlots("unlimited", "vaapi", 2)).toBe(UNLIMITED_HARDWARE_JOBS);
+    expect(pictureJobSlots("unlimited", "software", 12)).toBe(12);
   });
 });

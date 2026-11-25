@@ -325,4 +325,56 @@ describe.skipIf(!hasFfmpeg)("playback conversion with real ffmpeg", () => {
       expect(await ffmpegChildren()).toEqual([]);
     },
   );
+
+  it(
+    "follows Simultaneous picture conversions: one refuses a second, no limit admits it",
+    { timeout: 150_000 },
+    async () => {
+      const { admin, channel, close } = await setUp();
+      try {
+        const playback = (await admin.request("GET", "/api/settings/playback")).json as Record<
+          string,
+          unknown
+        >;
+        expect(playback.pictureConversions).toBe("unlimited");
+        const limit = async (pictureConversions: string) =>
+          expect(
+            (
+              await admin.request("PUT", "/api/settings/playback", {
+                ...playback,
+                pictureConversions,
+              })
+            ).status,
+          ).toBe(200);
+        const open = async (name: string) =>
+          (
+            await admin.request("POST", "/api/playback/sessions", {
+              source: { _tag: "Live", channelId: channel(name) },
+              capabilities: chrome,
+              quality: { _tag: "Bitrate", kbps: 2000 },
+            })
+          ).json as { id: string; plan?: { decision: string; quality: string } };
+
+        await limit("1");
+        const first = await open("Sportkanal F1 HD");
+        expect(first.plan).toMatchObject({ decision: "video" });
+        // A second conversion is over the limit: this browser plays the original picture.
+        const second = await open("Filmhaus HD");
+        expect(second.plan).toMatchObject({ quality: "original" });
+        expect(second.plan?.decision).not.toBe("video");
+
+        // Read live: with no limit the same request converts, next to the first.
+        await limit("unlimited");
+        const third = await open("Filmhaus HD");
+        expect(third.plan).toMatchObject({ decision: "video" });
+
+        for (const session of [first, second, third]) {
+          await admin.request("DELETE", `/api/playback/sessions/${session.id}`);
+        }
+      } finally {
+        await close();
+      }
+      expect(await ffmpegChildren()).toEqual([]);
+    },
+  );
 });

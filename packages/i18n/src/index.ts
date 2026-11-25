@@ -46,6 +46,7 @@ export {
 } from "./household-text.ts";
 export type { AccessWords, AvatarToneWord, InviteExpiryWord } from "./household-text.ts";
 export { keepBufferLabel, keepRunningLabel } from "./live-keep-text.ts";
+export { pictureConversionsLabel } from "./picture-conversions-text.ts";
 export { deviceQualityLabel, householdDefaultHintText, qualityLabel } from "./quality-text.ts";
 export { sourceFailureReasonText, sourceKindText, sourceProblemTexts } from "./source-text.ts";
 export type { SourceFailure, SourceKind } from "./source-text.ts";

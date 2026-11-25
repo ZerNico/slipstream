@@ -802,7 +802,7 @@ export const makeMockData = (now: number): MockData => {
         detail: "i7-7700K · H.264 and HEVC · constant-quality mode only",
       },
       preference: "quality",
-      maxConversions: 2,
+      pictureConversions: "unlimited",
       quality: { home: "original", away: "auto", mobile: "4000" },
     },
     // Three Tatort episodes Kim deleted: her series recording keeps them out (§3.2).

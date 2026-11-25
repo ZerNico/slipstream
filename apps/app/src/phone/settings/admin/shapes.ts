@@ -17,9 +17,12 @@ export const recordingShape: readonly GroupShape[] = [
   { heading: true, rows: [ROW_TWO_LINES_EM, ROW_EM] },
 ];
 
-/** Settings › Default quality: hardware acceleration, then the three quality defaults. */
+/**
+ * Settings › Default quality: hardware acceleration and simultaneous picture conversions, then
+ * the three quality defaults.
+ */
 export const playbackShape: readonly GroupShape[] = [
-  { heading: false, rows: [ROW_TWO_LINES_EM] },
+  { heading: false, rows: [ROW_TWO_LINES_EM, ROW_EM] },
   { heading: true, rows: [ROW_EM, ROW_EM, ROW_EM] },
 ];
 
