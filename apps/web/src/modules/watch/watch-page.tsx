@@ -1,25 +1,23 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { DateTime } from "effect";
 import {
   type ChannelId,
   epochMs,
-  extendPadding,
   isPlayable,
   playTargetFor,
   type RecordingId,
 } from "@slipstream/domain";
 import { problemOf } from "~/api/errors.ts";
 import { useHouseholdTimeZone, useQueries } from "~/api/hooks.ts";
-import { useStopRecording, useUpdateRecording } from "~/api/mutations.ts";
 import { formatTimeRange } from "~/i18n/formats.ts";
 import { m, pathLabels } from "@slipstream/i18n";
 import { gapsOf, itemName, missingMillis, recordedSpan } from "~/modules/library/library.ts";
 import { useOverlay } from "~/ui/overlay/use-overlay.tsx";
-import { toast } from "~/ui/toast-manager.ts";
 import { useNow } from "~/ui/use-now.ts";
 import { type PlayerProps, Player } from "./player.tsx";
+import { type RecordAt, useRecordingActions, useRecordNow } from "./use-record-now.ts";
 import { programmeSubject, recordingSubject } from "~/ui/artwork/subjects.ts";
 import {
   bandsIn,
@@ -30,11 +28,6 @@ import {
   slotLine,
   upNextItems,
 } from "./watch-data.ts";
-
-/** Tells the viewer Extend or Stop didn't go through, as the programme sheet does. */
-const failed = () => {
-  toast({ title: m.guide_action_failed(), type: "error" });
-};
 
 /** The player before its data arrives: titles as skeletons, nothing to play yet. */
 const waiting = (back: "guide" | "recordings"): PlayerProps => ({
@@ -74,8 +67,13 @@ export function RecordingPlayerPage({ id, search }: { id: RecordingId; search: R
     ...queries.guideWindow(span.start, span.end, entry ? [entry.channelId] : []),
     enabled: entry !== undefined,
   });
-  const update = useUpdateRecording();
-  const stop = useStopRecording();
+  const actions = useRecordingActions();
+  const recordNow = useRecordNow({
+    channelId: entry?.channelId,
+    programmes: [],
+    recordings: [],
+    playing: entry,
+  });
 
   if (recording.isError) {
     const offline = problemOf(recording.error)._tag === "Offline";
@@ -108,9 +106,6 @@ export function RecordingPlayerPage({ id, search }: { id: RecordingId; search: R
   const artwork = recordingSubject(entry, channel);
   const rule = rules.data?.find((candidate) => candidate.id === entry.ruleId)?.name;
   const until = new Date(span.end);
-  // One Extend, by the rule every client shares: a step more after the end, within the limit.
-  const extended = extendPadding(entry.padding);
-  const extendedEnd = span.end + (extended.afterMinutes - entry.padding.afterMinutes) * 60_000;
   const props: PlayerProps = {
     source: playable ? { _tag: "Recording", recordingId: entry.id } : undefined,
     start: recordingStart(entry, search, running),
@@ -142,21 +137,10 @@ export function RecordingPlayerPage({ id, search }: { id: RecordingId; search: R
                 rule === undefined
                   ? m.player_recording_extended({ end: until })
                   : m.player_recording_series({ end: until, name: rule }),
-              busy: update.isPending || stop.isPending,
-              onExtend: () =>
-                update.mutate(
-                  { id: entry.id, update: { padding: extended } },
-                  {
-                    onSuccess: () =>
-                      toast({ title: m.player_recording_extended({ end: new Date(extendedEnd) }) }),
-                    onError: failed,
-                  },
-                ),
-              onStop: () =>
-                stop.mutate(entry.id, {
-                  onSuccess: () => toast({ title: m.player_recording_stopped() }),
-                  onError: failed,
-                }),
+              busy: actions.busy,
+              // One Extend, by the rule every client shares: a step more after the end.
+              onExtend: () => actions.extend(entry),
+              onStop: () => actions.stop(entry),
             },
           }
         : {}),
@@ -165,6 +149,7 @@ export function RecordingPlayerPage({ id, search }: { id: RecordingId; search: R
     ...(entry.state === "incomplete"
       ? { gapMinutes: Math.max(1, Math.round(missingMillis(entry, now) / 60_000)) }
       : {}),
+    recordNow,
   };
   return <Player {...props} />;
 }
@@ -209,15 +194,27 @@ export function LivePlayerPage({ channelId }: { channelId: ChannelId }) {
       ? undefined
       : playTargetFor({ channelId, recordings: recordings.data, now });
   const recordingNow = target?._tag === "Recording" ? target.recordingId : undefined;
+  // Record pressed here: the recording plays on from where the playhead was, not from live.
+  const pressedAt = useRef<RecordAt | undefined>(undefined);
   useEffect(() => {
     if (recordingNow === undefined) return;
+    const at = pressedAt.current;
     void navigate({
       to: "/watch/rec/$id",
       params: { id: recordingNow },
-      search: { at: "live" },
+      search:
+        at === undefined || at.atLive ? { at: "live" } : { at: "pos", t: Math.round(at.atMs) },
       replace: true,
     });
   }, [recordingNow, navigate]);
+  const recordNow = useRecordNow({
+    channelId,
+    programmes: guide.data ?? [],
+    recordings: recordings.data ?? [],
+    onPressed: (at) => {
+      pressedAt.current = at;
+    },
+  });
 
   if (channels.isError) {
     const offline = problemOf(channels.error)._tag === "Offline";
@@ -263,6 +260,7 @@ export function LivePlayerPage({ channelId }: { channelId: ChannelId }) {
     channels: channelItems(channelList, nowNext.data ?? [], channelId, now),
     allChannels: channelList,
     channelName: channel.name,
+    recordNow,
   };
   return <Player {...props} />;
 }

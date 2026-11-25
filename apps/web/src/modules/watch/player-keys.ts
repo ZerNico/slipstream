@@ -2,7 +2,7 @@
  * The player's keyboard (SPEC §7.2): Space or K play and pause, J/L or ←/→ skip 10 s (Shift
  * 60 s), Home goes to the start of the programme, End to live, ↑/↓ change the volume, M mutes,
  * < and > change the speed, A and Q open the audio and Options menus, I the panel, Z Fill/Fit, F full
- * screen, Esc closes the innermost layer.
+ * screen, R records the programme at the playhead, Esc closes the innermost layer.
  */
 
 /** The player's two menus: audio and subtitles (A), Options (Q). */
@@ -21,6 +21,7 @@ export type PlayerKeyAction =
   | { readonly kind: "panel" }
   | { readonly kind: "fit" }
   | { readonly kind: "fullscreen" }
+  | { readonly kind: "record" }
   | { readonly kind: "close" };
 
 /** The parts of a key event the mapping reads. */
@@ -88,6 +89,9 @@ export const playerKeyFor = (event: KeyPress): PlayerKeyAction | undefined => {
     case "f":
     case "F":
       return { kind: "fullscreen" };
+    case "r":
+    case "R":
+      return { kind: "record" };
     case "Escape":
       return { kind: "close" };
     default:

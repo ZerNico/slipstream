@@ -6,6 +6,7 @@ import { useSaveProgress } from "~/api/mutations.ts";
 import { formatClock } from "~/i18n/formats.ts";
 import { m } from "@slipstream/i18n";
 import { setMiniPlayerItem } from "~/shell/mini-player-store.ts";
+import { goPrefixMs } from "~/shell/shortcuts.ts";
 import { Artwork } from "~/ui/artwork/artwork.tsx";
 import type { ArtworkSubject } from "~/ui/artwork/generate.ts";
 import { Badge } from "~/ui/controls.tsx";
@@ -37,6 +38,8 @@ import {
   ReadRow,
 } from "./player-controls.tsx";
 import { PlayerError } from "./player-error.tsx";
+import { RecordButton, RecordChip } from "./record-now.tsx";
+import { type RecordNow, recordAt } from "./use-record-now.ts";
 import { controlKeepsKey, type PlayerMenuName, playerKeyFor } from "./player-keys.ts";
 import {
   canGoToStart,
@@ -111,6 +114,8 @@ export interface PlayerProps {
   readonly channelName: string;
   /** Minutes missing from a finished recording. */
   readonly gapMinutes?: number;
+  /** Record for the programme at the playhead; absent for a profile that may not record. */
+  readonly recordNow?: RecordNow | undefined;
 }
 
 /**
@@ -269,6 +274,11 @@ export function Player(props: PlayerProps) {
     setAttempt((count) => count + 1);
     reload();
   };
+  const recordControl = props.recordNow?.(recordAt(position, now));
+  const record = () => {
+    if (recordControl?.kind === "record") recordControl.onRecord();
+    else if (recordControl?.kind === "recording") osd.show(recordControl.until);
+  };
 
   usePlayerKeys({
     blocked: overlay.current !== null,
@@ -287,6 +297,7 @@ export function Player(props: PlayerProps) {
       closePanel: () => setPanelOpen(false),
       fit: toggleFit,
       fullscreen: () => fullscreenToggle(),
+      record,
       close,
     },
   });
@@ -511,7 +522,12 @@ export function Player(props: PlayerProps) {
               <>
                 {readRow}
                 {timelineNode}
-                <ControlRow model={model} />
+                <ControlRow
+                  model={model}
+                  {...(props.recordNow === undefined
+                    ? {}
+                    : { record: <RecordButton control={recordControl} /> })}
+                />
               </>
             )
           }
@@ -579,6 +595,7 @@ export function Player(props: PlayerProps) {
             <PhoneControls
               model={model}
               onDetails={() => overlay.open({ kind: "sheet", name: "info" })}
+              record={<RecordChip control={recordControl} />}
             />
           }
           next={props.next}
@@ -685,6 +702,7 @@ interface KeyActions {
   readonly closePanel: () => void;
   readonly fit: () => void;
   readonly fullscreen: () => void;
+  readonly record: () => void;
   readonly close: () => void;
 }
 
@@ -704,8 +722,12 @@ function usePlayerKeys(input: {
   const { blocked } = input;
   useEffect(() => {
     if (blocked) return;
+    // `G` then `R` is the global "Go to Recordings": R right after G is not Record.
+    let goAt = Number.NEGATIVE_INFINITY;
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
+      const afterGo = Date.now() - goAt < goPrefixMs;
+      goAt = event.key.toLowerCase() === "g" ? Date.now() : Number.NEGATIVE_INFINITY;
       if (document.querySelector('[data-slot="dropdown-menu-content"]')) return;
       const target = event.target;
       if (target instanceof HTMLElement && target.closest("[data-overlay-root]")) return;
@@ -713,7 +735,7 @@ function usePlayerKeys(input: {
       if (target instanceof HTMLTextAreaElement) return;
       if (controlKeepsKey(target, event.key)) return;
       const action = playerKeyFor(event);
-      if (!action) return;
+      if (!action || (action.kind === "record" && afterGo)) return;
       const { act, panelOpen } = latest.current;
       event.preventDefault();
       switch (action.kind) {
@@ -749,6 +771,9 @@ function usePlayerKeys(input: {
           return;
         case "fullscreen":
           act.fullscreen();
+          return;
+        case "record":
+          act.record();
           return;
         case "close":
           if (panelOpen) act.closePanel();

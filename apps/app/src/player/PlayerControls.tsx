@@ -1,4 +1,3 @@
-import { extendStepMinutes } from "@slipstream/domain";
 import { formatters, m } from "@slipstream/i18n";
 import { Text, View } from "react-native";
 import { useTheme } from "../theme/theme.ts";
@@ -86,16 +85,26 @@ export const TopBar = ({
   );
 };
 
+/** The Record control in the row: record the programme at the playhead, or it records. */
+export interface RecordButton {
+  readonly kind: "record" | "recording";
+  readonly busy: boolean;
+  /** Record: records at once. Recording: opens Extend and Stop. */
+  readonly onPress: () => void;
+  /** The full record options (the record sheet). */
+  readonly onLongPress: (() => void) | undefined;
+}
+
 /**
  * The controls row: the transport from the left, play a size larger; what needs a word (live,
- * speed, extend) and the options after a gap. Amber is the focus alone.
+ * speed, Record) and the options after a gap. Amber is the focus alone; red says it records.
  */
 export const ControlsRow = ({
   size,
   paused,
   speed,
   showLive,
-  showExtend,
+  record,
   track,
   playFocus,
   optionsFocus,
@@ -103,7 +112,6 @@ export const ControlsRow = ({
   onSkip,
   onTogglePause,
   onLive,
-  onExtend,
   onNextTrack,
   onOptions,
 }: {
@@ -111,7 +119,8 @@ export const ControlsRow = ({
   readonly paused: boolean;
   readonly speed: number;
   readonly showLive: boolean;
-  readonly showExtend: boolean;
+  /** Absent for a profile that may not record, or where there is nothing to record. */
+  readonly record: RecordButton | undefined;
   /** The audio track's name, when there are tracks to switch between. */
   readonly track: string | undefined;
   readonly playFocus: boolean;
@@ -120,11 +129,10 @@ export const ControlsRow = ({
   readonly onSkip: (seconds: number) => void;
   readonly onTogglePause: () => void;
   readonly onLive: () => void;
-  readonly onExtend: () => void;
   readonly onNextTrack: () => void;
   readonly onOptions: () => void;
 }) => {
-  const { colors, em, fonts } = useTheme();
+  const { colors, em, fonts, isTV } = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 0.7 * em }}>
       <FocusButton
@@ -175,14 +183,19 @@ export const ControlsRow = ({
       {showLive ? (
         <FocusButton label={m.player_watch_live()} icon="live" size={size} onPress={onLive} />
       ) : null}
-      {showExtend ? (
+      {record === undefined ? null : (
         <FocusButton
-          label={m.player_extend({ minutes: extendStepMinutes })}
-          icon="plus"
+          label={record.kind === "recording" ? m.player_badge_recording() : m.record_now_action()}
+          icon="rec"
+          // The phone's compact row keeps it a round button; the TV says it.
+          iconOnly={!isTV}
+          tone={record.kind === "recording" ? "live" : undefined}
+          disabled={record.busy}
           size={size}
-          onPress={onExtend}
+          onPress={record.onPress}
+          onLongPress={record.onLongPress}
         />
-      ) : null}
+      )}
       {track === undefined ? null : (
         <FocusButton label={track} icon="audio" iconOnly size={size} onPress={onNextTrack} />
       )}

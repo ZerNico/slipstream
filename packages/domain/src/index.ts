@@ -28,6 +28,7 @@ export * from "./playback.ts";
 export * from "./problem-chains.ts";
 export * from "./profile-form.ts";
 export * from "./programme.ts";
+export * from "./record-now.ts";
 export * from "./record-options.ts";
 export * from "./recording.ts";
 export * from "./repeats.ts";

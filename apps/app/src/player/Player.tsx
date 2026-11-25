@@ -29,6 +29,8 @@ import Video, {
   type OnProgressData,
   type VideoRef,
 } from "react-native-video";
+import type { Effect } from "effect";
+import type { Api } from "../api/client.ts";
 import { queryKeys } from "../api/keys.ts";
 import { apiActions } from "../api/queries.ts";
 import { useApiQueries } from "../data/hooks.ts";
@@ -60,7 +62,10 @@ import {
   type PlayerParams,
   type SessionFailure,
 } from "./playback.ts";
+import { RecordSheet } from "../record/RecordSheet.tsx";
 import { OptionsSheet } from "./OptionsSheet.tsx";
+import { RecordNowSheet } from "./RecordNowSheet.tsx";
+import { playerRecord, playheadAt, recordedText, recordingShown } from "./record-now.ts";
 import { PictureGestures } from "./PictureGestures.tsx";
 import { ControlsRow, TopBar } from "./PlayerControls.tsx";
 import { savePrefs, usePlayerPrefs } from "./player-prefs.ts";
@@ -157,10 +162,14 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const [optionsOpen, setOptionsOpen] = useState(false);
   // TV: after Options closes, focus goes back to its button rather than nowhere.
   const [optionsClosed, setOptionsClosed] = useState(false);
+  // Record's sheets: the full record options, or Extend and Stop while it records.
+  const [recordSheet, setRecordSheet] = useState<"options" | "recording" | undefined>(undefined);
+  const [recordBusy, setRecordBusy] = useState(false);
+  // While a sheet is open it has the remote.
   const optionsOpenRef = useRef(optionsOpen);
   useEffect(() => {
-    optionsOpenRef.current = optionsOpen;
-  }, [optionsOpen]);
+    optionsOpenRef.current = optionsOpen || recordSheet !== undefined;
+  }, [optionsOpen, recordSheet]);
   const { runAction } = useSession();
   const queries = useApiQueries();
   const queryClient = useQueryClient();
@@ -174,6 +183,20 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
     recording.data?.title ??
     channels.data?.find((channel) => channel.id === channelOfTarget)?.name ??
     "";
+  // Record: only for a profile that may record; it needs the library (is it recorded already?)
+  // and the channel's programmes around the playhead, back as far as the pause buffer reaches.
+  const profile = useQuery(queries.myProfile());
+  const mayRecord = profile.data?.access.mayRecord === true && target?._tag !== "Range";
+  const library = useQuery({ ...queries.recordings(), enabled: mayRecord });
+  const [guideFrom] = useState(() => Math.floor(Date.now() / 300_000) * 300_000 - 4 * 3_600_000);
+  const channelGuide = useQuery({
+    ...queries.channelGuide(
+      target?._tag === "Live" ? target.channelId : recording.data?.channelId,
+      guideFrom,
+      guideFrom + 12 * 3_600_000,
+    ),
+    enabled: mayRecord,
+  });
 
   const video = useRef<VideoRef>(null);
   const [progress, setProgress] = useState<PlayerProgress | undefined>(undefined);
@@ -401,12 +424,22 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
     requestQuality(qualityRequest(quality));
   };
 
-  const extend = () => {
-    const current = recording.data;
-    if (current === undefined) return;
-    runAction(apiActions.updateRecording(current.id, { padding: extendPadding(current.padding) }))
-      .then(() => queryClient.invalidateQueries({ queryKey: queryKeys.recordingsAll }))
-      .catch(() => toast({ text: m.library_action_failed() }));
+  /** Marks what a recording write changes as stale, as the record sheet does. */
+  const refreshRecordings = () =>
+    Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.recordingsAll }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.recordOptionsAll }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.conflictsAll }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.guideRepeatsAll }),
+    ]);
+  /** Runs one write of Record's, refreshes what it changed, and says how it went. */
+  const recordWrite = <A, E>(effect: Effect.Effect<A, E, Api>, done: (result: A) => string) => {
+    if (recordBusy) return;
+    setRecordBusy(true);
+    runAction(effect)
+      .then((result) => refreshRecordings().then(() => toast({ text: done(result) })))
+      .catch(() => toast({ text: m.guide_action_failed() }))
+      .finally(() => setRecordBusy(false));
   };
 
   if (target === undefined) return <StatusScreen title={m.error_not_found()} />;
@@ -426,6 +459,30 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
       />
     );
   }
+
+  // Record for the programme at the playhead (or the recording being played, while it runs).
+  const playhead = playheadAt(target, progress, now, windowStart);
+  const record = playerRecord({
+    target,
+    mayRecord,
+    playhead,
+    now,
+    programmes: channelGuide.data ?? [],
+    recordings: library.data ?? [],
+    playing: recording.data,
+  });
+  const recordNow = () => {
+    if (record?.kind !== "record") return;
+    const { programme } = record;
+    const pressedAtMs = now;
+    recordWrite(
+      apiActions.recordProgramme({ _tag: "Programme", programmeId: programme.id }),
+      (entry) => recordedText(programme.title, entry, playhead, pressedAtMs),
+    );
+  };
+  const recordProgramme = record?.programme;
+  const openRecordOptions =
+    recordProgramme === undefined ? undefined : () => setRecordSheet("options");
 
   const f = formatters();
   const behind = progress === undefined ? 0 : behindLive(progress);
@@ -586,7 +643,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
           </Svg>
           <TopBar
             title={title}
-            recordingNow={recordingNow}
+            recordingNow={recordingNow || recordingShown(record)}
             now={now}
             size={size}
             pad={pad}
@@ -641,7 +698,17 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
               paused={paused}
               speed={speed}
               showLive={!atLive && !finished}
-              showExtend={recordingNow}
+              record={
+                record === undefined
+                  ? undefined
+                  : {
+                      kind: record.kind,
+                      busy: recordBusy,
+                      onPress:
+                        record.kind === "record" ? recordNow : () => setRecordSheet("recording"),
+                      onLongPress: openRecordOptions,
+                    }
+              }
               track={
                 tracks.length > 1 && currentTrack !== undefined
                   ? trackLabel(currentTrack)
@@ -655,7 +722,6 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
               onLive={() => {
                 if (progress !== undefined) seek(liveTarget(progress));
               }}
-              onExtend={extend}
               onNextTrack={() => {
                 if (currentTrack === undefined) return;
                 const position = tracks.indexOf(currentTrack);
@@ -665,6 +731,42 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
             />
           </View>
         </Animated.View>
+      ) : null}
+      {recordSheet === "recording" && record?.kind === "recording" ? (
+        <RecordNowSheet
+          title={record.programme?.title ?? record.recording.title}
+          until={m.player_recording_extended({
+            end: new Date(epochMs(padRange(record.recording, record.recording.padding).end)),
+          })}
+          onExtend={() => {
+            const { id, padding } = record.recording;
+            const extended = extendPadding(padding);
+            const extendedEnd =
+              epochMs(padRange(record.recording, record.recording.padding).end) +
+              (extended.afterMinutes - padding.afterMinutes) * 60_000;
+            recordWrite(apiActions.updateRecording(id, { padding: extended }), () =>
+              m.player_recording_extended({ end: new Date(extendedEnd) }),
+            );
+          }}
+          onStop={() =>
+            recordWrite(apiActions.stopRecording(record.recording.id), () =>
+              m.player_recording_stopped(),
+            )
+          }
+          onOptions={openRecordOptions}
+          onClose={() => setRecordSheet((open) => (open === "recording" ? undefined : open))}
+        />
+      ) : null}
+      {recordSheet === "options" && recordProgramme !== undefined ? (
+        <RecordSheet
+          programme={recordProgramme}
+          channelName={
+            channels.data?.find((channel) => channel.id === recordProgramme.channelId)?.name ?? ""
+          }
+          recordings={library.data ?? []}
+          conflicts={[]}
+          onClose={() => setRecordSheet(undefined)}
+        />
       ) : null}
       {optionsOpen ? (
         <OptionsSheet

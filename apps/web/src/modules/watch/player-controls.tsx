@@ -1,4 +1,4 @@
-import type { ComponentProps, ReactElement, Ref } from "react";
+import type { ComponentProps, ReactElement, ReactNode, Ref } from "react";
 import { m } from "@slipstream/i18n";
 import { Icon, type IconSvgElement } from "~/ui/icon.tsx";
 import {
@@ -140,10 +140,11 @@ export function ReadRow({
   );
 }
 
-/** An option chip under the phone transport (speed, audio, quality, Details). */
-function PhoneChip({
+/** An option chip under the phone transport (Record, audio, quality, Details). */
+export function PhoneChip({
   icon,
   children,
+  className,
   ...props
 }: ComponentProps<"button"> & { icon?: IconSvgElement }) {
   return (
@@ -153,8 +154,9 @@ function PhoneChip({
       className={cn(
         // A long track name ("English (Audio description)") shrinks its own chip, not the row.
         "inline-flex h-(--ctl-md) min-w-11 shrink items-center justify-center gap-1.5 rounded-full px-3 text-[13.5px] font-[550] whitespace-nowrap shadow-[inset_0_0_0_1px_var(--line-2)] max-[389px]:px-2.5",
-        "text-fg-2",
+        "text-fg-2 disabled:opacity-45",
         focusRing,
+        className,
       )}
     >
       {icon === undefined ? null : <Icon icon={icon} size={16} className="flex-none" />}
@@ -374,9 +376,9 @@ export interface ControlsModel {
  * audio and subtitles, Options (quality, speed, picture), picture-in-picture and full screen on
  * the right. Play and the skips sit in the middle of the picture (`CenterTransport`).
  */
-export function ControlRow({ model }: { model: ControlsModel }) {
+export function ControlRow({ model, record }: { model: ControlsModel; record?: ReactNode }) {
   return (
-    <div className="flex h-(--ctl-lg) items-center gap-1 [&_.ibtn]:text-fg">
+    <div className="flex h-(--ctl-lg) items-center gap-1 [&_.ibtn:not(.ibtn-live)]:text-fg">
       <IconButton
         label={m.player_from_start()}
         onClick={model.onFromStart}
@@ -407,6 +409,7 @@ export function ControlRow({ model }: { model: ControlsModel }) {
         />
       </div>
       <span className="flex-1" />
+      {record}
       {model.speed === 1 ? null : (
         <span className="px-2 text-[13.5px] font-semibold text-brand-fg tabular-nums" data-speed="">
           {m.player_speed_value({ speed: model.speed })}
@@ -460,9 +463,12 @@ export function ControlRow({ model }: { model: ControlsModel }) {
 export function PhoneControls({
   model,
   onDetails,
+  record,
 }: {
   model: ControlsModel;
   onDetails: () => void;
+  /** The Record chip, first, for a profile that may record. */
+  record?: ReactNode;
 }) {
   return (
     <>
@@ -502,6 +508,7 @@ export function PhoneControls({
         </IconButton>
       </div>
       <div className="mt-3.5 flex gap-2 max-[389px]:gap-1.5">
+        {record}
         <AudioMenu
           state={model.menus}
           tracks={model.tracks}

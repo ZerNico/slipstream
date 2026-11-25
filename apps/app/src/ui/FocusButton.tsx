@@ -17,7 +17,11 @@ export type ButtonVariant = "primary" | "default" | "ghost";
 export interface FocusButtonProps {
   readonly label: string;
   readonly onPress: () => void;
+  /** A long press (phone) or a held OK (TV): the secondary action, such as more options. */
+  readonly onLongPress?: (() => void) | undefined;
   readonly variant?: ButtonVariant;
+  /** `live`: the label and glyph in the recording red while not focused (Recording). */
+  readonly tone?: "live" | undefined;
   /** A glyph before the label. */
   readonly icon?: IconName | undefined;
   /** Takes focus first when the screen opens (TV). */
@@ -40,7 +44,9 @@ export interface FocusButtonProps {
 export const FocusButton = ({
   label,
   onPress,
+  onLongPress,
   variant = "default",
+  tone,
   icon,
   preferredFocus = false,
   size = 1,
@@ -76,10 +82,11 @@ export const FocusButton = ({
     transform: [{ scale: 1 + progress.value * (scale - 1) }],
   }));
   const fontSize = size * em;
-  const textColor = focused ? colors.onBrand : restText;
+  const textColor = focused ? colors.onBrand : tone === "live" ? colors.liveText : restText;
   return (
     <Pressable
       onPress={onPress}
+      {...(onLongPress === undefined ? {} : { onLongPress })}
       onFocus={() => {
         setFocused(true);
         onFocus?.();

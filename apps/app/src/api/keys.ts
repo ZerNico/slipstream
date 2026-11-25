@@ -18,6 +18,14 @@ export const queryKeys = {
   guideAll: ["guide"],
   /** One stretch of guide entries; the guides ask for one household day at a time. */
   guide: (from: number, to: number): QueryKey => ["guide", from, to],
+  /** One channel's guide entries around now, for the player's Record; under `guideAll`. */
+  channelGuide: (channelId: string, from: number, to: number): QueryKey => [
+    "guide",
+    "channel",
+    channelId,
+    from,
+    to,
+  ],
   /** Where the guide data ends, for a timeline as wide as its data before the days load. */
   guideExtent: ["guide", "extent"],
   /** One programme in full (description, pictures); under `guideAll`, so a new guide refreshes it. */
