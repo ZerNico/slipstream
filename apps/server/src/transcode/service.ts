@@ -447,6 +447,17 @@ const makeTranscoder = Effect.gen(function* () {
      * start another (`videoSessionLimit`). A conversion already in use is never busy: its
      * viewers share it.
      */
+    /**
+     * Frees a picture conversion's place at once (its last session ended), instead of after
+     * `VIDEO_IDLE_MILLIS` without requests: someone switching channels gets a slot straight away.
+     */
+    releaseVideo: (key: string) =>
+      Ref.update(inUse, (map) => {
+        if (!map.has(key)) return map;
+        const next = new Map(map);
+        next.delete(key);
+        return next;
+      }),
     videoBusy: (key: string, hardware: boolean) =>
       Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;

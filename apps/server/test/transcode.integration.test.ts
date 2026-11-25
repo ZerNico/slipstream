@@ -169,6 +169,8 @@ describe.skipIf(!hasFfmpeg)("playback conversion with real ffmpeg", () => {
         const frames = deinterlaced.packets.filter((p) => p.codec_type === "video").length;
         // Two-second segments: about 100 frames at 50 per second, not 50.
         expect(frames).toBeGreaterThan(80);
+        // A 4-core machine (CI) gets one software conversion: end this one before the next.
+        await admin.request("DELETE", `/api/playback/sessions/${dokuSession.id}`);
 
         // 1080p50 at 8 Mbit/s asked for at 2 Mbit/s: 540p H.264, the AAC copied.
         const f1 = await admin.request("POST", "/api/playback/sessions", {
@@ -189,9 +191,7 @@ describe.skipIf(!hasFfmpeg)("playback conversion with real ffmpeg", () => {
           codec_name: "h264",
           height: 540,
         });
-        for (const id of [dokuSession.id, f1Session.id]) {
-          await admin.request("DELETE", `/api/playback/sessions/${id}`);
-        }
+        await admin.request("DELETE", `/api/playback/sessions/${f1Session.id}`);
       } finally {
         await close();
       }

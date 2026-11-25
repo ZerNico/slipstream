@@ -881,13 +881,27 @@ const makePlayback = Effect.gen(function* () {
     });
 
   /** Forgets a session and lets go of its capture (a conversion stops when nobody fetches). */
+  /** The picture conversion a session holds a place for, if its delivery converts the picture. */
+  const heldConversion = (sessionId: string, session: OpenSession) =>
+    session.decision.variant === undefined || session.decision.plan?.video?._tag !== "Encode"
+      ? undefined
+      : conversionKey(conversionStream(session.request, sessionId), session.decision.variant);
+
   const close = (sessionId: string, session: OpenSession) =>
     Effect.gen(function* () {
-      yield* Ref.update(sessions, (map) => {
+      const remaining = yield* Ref.modify(sessions, (map) => {
         const next = new Map(map);
         next.delete(sessionId);
-        return next;
+        return [next, next] as const;
       });
+      // Free the session's picture conversion now unless another session still converts the same.
+      const held = heldConversion(sessionId, session);
+      if (
+        held !== undefined &&
+        ![...remaining].some(([id, other]) => heldConversion(id, other) === held)
+      ) {
+        yield* transcoder.releaseVideo(held);
+      }
       if (session.request.source._tag === "Live") yield* recorder.releaseLive(sessionId);
     });
 
