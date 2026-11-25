@@ -409,11 +409,12 @@ const makePlayback = Effect.gen(function* () {
 
   /**
    * What the stream of a new session carries. A live channel never captured before has nothing
-   * to tell yet: its capture was just started, so this waits until the capture reports its input
-   * or writes its first segment (announced, or found in the index, whichever comes first).
+   * to tell yet: its capture was just started (`capturing`), so this waits until the capture
+   * reports its input or writes its first segment (announced, or found in the index, whichever
+   * comes first). Without a capture there is nothing to wait for.
    */
-  const firstStreamInfo = (source: PlaybackSessionRequest["source"]) =>
-    source._tag !== "Live"
+  const firstStreamInfo = (source: PlaybackSessionRequest["source"], capturing: boolean) =>
+    source._tag !== "Live" || !capturing
       ? streamInfoFor(source)
       : Effect.scoped(
           Effect.gen(function* () {
@@ -499,17 +500,20 @@ const makePlayback = Effect.gen(function* () {
     expiresAt: session.expiresAt,
   });
 
-  /** Joins or starts the channel's capture for a live session; a refusal only gets logged. */
+  /**
+   * Joins or starts the channel's capture for a live session: whether it holds one now. A
+   * refusal only gets logged (the next playlist request tries again).
+   */
   const holdLive = (channelId: string, sessionId: string) =>
-    recorder
-      .acquireLive(ChannelId.make(channelId), sessionId)
-      .pipe(
-        Effect.catchTag("RecorderFailed", (error) =>
-          Effect.logWarning("No capture for live playback yet").pipe(
-            Effect.annotateLogs({ channelId, reason: error.reason }),
-          ),
+    recorder.acquireLive(ChannelId.make(channelId), sessionId).pipe(
+      Effect.as(true),
+      Effect.catchTag("RecorderFailed", (error) =>
+        Effect.logWarning("No capture for live playback yet").pipe(
+          Effect.annotateLogs({ channelId, reason: error.reason }),
+          Effect.as(false),
         ),
-      );
+      ),
+    );
 
   /** The enabled sources a channel's streams come from, in fallback order. */
   const sourcesOf = (channelId: string) =>
@@ -744,10 +748,11 @@ const makePlayback = Effect.gen(function* () {
     );
     const id = newId();
     let startAt: number | undefined;
+    let holding = false;
     switch (source._tag) {
       case "Live":
         yield* checkStreams(viewer, source.channelId);
-        yield* holdLive(source.channelId, id);
+        holding = yield* holdLive(source.channelId, id);
         break;
       case "Recording": {
         const [resume] = yield* read
@@ -777,7 +782,7 @@ const makePlayback = Effect.gen(function* () {
       id,
       request,
       client.origin,
-      yield* firstStreamInfo(source),
+      yield* firstStreamInfo(source, holding),
     );
     const { path, exp } = yield* playlistPath(
       actor,

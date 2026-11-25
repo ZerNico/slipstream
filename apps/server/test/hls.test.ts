@@ -316,6 +316,22 @@ describe("live and range playlists", () => {
     expect((await admin.request("DELETE", `/api/playback/sessions/${live.id}`)).status).toBe(204);
   });
 
+  it("answers at once when no capture can start for a channel never captured", async () => {
+    const channel = await admin.request("POST", "/api/channels", {
+      name: "Nowhere",
+      favourite: false,
+      hidden: false,
+    });
+    const nowhereId = (channel.json as { id: string }).id;
+    const startedAt = Date.now();
+    // No stream to open: nothing will report what the channel carries, so nothing is awaited.
+    const live = await session({ _tag: "Live", channelId: nowhereId });
+    expect(Date.now() - startedAt).toBeLessThan(3000);
+    expect(live.plan).toBeUndefined();
+    expect(live.playlistUrl).toContain(`/hls/live/${nowhereId}.m3u8?`);
+    expect((await admin.request("DELETE", `/api/playback/sessions/${live.id}`)).status).toBe(204);
+  });
+
   it("serves any captured range for start over", async () => {
     const range = {
       start: new Date(seededFrom + 6000).toISOString(),
