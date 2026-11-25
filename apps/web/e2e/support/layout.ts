@@ -229,7 +229,13 @@ export const clickableWhileLoading = (page: Page, scope = "main"): Promise<strin
 export const expectNoShiftOnLoad = async (
   page: Page,
   url: string,
-  options: ShiftOptions = {},
+  options: ShiftOptions & {
+    /**
+     * Runs once the skeleton was measured: a caller that holds the route's reads back releases
+     * them here, so the skeleton is on screen when measured however fast the machine answers.
+     */
+    readonly measured?: () => void;
+  } = {},
 ): Promise<void> => {
   await trackRequests(page);
   await page.goto(url, { waitUntil: "commit" });
@@ -246,6 +252,7 @@ export const expectNoShiftOnLoad = async (
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
   const early = await measureBoxes(page, options);
   expect(await clickableWhileLoading(page, options.scope)).toEqual([]);
+  options.measured?.();
   await settledForMeasure(page, scope);
   const loaded = await measureBoxes(page, options);
   expect(movedBetween(early, loaded, options.tolerance)).toEqual([]);

@@ -54,8 +54,9 @@ beforeAll(async () => {
   });
   const sourceId = (source.json as { id: string }).id;
   expect((await admin.request("POST", `/api/sources/${sourceId}/refresh`)).status).toBe(200);
-  const from = new Date(Date.now() + 2 * HOUR);
-  const to = new Date(from.getTime() + 2 * DAY);
+  // From now to the fake guide's end, so a "single airing" is single for the rule too.
+  const from = new Date();
+  const to = new Date(from.getTime() + 3 * DAY);
   guide = (
     await admin.request("GET", `/api/guide?from=${from.toISOString()}&to=${to.toISOString()}`)
   ).json as Array<Programme>;
@@ -84,9 +85,10 @@ const profile = async (username: string) => {
 const usedTitles = new Set<string>();
 
 /**
- * An upcoming programme, hours away (nothing captures), whose title no other test took. The
- * guide answers with everything that overlaps its window, so a long programme already on air
- * can lead the list; it would record at once instead of being scheduled.
+ * An upcoming programme, hours away (nothing captures), whose title no other test took and
+ * that airs only once in the guide. The guide answers with everything that overlaps its window,
+ * so a long programme already on air leads the list: it is never picked, but it counts, since a
+ * rule for its title would record it at once and skip the later airing as a repeat.
  */
 const freshProgramme = () => {
   const programme = guide.find(

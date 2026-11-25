@@ -71,7 +71,7 @@ function ResolveBox({ resolution }: { resolution: Resolution<Entry> }) {
     }
   };
   return (
-    <div className="col-span-full grid min-w-0 gap-2 pt-1.5 pb-1" data-resolve="">
+    <div className="sk-hide col-span-full grid min-w-0 gap-2 pt-1.5 pb-1" data-resolve="">
       <p className="flex gap-2 text-[13.5px] text-fg">
         <Icon icon={WarningIcon} size={16} className="mt-0.5 shrink-0 text-warn-fg" />
         <span className="min-w-0">{resolveIntro(resolution)}</span>
@@ -197,15 +197,21 @@ export function ScheduledPage() {
         : scheduledDays(recordings, conflicts.data ?? [], sources.data ?? [], timeZone),
     [recordings, conflicts.data, sources.data, timeZone],
   );
-  // The streams line, the conflict flags and the resolution boxes come from the conflicts and
-  // the sources: until both have settled (not pending, not a cached placeholder) the list stays
-  // the day skeleton, so no flag or box arrives under a row already on screen.
   const loading =
     data.loading ||
     conflicts.isPending ||
     conflicts.isPlaceholderData ||
     sources.isPending ||
     sources.isPlaceholderData;
+  // While loading, the days are drawn from the answers this browser kept (SPEC §6.2), so the
+  // loaded days land in the same boxes. Missing one (conflicts and sources add flags and
+  // resolution boxes), the list stays the day skeleton: nothing arrives under a drawn row.
+  const drawable =
+    !loading ||
+    (data.collectionsKnown &&
+      timeZone !== undefined &&
+      conflicts.data !== undefined &&
+      sources.data !== undefined);
   return (
     <Wrap>
       <RecordingsHeader data={data} />
@@ -215,7 +221,7 @@ export function ScheduledPage() {
             title={m.library_error_title()}
             actions={<Button onClick={data.refetch}>{m.action_try_again()}</Button>}
           />
-        ) : !loading && days.length === 0 ? (
+        ) : drawable && days.length === 0 ? (
           <EmptyState
             title={m.recordings_upcoming_empty()}
             action={
@@ -231,7 +237,7 @@ export function ScheduledPage() {
           />
         ) : (
           <>
-            {loading ? (
+            {!drawable ? (
               <section className="mb-7" data-scheduled-skeleton="">
                 <h3 className="mb-2 py-2 text-sm font-semibold text-fg-2">
                   <Sk chars={8} />
@@ -263,7 +269,7 @@ export function ScheduledPage() {
                   aria-label={dayPill(day.day, now, data.timeZone)}
                 >
                   <h3 className="sticky top-[calc(var(--nav-h)+var(--safe-t))] z-2 mb-2 bg-bg py-2 text-sm font-semibold text-fg-2">
-                    {dayPill(day.day, now, data.timeZone)}
+                    <Sk>{dayPill(day.day, now, data.timeZone)}</Sk>
                   </h3>
                   <div className="grid gap-0.5">
                     {day.rows.map((row) => (

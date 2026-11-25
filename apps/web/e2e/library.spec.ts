@@ -72,17 +72,21 @@ for (const viewport of [viewports[0], viewports[3]]) {
 
     test("nothing moves between the skeleton and the loaded screen", async ({ page }) => {
       await seed(page);
-      // Slow the API so the skeleton is on screen when the first boxes are measured.
+      // The screen's reads wait until the skeleton was measured, so it is on screen then
+      // whichever answer comes first; sign-in is not held, or the route would never mount.
       // Only the API: in a dev server, module paths such as /src/api/ must stay fast.
-      await page.route(/^https?:\/\/[^/]+\/api\//u, async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 400));
+      let held: Promise<void> = Promise.resolve();
+      await page.route(/^https?:\/\/[^/]+\/api\/(?!auth\/|events)/u, async (route) => {
+        await held;
         await route.continue();
       });
       for (const route of routes) {
         // The first visit keeps the answers the skeleton is drawn from on the next load.
         await page.goto(route);
         await settled(page);
-        await test.step(route, () => expectNoShiftOnLoad(page, route));
+        const { promise, resolve } = Promise.withResolvers<void>();
+        held = promise;
+        await test.step(route, () => expectNoShiftOnLoad(page, route, { measured: resolve }));
       }
     });
   });

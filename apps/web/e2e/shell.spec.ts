@@ -77,7 +77,9 @@ test.describe("desktop 1440 × 900", () => {
     await input.fill(programme.title.slice(0, 1));
     await expect(guide).toHaveCount(0);
     await input.fill(programme.title);
-    const option = guide.getByRole("option").filter({ hasText: programme.title }).first();
+    // This airing's own option: a title such as "Nachrichten" airs every hour, and the airing
+    // on air (being recorded) opens the watch choice instead of the sheet.
+    const option = guide.locator(`[role="option"][id$="-programme-${programme.id}"]`);
     await expect(option).toBeVisible();
     await option.click();
     await expect.poll(() => search("sheet")).toBe(`prog:${programme.id}`);
