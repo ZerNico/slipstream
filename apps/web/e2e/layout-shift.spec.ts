@@ -10,18 +10,29 @@ import {
 } from "./support/session.ts";
 
 /*
- * Zero layout shift on every route (SPEC §6), by the browser's CLS: at 1440, 390 and 667 × 375
- * each route loads cold, warm and with one slow endpoint at a time, and is hovered. The CLS per
- * route is reported as `cls` annotations.
+ * Zero layout shift on every route (SPEC §6), by the browser's CLS: each route loads cold, warm
+ * and with one slow endpoint at a time at 1440 and 390 (at 667 × 375 those with a short-landscape
+ * layout), and is hovered. The CLS per route is reported as `cls` annotations.
  */
 
 requireServer({ source: true });
 
-/** Every screen, with the ids the seed made. */
-const routes = async (page: Page, seeded: Seeded): Promise<string[]> => {
+/**
+ * Routes with a short-landscape layout of their own (`short:`, `media.shortLandscape`): Home's
+ * hero, the guide's header and grid, the library's header and toolbar, the collection and series
+ * editors. The rest only get the shell's compact rail and page head, which these cover.
+ */
+const ownShortLayout = (route: string): boolean =>
+  route === "/" ||
+  route === "/guide" ||
+  /^\/recordings(\?|\/scheduled$|\/problems$|\/collections\/|$)/u.test(route) ||
+  /^\/series\/./u.test(route);
+
+/** Every screen, with the ids the seed made; in short landscape those with their own layout. */
+const routes = async (page: Page, seeded: Seeded, short: boolean): Promise<string[]> => {
   const rules = await api(page).get<{ id: string }[]>("/api/rules");
   const collections = await api(page).get<{ id: string }[]>("/api/collections");
-  return [
+  const all = [
     "/",
     "/guide",
     "/recordings",
@@ -42,6 +53,7 @@ const routes = async (page: Page, seeded: Seeded): Promise<string[]> => {
     "/settings/storage",
     "/settings/profile",
   ];
+  return short ? all.filter(ownShortLayout) : all;
 };
 
 /** Slows the API reads `matches` picks (every read by default), so their answers come last. */
@@ -102,9 +114,9 @@ const slowAlone = (seeded: Seeded) => [
 ];
 
 for (const viewport of [
-  { width: 1440, height: 900, touch: false },
-  { width: 390, height: 844, touch: true },
-  { width: 667, height: 375, touch: true },
+  { width: 1440, height: 900, touch: false, short: false },
+  { width: 390, height: 844, touch: true, short: false },
+  { width: 667, height: 375, touch: true, short: true },
 ]) {
   test.describe(`${viewport.width} × ${viewport.height}`, () => {
     test.use({
@@ -116,7 +128,7 @@ for (const viewport of [
     test("every route loads without a layout shift, cold and warm", async ({ page }) => {
       test.setTimeout(300_000);
       const seeded = await seed(page);
-      const list = await routes(page, seeded);
+      const list = await routes(page, seeded, viewport.short);
       await recordLayoutShifts(page);
       const found: Record<string, unknown> = {};
       await slowApi(page);
@@ -194,7 +206,8 @@ for (const viewport of [
       const measured: string[] = [];
       for (const endpoint of slowAlone(seeded)) {
         await slowApi(page, endpoint.matches);
-        for (const route of endpoint.routes) {
+        const list = endpoint.routes.filter((route) => !viewport.short || ownShortLayout(route));
+        for (const route of list) {
           // Warm (the shape caches filled by a first visit) and cold: the late answer must land
           // in its box both ways.
           await shiftsOnLoad(page, route);
@@ -268,7 +281,7 @@ test.describe("1440 × 900 hover", () => {
   test("hovering links and buttons moves nothing on any route", async ({ page }) => {
     test.setTimeout(300_000);
     const seeded = await seed(page);
-    const list = await routes(page, seeded);
+    const list = await routes(page, seeded, false);
     await recordLayoutShifts(page);
     const found: Record<string, unknown> = {};
     for (const route of list) {

@@ -37,6 +37,8 @@ export default defineConfig({
       // (e2e/support/layout.ts), and surfaces as one.
       name: "layout",
       testMatch: "layout-shift.spec.ts",
+      // Each test seeds what it needs, so `--shard` may split this one file between tests.
+      fullyParallel: true,
       retries: 0,
       use: { ...devices["Desktop Chrome"] },
     },

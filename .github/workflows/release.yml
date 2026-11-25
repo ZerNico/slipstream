@@ -45,20 +45,60 @@ jobs:
           [[ "$TAG" == *-* ]] && flags+=(--prerelease)
           gh release create "$TAG" "${flags[@]}"
 
+  # The tagged commit has normally passed CI on main already: a successful CI run pushed for
+  # this exact SHA is enough, so the release goes straight to the builds. Without one (or when
+  # the API cannot say), CI runs here as before.
+  passed:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+    outputs:
+      ci: ${{ steps.check.outputs.ci }}
+    steps:
+      - name: Has this commit passed CI?
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          # Push runs only: a pull request's run tests its merge with the base, not this SHA.
+          runs=$(gh run list --workflow ci.yml --commit "$SHA" --event push --status success \
+            --json databaseId --jq length) || runs=0
+          if [[ "$runs" =~ ^[0-9]+$ ]] && (( runs > 0 )); then
+            echo "CI already passed for $SHA, skipping it." >> "$GITHUB_STEP_SUMMARY"
+            echo "ci=passed" >> "$GITHUB_OUTPUT"
+          else
+            echo "No successful CI run for $SHA, running CI." >> "$GITHUB_STEP_SUMMARY"
+            echo "ci=run" >> "$GITHUB_OUTPUT"
+          fi
+
   ci:
+    needs: passed
+    if: needs.passed.outputs.ci != 'passed'
     uses: ./.github/workflows/ci.yml
     permissions:
       contents: read
 
   docker:
-    needs: [draft, ci]
+    needs: [draft, passed, ci]
+    # A skipped `ci` would skip everything after it; it may only be skipped because it passed.
+    if: >-
+      !cancelled() && needs.draft.result == 'success' && needs.passed.result == 'success' &&
+      (needs.ci.result == 'success' ||
+      (needs.ci.result == 'skipped' && needs.passed.outputs.ci == 'passed'))
     uses: ./.github/workflows/docker.yml
     permissions:
       contents: read
       packages: write
 
   android:
-    needs: [draft, ci]
+    needs: [draft, passed, ci]
+    if: >-
+      !cancelled() && needs.draft.result == 'success' && needs.passed.result == 'success' &&
+      (needs.ci.result == 'success' ||
+      (needs.ci.result == 'skipped' && needs.passed.outputs.ci == 'passed'))
     uses: ./.github/workflows/android.yml
     permissions:
       contents: read
@@ -71,6 +111,8 @@ jobs:
 
   assets:
     needs: [docker, android]
+    # Spelled out: the default would skip this whenever `ci` was skipped, as an ancestor.
+    if: ${{ !cancelled() && needs.docker.result == 'success' && needs.android.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:

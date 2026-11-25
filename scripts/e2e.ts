@@ -3,7 +3,8 @@
  * web app, starts the fake source and a server serving `apps/web/dist` from a temporary data
  * directory, runs Playwright with `SLIPSTREAM_E2E_URL`, then stops everything and deletes the
  * data. CI runs exactly this. `--skip-build` reuses the last build; `--keep` keeps the data.
- * Every other argument goes to Playwright: `pnpm e2e --skip-build shell.spec.ts` runs one spec.
+ * Every other argument goes to Playwright: `pnpm e2e --skip-build shell.spec.ts` runs one spec,
+ * `pnpm e2e --project=layout --shard=1/2` one of CI's four shards (.github/workflows/ci.yml).
  */
 import { spawn, spawnSync } from "node:child_process";
 import { mkdtempSync, rmSync } from "node:fs";

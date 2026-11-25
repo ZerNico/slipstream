@@ -30,10 +30,20 @@ jobs:
       - run: pnpm test
 
   # The web journey in a real browser against a fresh server serving the built web app, with the
-  # fake source as its only source. `pnpm e2e` does the same locally.
+  # fake source as its only source. `pnpm e2e` does the same locally. Four runners, each with its
+  # own server: Playwright shards by test count, not time, so the layout sweep (half the time in
+  # a tenth of the tests) and the other journeys are sharded apart, in two halves each.
+  # `pnpm e2e --project=layout --shard=1/2` runs one of them locally.
   e2e:
+    name: e2e (${{ matrix.project }} ${{ matrix.shard }}/2)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 20
+    strategy:
+      # Every shard reports, so one failure does not hide another.
+      fail-fast: false
+      matrix:
+        project: [layout, chromium]
+        shard: [1, 2]
     env:
       # Without a server the journeys would skip and pass: here that is a failure.
       SLIPSTREAM_E2E_REQUIRED: "1"
@@ -45,13 +55,16 @@ jobs:
       - uses: ./.github/actions/ffmpeg
       - name: Install Playwright chromium
         run: pnpm --filter @slipstream/web exec playwright install --with-deps chromium
-      - name: Build the web app, start fake source and server, run the journey
-        run: pnpm e2e
+      - name: Build the web app, start fake source and server, run the journey shard
+        env:
+          PROJECT: ${{ matrix.project }}
+          SHARD: ${{ matrix.shard }}
+        run: pnpm e2e --project="$PROJECT" --shard="$SHARD/2"
       - name: Keep Playwright traces of a failed run
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-traces
+          name: e2e-traces-${{ matrix.project }}-${{ matrix.shard }}
           path: apps/web/test-results
           retention-days: 7
 
