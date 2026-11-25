@@ -471,6 +471,9 @@ export const GuideRepoLive = Layer.effect(
     const bus = yield* EventBus;
     return GuideRepo.of({
       programmes: (range) => guide.between(epochMs(range.start), epochMs(range.end)),
+      // Asked for by id, a hidden channel's programmes come along too.
+      onChannel: (channelId, range) =>
+        guide.between(epochMs(range.start), epochMs(range.end), [channelId]),
       programme: (id) =>
         guide.programme(id).pipe(Effect.catchTag("NotFound", () => Effect.succeed(undefined))),
       changes: bus.events.pipe(

@@ -375,6 +375,10 @@ export const makeHarness = Effect.fnUntraced(function* (setup: {
   readonly planning?: MemoryPlanningOptions;
   /** What live TV keeps after its viewers leave; nothing by default. */
   readonly liveKeep?: LiveKeepRules;
+  /** The keep rules cannot be read (the database is in trouble). */
+  readonly liveKeepFails?: boolean;
+  /** A channel's programme on air cannot be read. */
+  readonly guideFails?: boolean;
 }) {
   yield* TestClock.setTime(T0);
   const harness: Harness = {
@@ -388,7 +392,12 @@ export const makeHarness = Effect.fnUntraced(function* (setup: {
     log: makeCaptureLog(),
   };
   const ports = Layer.mergeAll(
-    Layer.succeed(GuideRepo, harness.guide),
+    Layer.succeed(
+      GuideRepo,
+      setup.guideFails === true
+        ? { ...harness.guide, onChannel: () => Effect.die("the guide is gone") }
+        : harness.guide,
+    ),
     Layer.succeed(RuleRepo, harness.rules),
     Layer.succeed(Storage, harness.storage),
     Layer.succeed(HistoryRepo, harness.history),
@@ -401,7 +410,11 @@ export const makeHarness = Effect.fnUntraced(function* (setup: {
     ),
     Layer.effect(SegmentRepo, makeMemorySegmentRepo()),
     Lineup.fixed(setup.lineup ?? singleSource()),
-    setup.liveKeep === undefined ? LiveKeepPolicy.none : LiveKeepPolicy.fixed(setup.liveKeep),
+    setup.liveKeepFails === true
+      ? Layer.succeed(LiveKeepPolicy, { rules: Effect.die("the settings are gone") })
+      : setup.liveKeep === undefined
+        ? LiveKeepPolicy.none
+        : LiveKeepPolicy.fixed(setup.liveKeep),
     publishedEventsLayer,
     fakeCapture(setup.behaviours ?? {}, harness.log),
   );

@@ -9,7 +9,7 @@
 import { assert, describe, it } from "@effect/vitest";
 import { DateTime, Effect, Layer } from "effect";
 import { TestClock } from "effect/testing";
-import { planHousehold } from "@slipstream/domain";
+import { ChannelId, planHousehold } from "@slipstream/domain";
 import { GuideRepo, PlanningContextRepo, RecordingRepo, RuleRepo } from "@slipstream/recorder";
 import { ServerConfig } from "../src/config.ts";
 import { Db } from "../src/db/client.ts";
@@ -216,6 +216,42 @@ describe("planning parity", () => {
         assert.deepStrictEqual(server.skipped, scheduler.skipped);
         assert.deepStrictEqual([...server.unserved], [...scheduler.unserved]);
         assert.deepStrictEqual([...server.moved], [...scheduler.moved]);
+      }).pipe(Effect.provide(servicesIn(root)));
+    }).pipe(Effect.scoped),
+  );
+
+  it.effect("reads one channel's programme on air, a hidden channel's too", () =>
+    Effect.gen(function* () {
+      const root = yield* tempDir;
+      yield* Effect.gen(function* () {
+        const now = Date.UTC(2026, 10, 25, 20, 0);
+        yield* seed(now);
+        const { write } = yield* Db;
+        yield* write.insert(channels).values({
+          id: "quiet",
+          name: "Quiet",
+          guideChannelId: "quiet.de",
+          favourite: false,
+          hidden: true,
+        });
+        yield* write.insert(programmes).values({
+          id: "night",
+          sourceId: "s1",
+          guideChannelId: "quiet.de",
+          start: now - HOUR,
+          end: now + HOUR,
+          title: "Nachtprogramm",
+          categories: [],
+          repeat: false,
+          live: false,
+        });
+        const at = DateTime.makeUnsafe(now);
+        const guide = yield* GuideRepo;
+        const onAir = yield* guide.onChannel(ChannelId.make("quiet"), { start: at, end: at });
+        assert.deepStrictEqual(
+          onAir.map((programme) => programme.id),
+          ["night"],
+        );
       }).pipe(Effect.provide(servicesIn(root)));
     }).pipe(Effect.scoped),
   );

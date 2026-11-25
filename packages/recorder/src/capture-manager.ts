@@ -27,12 +27,14 @@ import {
   CaptureReason,
   type CaptureState,
   ChannelId,
+  initialLiveKeep,
   keepRunningUntil,
   MINUTE,
   type SourceId,
   type SourceStreamId,
 } from "@slipstream/domain";
 import {
+  Cause,
   Clock,
   Context,
   Data,
@@ -204,7 +206,10 @@ interface Session {
   windowFromMs: number;
   /** Until when the channel keeps running for a live viewer who left; unset while none did. */
   lingerUntilMs: number | undefined;
-  /** Set by `stopWhenIdle`: the channel stops with its last consumer, lingering for nobody. */
+  /**
+   * Set by `stopWhenIdle`: the channel stops with its last consumer, lingering for nobody and
+   * keeping no buffer. A live viewer joining again clears it.
+   */
   stopWhenIdle: boolean;
 }
 
@@ -288,6 +293,22 @@ export class CaptureManager extends Context.Service<
     Layer.effect(CaptureManager, makeCaptureManager(options));
 }
 
+/**
+ * `read`, or `fallback` (logged) when it fails: the keep rules and the guide are database
+ * reads, and trouble there must never stop the capture bookkeeping (a consumer released, a
+ * window kept). Interruption still interrupts.
+ */
+const orElse = <A>(read: Effect.Effect<A>, fallback: A, what: string) =>
+  read.pipe(
+    Effect.catchCause((cause) =>
+      Cause.hasInterruptsOnly(cause)
+        ? Effect.failCause(cause)
+        : Effect.logWarning(`Could not read ${what}; going on without it`, cause).pipe(
+            Effect.as(fallback),
+          ),
+    ),
+  );
+
 const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerOptions) {
   const capture = yield* Capture;
   const lineup = yield* Lineup;
@@ -313,17 +334,24 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
   const buffers = new Map<ChannelId, KeptBuffer>();
   let captureCounter = 0;
 
-  const keepBufferMs = Effect.map(keepPolicy.rules, (rules) => rules.keepBufferMinutes * MINUTE);
+  /** The live keep rules; the defaults when they cannot be read. */
+  const keepRules = orElse(keepPolicy.rules, initialLiveKeep, "the live keep rules");
+
+  const keepBufferMs = Effect.map(keepRules, (rules) => rules.keepBufferMinutes * MINUTE);
 
   /** When a channel whose live viewer left at `now` stops, by the keep rules and the guide. */
   const lingerDeadline = (channelId: ChannelId, now: number) =>
     Effect.gen(function* () {
-      const { keepRunning } = yield* keepPolicy.rules;
+      const { keepRunning } = yield* keepRules;
       if (keepRunning !== "programmeEnd") return keepRunningUntil(keepRunning, now, undefined);
       const instant = DateTime.makeUnsafe(now);
-      const onAir = (yield* guide.programmes({ start: instant, end: instant })).find(
+      const onChannel = yield* orElse(
+        guide.onChannel(channelId, { start: instant, end: instant }),
+        [],
+        "the programme on air",
+      );
+      const onAir = onChannel.find(
         (programme) =>
-          programme.channelId === channelId &&
           DateTime.toEpochMillis(programme.start) <= now &&
           now < DateTime.toEpochMillis(programme.end),
       );
@@ -344,6 +372,19 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
     if (keepBuffer) {
       buffers.set(session.channelId, { fromMs: session.windowFromMs, stoppedAtMs: now });
     }
+  };
+
+  /**
+   * A live viewer's linger that ended while others (a recording) keep the capture running: the
+   * DVR window it kept becomes the channel's kept buffer, as if the capture had stopped when the
+   * linger ended. Call under the lock.
+   */
+  const settleLinger = (session: Session, now: number) => {
+    const until = session.lingerUntilMs;
+    if (until === undefined || until > now) return;
+    if (session.consumers.size === 0 || hasLiveViewer(session)) return;
+    session.lingerUntilMs = undefined;
+    buffers.set(session.channelId, { fromMs: session.windowFromMs, stoppedAtMs: until });
   };
 
   /**
@@ -386,7 +427,8 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
   /** Removes a session from the active set and tells its consumers why. Call under the lock. */
   const evict = (victim: Session, reason: CaptureReason, now: number) =>
     Effect.gen(function* () {
-      retire(victim, now, keepsWindow(victim, now));
+      settleLinger(victim, now);
+      retire(victim, now, keepsWindow(victim, now) && !victim.stopWhenIdle);
       for (const entry of victim.consumers.values()) {
         yield* Deferred.succeed(entry.dropped, reason);
         // A session that has not started a run yet has nothing to report it in.
@@ -680,7 +722,7 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
               if (session.consumers.size > 0 || sessions.get(session.channelId) !== session) {
                 return false;
               }
-              retire(session, now, true);
+              retire(session, now, !session.stopWhenIdle);
               return true;
             }),
           );
@@ -778,7 +820,7 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
         Effect.sync(() => {
           if (sessions.get(session.channelId) !== session || session.consumers.size > 0) return [];
           if (session.lingerUntilMs !== undefined && session.lingerUntilMs > now) return [];
-          retire(session, now, true);
+          retire(session, now, !session.stopWhenIdle);
           return [session];
         }),
       );
@@ -807,6 +849,7 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
           } => {
             const session = sessions.get(channelId);
             if (session === undefined || session.consumers.get(consumerId) !== entry) return {};
+            settleLinger(session, now);
             session.consumers.delete(consumerId);
             if (deadline !== undefined && deadline > now && !session.stopWhenIdle) {
               session.lingerUntilMs = Math.max(session.lingerUntilMs ?? 0, deadline);
@@ -815,7 +858,8 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
             if (session.lingerUntilMs !== undefined && session.lingerUntilMs > now) {
               return { lingering: { session, untilMs: session.lingerUntilMs } };
             }
-            retire(session, now, live);
+            // An admin stopped it to free the stream: nothing of it is kept.
+            retire(session, now, live && !session.stopWhenIdle);
             return { gone: session };
           },
         ),
@@ -836,7 +880,8 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
           session.stopWhenIdle = true;
           session.lingerUntilMs = undefined;
           if (session.consumers.size > 0) return [];
-          retire(session, now, true);
+          // Stopped by hand to free the stream: its rewind buffer goes too.
+          retire(session, now, false);
           return [session];
         }),
       );
@@ -859,10 +904,13 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
         Effect.gen(function* () {
           const existing = sessions.get(channelId);
           if (existing !== undefined) {
+            settleLinger(existing, now);
             existing.consumers.set(consumer.id, entry);
             if (live) {
               // Back in time: the channel no longer lingers, and its kept buffer is its again.
+              // Someone watches again, so an admin's stop no longer applies.
               existing.lingerUntilMs = undefined;
+              existing.stopWhenIdle = false;
               absorbBuffer(existing, now, keptMs);
             }
             return { session: existing, created: false, victims: [] as Array<Session> };
@@ -934,6 +982,7 @@ const makeCaptureManager = Effect.fnUntraced(function* (options: CaptureManagerO
       const keptMs = yield* keepBufferMs;
       return yield* lock.withPermit(
         Effect.sync(() => {
+          for (const session of sessions.values()) settleLinger(session, now);
           const running = [...sessions.values()]
             .filter((session) => keepsWindow(session, now))
             .map((session): LiveWindow => ({

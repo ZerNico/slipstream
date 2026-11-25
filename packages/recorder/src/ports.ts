@@ -155,6 +155,8 @@ export class GuideRepo extends Context.Service<
   {
     /** Programmes overlapping `range`. */
     programmes(range: TimeRange): Effect.Effect<ReadonlyArray<Programme>>;
+    /** Programmes of one channel overlapping `range`, hidden channels included. */
+    onChannel(channelId: ChannelId, range: TimeRange): Effect.Effect<ReadonlyArray<Programme>>;
     programme(id: ProgrammeId): Effect.Effect<Programme | undefined>;
     readonly changes: Stream.Stream<void>;
   }

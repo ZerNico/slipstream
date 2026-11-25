@@ -500,7 +500,7 @@ const makeRecorder = Effect.gen(function* () {
         for (const recording of running) {
           yield* Effect.ignore(stop(RecordingId.make(recording.id)));
         }
-        // Nobody to keep it running for: it stops with its last consumer.
+        // Nobody to keep it running for: it stops with its last consumer, keeping no buffer.
         yield* manager.stopWhenIdle(ChannelId.make(row.channelId));
       }),
     /** The channel captures running now, with their source slots and consumers (SPEC 7.9). */

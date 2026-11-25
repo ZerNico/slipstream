@@ -113,8 +113,10 @@ HLS routes live outside the JSON API because players cannot send auth headers re
   stream takes its stream at once. Once a watched channel's capture stopped, its DVR window stays
   retained as a kept buffer (1 hour by default, up to 24 hours, never beyond the DVR window); a
   viewer coming back rewinds into it, and the live playlist shows the gap with a discontinuity
-  and each stretch's own `PROGRAM-DATE-TIME`. Kept buffers live in memory, so a restart lets them
-  go.
+  and each stretch's own `PROGRAM-DATE-TIME`. A recording that keeps the capture running past
+  the linger does not change that: the viewer's window becomes a kept buffer when the linger
+  ends. A capture an admin stops by hand keeps nothing. Kept buffers live in memory, so a
+  restart lets them go.
 - **ffmpeg processes are scoped resources** (Effect `Scope`): always killed on interrupt or
   shutdown. Reconnects use `Schedule`.
 - **Startup self-check:** the server runs the ffmpeg it finds against a generated test stream and

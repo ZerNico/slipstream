@@ -187,6 +187,12 @@ export const makeMemoryGuideRepo = (
           Effect.map(Ref.get(ref), (programmes) =>
             programmes.filter((programme) => overlaps(programme, range)),
           ),
+        onChannel: (channelId, range) =>
+          Effect.map(Ref.get(ref), (programmes) =>
+            programmes.filter(
+              (programme) => programme.channelId === channelId && overlaps(programme, range),
+            ),
+          ),
         programme: (id) =>
           Effect.map(Ref.get(ref), (programmes) =>
             programmes.find((programme) => programme.id === id),

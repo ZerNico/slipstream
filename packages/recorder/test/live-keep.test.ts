@@ -260,6 +260,99 @@ describe("live TV that waits", () => {
     }),
   );
 
+  it.effect("keeps the rewind buffer when a recording keeps the capture past the linger", () =>
+    Effect.gen(function* () {
+      const { harness, layer } = yield* makeHarness({ liveKeep: keep });
+      yield* Effect.gen(function* () {
+        const viewer = yield* lease(skyF1, "sofa", "live");
+        yield* advance(5, 30);
+        // A two-hour recording joins the capture the viewer started.
+        yield* lease(skyF1, "race", "recording");
+        yield* advance(5, 30);
+        yield* viewer.close;
+        // The linger ends at T0 + 20 min; the recording keeps the capture running.
+        yield* advance(15, 30);
+        assert.strictEqual(harness.log.active.get(url(skyF1)), 1);
+        // What the viewer could rewind stays as the channel's kept buffer.
+        assert.deepStrictEqual(yield* windowsOf(skyF1), [
+          { channelId: skyF1, fromMs: T0, toMs: T0 + 20 * MINUTE },
+        ]);
+        yield* sweep;
+        // Back 30 minutes after leaving: the whole buffer is still there.
+        yield* advance(15, 30);
+        yield* lease(skyF1, "sofa-again", "live");
+        assert.deepStrictEqual(yield* windowsOf(skyF1), [{ channelId: skyF1, fromMs: T0 }]);
+        yield* sweep;
+        assert.strictEqual((yield* segmentsOf(skyF1))[0]?.startMs, T0);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("releases a viewer and stops the channel when the keep rules cannot be read", () =>
+    Effect.gen(function* () {
+      const { harness, layer } = yield* makeHarness({ liveKeepFails: true });
+      yield* Effect.gen(function* () {
+        const viewer = yield* lease(skyF1, "sofa", "live");
+        assert.isTrue(Exit.isSuccess(viewer.exit));
+        yield* advance(2, 30);
+        yield* viewer.close;
+        // The viewer is gone; the defaults (10 minutes running) apply.
+        assert.deepStrictEqual((yield* statusOf(skyF1))?.consumers, []);
+        assert.isAbove(yield* windowsOf(skyF1).pipe(Effect.map((windows) => windows.length)), 0);
+        yield* advance(11, 30);
+        assert.strictEqual(harness.log.active.get(url(skyF1)), 0);
+        assert.isUndefined(yield* statusOf(skyF1));
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect("releases a viewer when the programme on air cannot be read", () =>
+    Effect.gen(function* () {
+      const { layer } = yield* makeHarness({
+        liveKeep: { keepRunning: "programmeEnd", keepBufferMinutes: 60 },
+        guideFails: true,
+      });
+      yield* Effect.gen(function* () {
+        const viewer = yield* lease(skyF1, "sofa", "live");
+        yield* advance(2, 30);
+        yield* viewer.close;
+        // No programme known: the default ten minutes.
+        const status = yield* statusOf(skyF1);
+        assert.deepStrictEqual(status?.consumers, []);
+        assert.strictEqual(status?.lingeringUntilMs, T0 + 12 * MINUTE);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
+
+  it.effect(
+    "keeps nothing of a channel an admin stopped, and forgets the stop for a new viewer",
+    () =>
+      Effect.gen(function* () {
+        const { harness, layer } = yield* makeHarness({ liveKeep: keep });
+        yield* Effect.gen(function* () {
+          const manager = yield* CaptureManager;
+          const viewer = yield* lease(skyF1, "sofa", "live");
+          yield* advance(5, 30);
+          yield* viewer.close;
+          // Lingering; an admin stops it to free the stream.
+          yield* manager.stopWhenIdle(skyF1);
+          yield* settle;
+          assert.strictEqual(harness.log.active.get(url(skyF1)), 0);
+          assert.deepStrictEqual(yield* windowsOf(skyF1), []);
+
+          // A capture an admin asked to stop, then someone watches again: it lingers as usual.
+          const recorder = yield* lease(prosieben, "race", "recording");
+          yield* manager.stopWhenIdle(prosieben);
+          const back = yield* lease(prosieben, "sofa", "live");
+          yield* advance(1, 30);
+          yield* back.close;
+          yield* recorder.close;
+          assert.isDefined((yield* statusOf(prosieben))?.lingeringUntilMs);
+          assert.strictEqual(harness.log.active.get(url(prosieben)), 1);
+        }).pipe(Effect.provide(layer));
+      }),
+  );
+
   it.effect("drops rewind buffers before recordings when disk space runs low", () =>
     Effect.gen(function* () {
       const { harness, layer } = yield* makeHarness({
