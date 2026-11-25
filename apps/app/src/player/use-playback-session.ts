@@ -14,6 +14,7 @@ import {
   type PlayTarget,
   type SessionFailure,
 } from "./playback.ts";
+import { deviceCapabilities } from "./native-media.ts";
 import { startRenewal, type Renewal } from "./renewal.ts";
 
 /** A started playback session, ready for the player. */
@@ -89,7 +90,9 @@ export const usePlaybackSession = (
     });
     currentNetwork()
       .then((network) =>
-        runAction(startSession(sessionRequest(target, network, startQuality.current))),
+        runAction(
+          startSession(sessionRequest(target, network, startQuality.current, deviceCapabilities())),
+        ),
       )
       .then((start) => {
         if (start._tag === "Refused") {
