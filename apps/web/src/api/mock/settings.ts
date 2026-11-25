@@ -62,8 +62,14 @@ export const settingsGroup = (ctx: MockContext) => {
       .handle("savePlayback", ({ payload }) =>
         Effect.gen(function* () {
           yield* requireAdmin;
-          data.playbackSettings = payload;
-          return payload;
+          // An app that does not know the conversion limit yet keeps the stored one.
+          const saved = {
+            ...payload,
+            pictureConversions:
+              payload.pictureConversions ?? data.playbackSettings.pictureConversions,
+          };
+          data.playbackSettings = saved;
+          return saved;
         }),
       ),
   );

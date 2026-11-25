@@ -7944,7 +7944,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PlaybackSettings"
+                "$ref": "#/components/schemas/PlaybackSettingsUpdate"
               }
             }
           },
@@ -8590,6 +8590,98 @@
           "9",
           "10"
         ]
+      },
+      "PlaybackSettingsUpdate": {
+        "type": "object",
+        "properties": {
+          "hardwareAcceleration": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "off"
+            ]
+          },
+          "detected": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "ok": {
+                "type": "boolean"
+              },
+              "testedAt": {
+                "type": "string"
+              },
+              "detail": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "ok",
+              "testedAt"
+            ],
+            "additionalProperties": false
+          },
+          "preference": {
+            "type": "string",
+            "enum": [
+              "quality",
+              "power"
+            ]
+          },
+          "pictureConversions": {
+            "$ref": "#/components/schemas/PictureConversionLimit"
+          },
+          "quality": {
+            "type": "object",
+            "properties": {
+              "home": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "original",
+                  "8000",
+                  "4000",
+                  "2000"
+                ]
+              },
+              "away": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "original",
+                  "8000",
+                  "4000",
+                  "2000"
+                ]
+              },
+              "mobile": {
+                "type": "string",
+                "enum": [
+                  "auto",
+                  "original",
+                  "8000",
+                  "4000",
+                  "2000"
+                ]
+              }
+            },
+            "required": [
+              "home",
+              "away",
+              "mobile"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": [
+          "hardwareAcceleration",
+          "preference",
+          "quality"
+        ],
+        "additionalProperties": false
       },
       "ArtworkSettings": {
         "type": "object",

@@ -72,6 +72,16 @@ export const PlaybackSettings = Schema.Struct({
 export type PlaybackSettings = typeof PlaybackSettings.Type;
 
 /**
+ * What a client saves: the playback settings, where an app from before "Simultaneous picture
+ * conversions" leaves that field out and the server keeps what is stored.
+ */
+export const PlaybackSettingsUpdate = PlaybackSettings.mapFields((fields) => ({
+  ...fields,
+  pictureConversions: Schema.optionalKey(PictureConversionLimit),
+})).annotate({ identifier: "PlaybackSettingsUpdate" });
+export type PlaybackSettingsUpdate = typeof PlaybackSettingsUpdate.Type;
+
+/**
  * Settings. Everyone reads them (other profiles see "Defaults are set by Jonas (admin)"); only
  * admins save. Saving recording settings checks `extraTimeDefaultsProblems` from the domain and
  * answers `InvalidInput` with problems like `{ path: "extraTime.overrides.3", code:
@@ -94,7 +104,7 @@ export class SettingsGroup extends HttpApiGroup.make("settings")
     }),
     HttpApiEndpoint.get("playback", "/playback", { success: PlaybackSettings }),
     HttpApiEndpoint.put("savePlayback", "/playback", {
-      payload: PlaybackSettings,
+      payload: PlaybackSettingsUpdate,
       success: PlaybackSettings,
       error: [InvalidInput, Forbidden],
     }),

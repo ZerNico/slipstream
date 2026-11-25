@@ -13,6 +13,7 @@ import {
   InvalidInput,
   NotFound,
   PlaybackSettings,
+  type PlaybackSettingsUpdate,
   RecordingSettings,
   type InputProblem,
 } from "@slipstream/api";
@@ -194,12 +195,18 @@ const makeSettings = Effect.gen(function* () {
 
   const savePlayback = Effect.fn("Settings.savePlayback")(function* (
     actor: User,
-    input: PlaybackSettings,
+    input: PlaybackSettingsUpdate,
   ) {
     yield* requireAdmin(actor);
-    // The probe's result belongs to the server; a client cannot overwrite it.
-    const { detected: _ignored, ...rest } = input;
-    yield* store(PLAYBACK_KEY, Schema.encodeSync(StoredPlaybackJson)(rest));
+    // The probe's result belongs to the server; a client cannot overwrite it. An app that does
+    // not know "Simultaneous picture conversions" yet keeps the stored value.
+    const { detected: _ignored, pictureConversions, ...rest } = input;
+    const kept =
+      pictureConversions ?? readStoredPlayback(yield* stored(PLAYBACK_KEY)).pictureConversions;
+    yield* store(
+      PLAYBACK_KEY,
+      Schema.encodeSync(StoredPlaybackJson)({ ...rest, pictureConversions: kept }),
+    );
     return yield* playback;
   });
 

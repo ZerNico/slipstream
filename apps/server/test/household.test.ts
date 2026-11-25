@@ -483,6 +483,12 @@ describe("recording settings and record options", () => {
           .status,
       ).toBe(400);
     }
+    // An app from before the limit existed saves without it: the stored limit stays.
+    const { pictureConversions: _left, ...older } = { ...next, preference: "quality" };
+    expect((await admin.request("PUT", "/api/settings/playback", older)).json).toEqual({
+      ...older,
+      pictureConversions: "3",
+    });
   });
 
   it("keeps live TV running and its rewind buffer as an admin sets it", async () => {
