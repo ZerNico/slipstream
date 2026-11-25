@@ -60,7 +60,8 @@ system (tokens, timeline, screen mockups). This file is orientation, rules and v
 - Without fnm's shell hook, `source scripts/dev-env.sh` puts Node 26 and pnpm on PATH.
 - Every "verified" claim rests on output seen in this session.
 - ffmpeg 8 or newer (`MIN_FFMPEG_MAJOR` in `packages/recorder/src/capture/binaries.ts`; the Docker
-  image pins 9) is required for the recorder's capture tests and the fake source's (`brew install ffmpeg`).
+  image pins jellyfin-ffmpeg 8) is required for the recorder's capture tests and the fake
+  source's (`brew install ffmpeg`).
 - Android builds: `source scripts/android-env.sh` first (JDK 17, Android SDK in
   `~/Library/Android/sdk`).
 - Never kill processes by pattern. Kill the PID you started.

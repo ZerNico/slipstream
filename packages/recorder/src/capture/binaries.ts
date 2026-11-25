@@ -8,7 +8,7 @@
  * The oldest ffmpeg (and ffprobe) major version accepted. The capture arguments themselves are
  * older (`-stats_period` came in 4.4), but what the recorder reads back (log lines, stream
  * summaries, refused-connection messages) and the server's conversions are tested against
- * ffmpeg 8 and 9 only; the Docker image pins 9.
+ * ffmpeg 8 and 9 only; the Docker image pins jellyfin-ffmpeg 8.
  */
 export const MIN_FFMPEG_MAJOR = 8;
 

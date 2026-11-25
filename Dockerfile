@@ -1,17 +1,32 @@
 # syntax=docker/dockerfile:1
 
-# Slipstream in one image: the server, the built web app and a pinned ffmpeg 9. Releases are
-# published as ghcr.io/zernico/slipstream (.github/workflows/docker.yml).
+# Slipstream in one image: the server, the built web app and a pinned jellyfin-ffmpeg 8.
+# Releases are published as ghcr.io/zernico/slipstream (.github/workflows/docker.yml).
 #   docker build -t slipstream .
 #   docker run -p 8080:8080 -v slipstream-config:/config -v slipstream-data:/data slipstream
 # Bootstrap settings are SLIPSTREAM_* environment variables (docs/configuration.md); the
 # rest is configured in the web UI. Back up /config: it holds the database and secret.key,
 # without which stored source credentials cannot be read.
 
-# Bases pinned by digest (multi-arch index), so a rebuild never picks up a different Node or
-# ffmpeg. Bumping ffmpeg is a deliberate release, guarded by the server's startup self-check.
+# Node pinned by digest (multi-arch index, Debian trixie), so a rebuild never picks up a
+# different Node.
 FROM node:26-slim@sha256:e6bedef217677b276c591795e169840edd9096dbf13f29df8ef8d1856b8820bc AS node
-FROM mwader/static-ffmpeg:9.0.2@sha256:7d9bdaaf887f7e6ce6151f67325c344074b5ff1fb75316011c3376503e449a7b AS ffmpeg
+
+# ffmpeg is Jellyfin's build (jellyfin-ffmpeg8, Debian trixie): unlike a static build it loads
+# GPU drivers, so VAAPI, Quick Sync (oneVPL) and NVENC work when the device is passed through,
+# and it bundles the Intel media driver. One .deb per architecture, fetched by exact URL and
+# checked against its sha256 (from the repository's Packages index); TARGETARCH picks the
+# stage. Bumping it is a deliberate release, guarded by the server's startup self-check:
+# change the version and both checksums together.
+FROM scratch AS ffmpeg-amd64
+ADD --checksum=sha256:82bd7422530740af738891c54b548eadf9bb572ff875976eddbe231e6f02482b \
+    https://repo.jellyfin.org/debian/pool/main/j/jellyfin-ffmpeg/jellyfin-ffmpeg8_8.1.3-2-trixie_amd64.deb \
+    /jellyfin-ffmpeg.deb
+FROM scratch AS ffmpeg-arm64
+ADD --checksum=sha256:21e7f67d3fe70b4c757f8c5064f1317e2580a08b3b84460b7a79af0a99c1095f \
+    https://repo.jellyfin.org/debian/pool/main/j/jellyfin-ffmpeg/jellyfin-ffmpeg8_8.1.3-2-trixie_arm64.deb \
+    /jellyfin-ffmpeg.deb
+FROM ffmpeg-${TARGETARCH} AS ffmpeg
 
 FROM node AS build
 WORKDIR /repo
@@ -41,10 +56,12 @@ RUN node scripts/stamp-version.ts "$APP_VERSION" "$APP_REVISION"
 
 FROM node AS runtime
 # tini reaps ffmpeg processes and forwards signals; DejaVu is the fake source's overlay font.
-RUN apt-get update \
- && apt-get install -y --no-install-recommends tini fonts-dejavu-core \
+# jellyfin-ffmpeg installs into /usr/lib/jellyfin-ffmpeg (ffmpeg, ffprobe, vainfo) and pulls its
+# libraries from Debian.
+RUN --mount=type=bind,from=ffmpeg,source=/jellyfin-ffmpeg.deb,target=/tmp/jellyfin-ffmpeg.deb \
+    apt-get update \
+ && apt-get install -y --no-install-recommends tini fonts-dejavu-core /tmp/jellyfin-ffmpeg.deb \
  && rm -rf /var/lib/apt/lists/*
-COPY --from=ffmpeg /ffmpeg /ffprobe /usr/local/bin/
 WORKDIR /app
 COPY --from=build /repo/package.json /repo/pnpm-workspace.yaml ./
 COPY --from=build /repo/node_modules node_modules
@@ -53,14 +70,16 @@ COPY --from=build /repo/tools tools
 COPY --from=build /repo/apps/server apps/server
 COPY --from=build /repo/apps/web/dist apps/web/dist
 RUN mkdir -p /config /data && chown node:node /config /data
+# PATH: the fake source (and a shell in the container) runs `ffmpeg`, `ffprobe` and `vainfo`.
 ENV NODE_ENV=production \
     SLIPSTREAM_HOST=0.0.0.0 \
     SLIPSTREAM_PORT=8080 \
     SLIPSTREAM_CONFIG_DIR=/config \
     SLIPSTREAM_DATA_DIR=/data \
     SLIPSTREAM_WEB_DIR=/app/apps/web/dist \
-    SLIPSTREAM_FFMPEG=/usr/local/bin/ffmpeg \
-    SLIPSTREAM_FFPROBE=/usr/local/bin/ffprobe \
+    SLIPSTREAM_FFMPEG=/usr/lib/jellyfin-ffmpeg/ffmpeg \
+    SLIPSTREAM_FFPROBE=/usr/lib/jellyfin-ffmpeg/ffprobe \
+    PATH=/usr/lib/jellyfin-ffmpeg:$PATH \
     SLIPSTREAM_MDNS=false
 USER node
 VOLUME ["/config", "/data"]

@@ -6,6 +6,7 @@ describe("parseVersion", () => {
     expect(parseVersion("ffmpeg version 9.0.2 Copyright (c) 2000-2026")).toBe("9.0.2");
     expect(parseVersion("ffprobe version n7.1-25-g1234 Copyright")).toBe("7.1");
     expect(parseVersion("ffprobe version 8.1 Copyright")).toBe("8.1");
+    expect(parseVersion("ffmpeg version 8.1.3-Jellyfin Copyright (c) 2000-2026")).toBe("8.1.3");
     expect(parseVersion("ffmpeg version N-118000-gabcdef")).toBeNull();
     expect(parseVersion("nonsense")).toBeNull();
     expect(majorOf("9.0.2")).toBe(9);
