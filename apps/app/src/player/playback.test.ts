@@ -75,6 +75,14 @@ describe("sessionRequest", () => {
     });
     expect(wire.quality).toEqual({ _tag: "Auto" });
   });
+
+  it("tells the server a live session starts behind the live edge", () => {
+    const channelId = "f1" as never;
+    const behind = sessionRequest({ _tag: "Live", channelId, from: "start" });
+    expect(Schema.encodeSync(PlaybackSessionRequest)(behind).startsBehindLive).toBe(true);
+    const atLive = sessionRequest({ _tag: "Live", channelId, from: "live" });
+    expect(atLive.startsBehindLive).toBeUndefined();
+  });
 });
 
 describe("positionForInstant", () => {

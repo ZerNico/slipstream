@@ -99,7 +99,10 @@ interface Job {
   readonly done: Deferred.Deferred<string | undefined>;
   fiber: Fiber.Fiber<unknown> | undefined;
   waiters: number;
-  /** A look-ahead runs to the end even when nobody waits. */
+  /**
+   * A look-ahead on a free job slot: it runs to the end even when nobody waits. A job that
+   * queues for a slot never is: it stops when its last waiter leaves.
+   */
   pinned: boolean;
   /** A look-ahead that found no free job slot and gave up: a waiter converts afresh. */
   skipped: boolean;
@@ -261,7 +264,8 @@ const makeTranscoder = Effect.gen(function* () {
   /**
    * Starts converting into `output`. A look-ahead (`pinned`) takes a job slot only when one is
    * free right now: segments someone waits for queue for slots, a look-ahead never does. One
-   * that finds none gives up (unless a request joined it meanwhile, which then queues).
+   * that finds none gives up, unless a request joined it meanwhile: then it queues for that
+   * request and stops when it leaves.
    */
   const start = (request: SegmentRequest, output: string, pinned: boolean) =>
     Effect.gen(function* () {
@@ -284,7 +288,11 @@ const makeTranscoder = Effect.gen(function* () {
               free
                 ? restore(convert(request, output)).pipe(Effect.ensuring(slots.release(1)))
                 : job.waiters > 0
-                  ? restore(queued)
+                  ? // Someone wants it after all: it queues like theirs, and stops with them.
+                    Effect.suspend(() => {
+                      job.pinned = false;
+                      return restore(queued);
+                    })
                   : Effect.sync(() => {
                       job.skipped = true;
                       return undefined;
@@ -322,11 +330,8 @@ const makeTranscoder = Effect.gen(function* () {
     Effect.gen(function* () {
       const output = outputOf(request);
       if (yield* exists(output)) return;
-      const running = jobs.get(output);
-      if (running !== undefined) {
-        running.pinned = true;
-        return;
-      }
+      // Already converting for someone: it goes on as long as they wait.
+      if (jobs.has(output)) return;
       yield* start(request, output, true);
     });
 

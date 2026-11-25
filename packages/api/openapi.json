@@ -9403,6 +9403,9 @@
           },
           "audioLanguage": {
             "type": "string"
+          },
+          "startsBehindLive": {
+            "type": "boolean"
           }
         },
         "required": [

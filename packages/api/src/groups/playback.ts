@@ -43,6 +43,12 @@ export const PlaybackSessionRequest = Schema.Struct({
   playbackRate: Schema.optionalKey(PlaybackRate),
   /** Preferred audio language as the guide reports it, e.g. "deu". */
   audioLanguage: Schema.optionalKey(Schema.String),
+  /**
+   * A live session the player starts behind the live edge (from the start of the rewind buffer,
+   * a resume position): its picture conversion is its own rather than shared with the channel's
+   * live viewers, and counts so against the server's limit.
+   */
+  startsBehindLive: Schema.optionalKey(Schema.Boolean),
 }).annotate({ identifier: "PlaybackSessionRequest" });
 export type PlaybackSessionRequest = typeof PlaybackSessionRequest.Type;
 

@@ -192,12 +192,26 @@ describe("Transcoder", () => {
         const live = { _tag: "Live", channelId: ChannelId.make("ch") } as const;
         const recording = { _tag: "Recording", recordingId: RecordingId.make("rec") } as const;
         // Live viewers at the edge share one conversion; anything else is its own.
-        assert.strictEqual(conversionStream(live, "s1"), conversionStream(live, "s2"));
-        assert.notStrictEqual(conversionStream(recording, "s3"), conversionStream(live, "s1"));
-        assert.notStrictEqual(conversionStream(recording, "s3"), conversionStream(recording, "s4"));
+        assert.strictEqual(
+          conversionStream({ source: live }, "s1"),
+          conversionStream({ source: live }, "s2"),
+        );
+        assert.notStrictEqual(
+          conversionStream({ source: recording }, "s3"),
+          conversionStream({ source: live }, "s1"),
+        );
+        assert.notStrictEqual(
+          conversionStream({ source: recording }, "s3"),
+          conversionStream({ source: recording }, "s4"),
+        );
+        // Live started behind the edge converts other segments than the live viewers'.
+        assert.notStrictEqual(
+          conversionStream({ source: live, startsBehindLive: true }, "s6"),
+          conversionStream({ source: live }, "s1"),
+        );
         // Fill the limit with the channel's live conversion and others.
         const variant = "x";
-        const keys = [conversionKey(conversionStream(live, "s1"), variant)];
+        const keys = [conversionKey(conversionStream({ source: live }, "s1"), variant)];
         let filled = 0;
         while (!(yield* transcoder.videoBusy(keys.at(-1) ?? "", false))) {
           yield* transcoder.touchVideo(keys.at(-1) ?? "");
@@ -205,10 +219,13 @@ describe("Transcoder", () => {
           keys.push(conversionKey(`other${filled}`, variant));
         }
         // The same channel and variant played from a recording converts other segments.
-        const fromRecording = conversionKey(conversionStream(recording, "s3"), variant);
+        const fromRecording = conversionKey(conversionStream({ source: recording }, "s3"), variant);
         assert.isTrue(yield* transcoder.videoBusy(fromRecording, false));
         assert.isFalse(
-          yield* transcoder.videoBusy(conversionKey(conversionStream(live, "s5"), variant), false),
+          yield* transcoder.videoBusy(
+            conversionKey(conversionStream({ source: live }, "s5"), variant),
+            false,
+          ),
         );
       }),
     ),
@@ -250,6 +267,30 @@ describe("Transcoder", () => {
         assert.lengthOf(yield* Ref.get(runs.started), slots, "the look-ahead never ran");
         // Asked for, it converts.
         assert.isDefined(yield* transcoder.segment(request(root, smaller, 99), undefined));
+      }),
+    ),
+  );
+
+  it.live("stops a queued conversion when its request leaves, look-ahead or not", () =>
+    withTranscoder((transcoder, runs, root) =>
+      Effect.gen(function* () {
+        const slots = Math.max(1, Math.floor(availableParallelism() / 4));
+        const busy = yield* Effect.forEach(
+          Array.from({ length: slots }, (_, index) => request(root, smaller, 20 + index)),
+          (segment) => Effect.forkChild(transcoder.segment(segment, undefined)),
+        );
+        yield* started(runs, slots);
+        // Asked for, it queues for a slot; converting it ahead too changes nothing...
+        const ahead = request(root, smaller, 50);
+        const asked = yield* Effect.forkChild(transcoder.segment(ahead, undefined));
+        yield* Effect.sleep("20 millis");
+        yield* transcoder.warm(ahead);
+        // ...and it stops when the request leaves before a slot frees up.
+        yield* Fiber.interrupt(asked);
+        yield* Deferred.succeed(runs.gate, undefined);
+        for (const fiber of busy) yield* Fiber.join(fiber);
+        yield* Effect.sleep("50 millis");
+        assert.lengthOf(yield* Ref.get(runs.started), slots, "nobody waits for it any more");
       }),
     ),
   );

@@ -206,14 +206,18 @@ export const liveVerdict = (input: {
 };
 
 /**
- * The picture conversion a new session counts for against the limit (`videoBusy`): live starts
- * at the edge, which everyone watching the channel the same way shares; a recording or a range
- * converts the segments at its own position, so it counts on its own.
+ * The picture conversion a session counts for against the limit (`videoBusy`), the one its
+ * segments will convert as: live at the edge is shared by everyone watching the channel the
+ * same way; a recording, a range or live started behind the edge (`startsBehindLive`) converts
+ * the segments at its own position, so it counts on its own.
  */
 export const conversionStream = (
-  source: PlaybackSessionRequest["source"],
+  request: Pick<PlaybackSessionRequest, "source" | "startsBehindLive">,
   sessionId: string,
-): string => (source._tag === "Live" ? liveStream(source.channelId) : sessionStream(sessionId));
+): string =>
+  request.source._tag === "Live" && request.startsBehindLive !== true
+    ? liveStream(request.source.channelId)
+    : sessionStream(sessionId);
 
 const CONTINUE_LIMIT = 20;
 /** How far past the server's clock a range may end: clients' clocks differ a little. */
@@ -459,10 +463,7 @@ const makePlayback = Effect.gen(function* () {
       });
       let plan = planned;
       // A live picture conversion is shared by everyone converting the channel the same way.
-      const key = conversionKey(
-        conversionStream(request.source, sessionId),
-        variantName(planned) ?? "",
-      );
+      const key = conversionKey(conversionStream(request, sessionId), variantName(planned) ?? "");
       if (planned.video._tag === "Encode") {
         const onHardware = planned.video.encoder !== "software";
         if (yield* transcoder.videoBusy(key, onHardware)) {

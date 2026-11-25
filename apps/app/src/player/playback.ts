@@ -280,6 +280,8 @@ export const sessionRequest = (
   capabilities,
   quality,
   network,
+  // Live from the start of the buffer or a resume point converts on its own (server limit).
+  ...(target._tag === "Live" && target.from !== "live" ? { startsBehindLive: true } : {}),
 });
 
 /**
