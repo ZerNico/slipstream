@@ -62,7 +62,7 @@ import {
   withOriginalVideo,
 } from "@slipstream/domain";
 import { EventBus } from "../events.ts";
-import { conversionKey, Transcoder } from "../transcode/service.ts";
+import { conversionKey, liveStream, sessionStream, Transcoder } from "../transcode/service.ts";
 import { variantName } from "../transcode/variant.ts";
 import { Auth, type RequestOrigin } from "../auth/service.ts";
 import { type HlsGrant, Signing } from "../auth/signing.ts";
@@ -204,6 +204,16 @@ export const liveVerdict = (input: {
   }
   return { _tag: "sourceFull", sourceId: input.sources[0]?.id };
 };
+
+/**
+ * The picture conversion a new session counts for against the limit (`videoBusy`): live starts
+ * at the edge, which everyone watching the channel the same way shares; a recording or a range
+ * converts the segments at its own position, so it counts on its own.
+ */
+export const conversionStream = (
+  source: PlaybackSessionRequest["source"],
+  sessionId: string,
+): string => (source._tag === "Live" ? liveStream(source.channelId) : sessionStream(sessionId));
 
 const CONTINUE_LIMIT = 20;
 /** How far past the server's clock a range may end: clients' clocks differ a little. */
@@ -430,6 +440,7 @@ const makePlayback = Effect.gen(function* () {
    */
   const decide = (
     channelId: string | undefined,
+    sessionId: string,
     request: PlaybackSessionRequest,
     origin: RequestOrigin,
     stream: Effect.Success<ReturnType<typeof streamInfoFor>>,
@@ -446,8 +457,11 @@ const makePlayback = Effect.gen(function* () {
         hardware: (yield* hardware.caps) ?? softwareOnly,
       });
       let plan = planned;
-      // A picture conversion is shared by everyone converting the channel the same way.
-      const key = conversionKey(channelId ?? "", variantName(planned) ?? "");
+      // A live picture conversion is shared by everyone converting the channel the same way.
+      const key = conversionKey(
+        conversionStream(request.source, sessionId),
+        variantName(planned) ?? "",
+      );
       if (planned.video._tag === "Encode") {
         const onHardware = planned.video.encoder !== "software";
         if (yield* transcoder.videoBusy(key, onHardware)) {
@@ -660,6 +674,7 @@ const makePlayback = Effect.gen(function* () {
         sid: client.sessionId,
         ...(variant === undefined ? {} : { x: variant }),
         ...(variant === undefined || channelId === undefined ? {} : { c: channelId }),
+        ...(variant === undefined ? {} : { k: sessionStream(sessionId) }),
       };
       const file = (id: string) =>
         `${encodeURIComponent(id)}${variant === undefined ? "" : `/${variant}`}.m3u8`;
@@ -759,6 +774,7 @@ const makePlayback = Effect.gen(function* () {
     }
     const decision = yield* decide(
       channelOf(source, stored),
+      id,
       request,
       client.origin,
       yield* firstStreamInfo(source),
@@ -831,6 +847,7 @@ const makePlayback = Effect.gen(function* () {
       const request = { ...session.request, ...update };
       const decision = yield* decide(
         channelOf(source, stored),
+        sessionId,
         request,
         client.origin,
         yield* streamInfoFor(source),

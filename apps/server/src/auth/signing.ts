@@ -43,6 +43,11 @@ export const HlsGrant = Schema.Struct({
    * everyone converting the channel the same way).
    */
   c: Schema.optionalKey(Schema.String),
+  /**
+   * The picture conversion a converting session counts for away from the live edge
+   * (`sessionStream`): its own, since it converts segments nobody else asks for.
+   */
+  k: Schema.optionalKey(Schema.String),
 });
 export type HlsGrant = typeof HlsGrant.Type;
 

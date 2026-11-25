@@ -18,14 +18,19 @@
  *   {@link CACHE_TTL_MILLIS}, those whose source segment is gone (retention or the disk guard
  *   purged it), and the oldest beyond {@link CACHE_MAX_BYTES}; startup deletes all of it.
  * - **Ahead.** A picture segment is slow to convert, so serving one starts the next one. Live
- *   conversions in use (someone fetched one within {@link LIVE_AHEAD_IDLE_MILLIS}) are also
- *   converted as each new segment is indexed (`liveInUse`, driven by the segment routes), so the
- *   converted live edge keeps up with the original's.
+ *   conversions in use at the live edge (someone fetched a segment there, {@link atLiveEdge},
+ *   within {@link LIVE_AHEAD_IDLE_MILLIS}) are also converted as each new segment is indexed
+ *   (`liveInUse`, driven by the segment routes), so the converted live edge keeps up with the
+ *   original's. A viewer paused or behind does not keep the live edge converting. Converting
+ *   ahead never queues for a job slot: it runs on a free one or not at all, so it never holds
+ *   up a segment someone waits for.
  * - **Bounded.** Audio jobs (cheap) run up to one per core. Picture jobs run up to
  *   {@link videoSessionLimit} at a time per encoder kind, and as many distinct picture
- *   conversions (channel and variant, however many watch each) may be in use at once
- *   (`videoBusy`). A new one over the limit whose device plays the original picture gets the
- *   original (`withOriginalVideo` in the domain); one that cannot waits for a picture job.
+ *   conversions may be in use at once (`videoBusy`): what converts the same segments counts
+ *   once (everyone watching a channel live at its edge in the same variant, `liveStream`), any
+ *   other session counts on its own (`sessionStream`: a recording, a range, live behind the
+ *   edge). A new one over the limit whose device plays the original picture gets the original
+ *   (`withOriginalVideo` in the domain); one that cannot waits for a picture job.
  */
 import { randomUUID } from "node:crypto";
 import { mkdir, readdir, rename, rm, rmdir, stat, unlink } from "node:fs/promises";
@@ -59,6 +64,10 @@ const SWEEP_EVERY = Duration.minutes(1);
 export const VIDEO_IDLE_MILLIS = 45_000;
 /** A live conversion is converted ahead while someone fetched from it this recently. */
 export const LIVE_AHEAD_IDLE_MILLIS = 30_000;
+/** A segment counts as at the live edge when it ended at most this long ago (or six segments). */
+export const LIVE_EDGE_MILLIS = 30_000;
+/** An empty cache directory this young may be about to receive a conversion: the sweep keeps it. */
+const DIRECTORY_GRACE_MILLIS = 60_000;
 /** A segment job that takes longer than this is killed. */
 const JOB_TIMEOUT = Duration.minutes(2);
 
@@ -85,24 +94,49 @@ export interface SegmentRequest {
 
 /** A conversion running for one key, and how many requests wait for it. */
 interface Job {
+  /** The converted file it writes. */
+  readonly output: string;
   readonly done: Deferred.Deferred<string | undefined>;
   fiber: Fiber.Fiber<unknown> | undefined;
   waiters: number;
   /** A look-ahead runs to the end even when nobody waits. */
   pinned: boolean;
+  /** A look-ahead that found no free job slot and gave up: a waiter converts afresh. */
+  skipped: boolean;
 }
 
 /** Whether a variant converts the picture. */
 const convertsVideo = (variant: Variant): boolean => variant.video._tag === "Encode";
 
-/** The key of a picture conversion in use: what it converts (a channel) and how. */
-export const conversionKey = (channelId: string, variant: string): string =>
-  `${channelId}/${variant}`;
+/** The picture conversion everyone watching `channelId` live at its edge shares. */
+export const liveStream = (channelId: string): string => `live:${channelId}`;
+/**
+ * The picture conversion of one playback session on its own: a recording or a range (each
+ * viewer at their own position), or live played behind the edge.
+ */
+export const sessionStream = (sessionId: string): string => `session:${sessionId}`;
 
-/** Who asks for a converted segment: the channel it belongs to, and whether it plays live. */
+/** The key of a picture conversion in use: what it converts (`liveStream`, `sessionStream`) and how. */
+export const conversionKey = (stream: string, variant: string): string => `${stream}/${variant}`;
+
+/**
+ * Whether a segment is at the live edge: it ended at most {@link LIVE_EDGE_MILLIS} (or six
+ * segment lengths) before `now`. Players sit a few segments behind the newest one.
+ */
+export const atLiveEdge = (
+  segment: { readonly startMs: number; readonly durationMs: number },
+  now: number,
+): boolean =>
+  segment.startMs + segment.durationMs >= now - Math.max(LIVE_EDGE_MILLIS, 6 * segment.durationMs);
+
+/**
+ * Who asks for a converted segment: the picture conversion it counts for (`liveStream` or
+ * `sessionStream`), and the channel whose live edge it plays at, if it does (its new segments
+ * are then converted ahead).
+ */
 export interface Requester {
-  readonly channelId: string;
-  readonly live: boolean;
+  readonly stream: string;
+  readonly liveEdgeOf: string | undefined;
 }
 
 /** A live conversion in use, for converting new segments ahead. */
@@ -176,8 +210,15 @@ const makeTranscoder = Effect.gen(function* () {
           // Failed or interrupted: no half-written file stays behind.
           .pipe(Effect.onError(() => Effect.promise(() => rm(partial, { force: true }))))
       );
-      yield* Effect.promise(() => rename(partial, output).catch(() => undefined));
+      // Known before it appears, so the sweep never takes it for one whose source is gone.
       sources.set(output, request.file);
+      const renamed = yield* Effect.promise(() =>
+        rename(partial, output).then(
+          () => true,
+          () => false,
+        ),
+      );
+      if (!renamed && !(yield* exists(output))) sources.delete(output);
       const took = (yield* Clock.currentTimeMillis) - started;
       yield* Effect.logDebug("Converted a segment").pipe(
         Effect.annotateLogs({ variant: request.name, sequence: request.sequence, millis: took }),
@@ -196,7 +237,11 @@ const makeTranscoder = Effect.gen(function* () {
       ),
     );
 
-  /** Waits for a job as one of its waiters; the last waiter to leave stops it. */
+  /**
+   * Waits for a job as one of its waiters; the last waiter to leave stops it. A job being
+   * stopped is forgotten at once, so a request in the meantime converts afresh instead of
+   * waiting for one that is going away.
+   */
   const waitFor = (job: Job) =>
     Effect.suspend(() => {
       job.waiters += 1;
@@ -206,40 +251,83 @@ const makeTranscoder = Effect.gen(function* () {
         Effect.suspend(() => {
           job.waiters -= 1;
           const fiber = job.fiber;
-          return job.waiters === 0 && !job.pinned && fiber !== undefined
-            ? Effect.asVoid(Effect.forkIn(Fiber.interrupt(fiber), scope))
-            : Effect.void;
+          if (job.waiters > 0 || job.pinned || fiber === undefined) return Effect.void;
+          if (jobs.get(job.output) === job) jobs.delete(job.output);
+          return Effect.asVoid(Effect.forkIn(Fiber.interrupt(fiber), scope));
         }),
       ),
     );
 
   /**
-   * The converted file, converting it once however many ask at the same time (`pinned`: a
-   * look-ahead nobody waits for yet).
+   * Starts converting into `output`. A look-ahead (`pinned`) takes a job slot only when one is
+   * free right now: segments someone waits for queue for slots, a look-ahead never does. One
+   * that finds none gives up (unless a request joined it meanwhile, which then queues).
    */
-  const ensure = (request: SegmentRequest, pinned: boolean) =>
+  const start = (request: SegmentRequest, output: string, pinned: boolean) =>
     Effect.gen(function* () {
-      const output = join(root, request.name, request.captureId, `${request.sequence}.ts`);
-      if (yield* exists(output)) return output;
-      const running = jobs.get(output);
-      if (running !== undefined) {
-        running.pinned ||= pinned;
-        return yield* waitFor(running);
-      }
       // Made and registered in one step, so a second request cannot slip in between.
-      const job: Job = { done: Deferred.makeUnsafe(), fiber: undefined, waiters: 0, pinned };
+      const job: Job = {
+        output,
+        done: Deferred.makeUnsafe(),
+        fiber: undefined,
+        waiters: 0,
+        pinned,
+        skipped: false,
+      };
       jobs.set(output, job);
-      job.fiber = yield* convert(request, output).pipe(
-        permits(request.variant).withPermits(1),
+      const slots = permits(request.variant);
+      const queued = convert(request, output).pipe(slots.withPermits(1));
+      const run = !pinned
+        ? queued
+        : Effect.uninterruptibleMask((restore) =>
+            Effect.flatMap(slots.takeIfAvailable(1), (free) =>
+              free
+                ? restore(convert(request, output)).pipe(Effect.ensuring(slots.release(1)))
+                : job.waiters > 0
+                  ? restore(queued)
+                  : Effect.sync(() => {
+                      job.skipped = true;
+                      return undefined;
+                    }),
+            ),
+          );
+      job.fiber = yield* run.pipe(
         Effect.onExit((exit) =>
           Effect.suspend(() => {
-            jobs.delete(output);
+            if (jobs.get(output) === job) jobs.delete(output);
             return Deferred.done(job.done, Exit.isSuccess(exit) ? exit : Exit.succeed(undefined));
           }),
         ),
         Effect.forkIn(scope),
       );
-      return yield* waitFor(job);
+      return job;
+    });
+
+  const outputOf = (request: SegmentRequest) =>
+    join(root, request.name, request.captureId, `${request.sequence}.ts`);
+
+  /** The converted file, converting it once however many ask at the same time. */
+  const ensure = (request: SegmentRequest): Effect.Effect<string | undefined> =>
+    Effect.gen(function* () {
+      const output = outputOf(request);
+      if (yield* exists(output)) return output;
+      const job = jobs.get(output) ?? (yield* start(request, output, false));
+      const file = yield* waitFor(job);
+      // Joined a look-ahead that found no free slot: queue for one now.
+      return job.skipped ? yield* ensure(request) : file;
+    });
+
+  /** Starts converting a segment ahead unless it is cached or converting already. */
+  const ahead = (request: SegmentRequest) =>
+    Effect.gen(function* () {
+      const output = outputOf(request);
+      if (yield* exists(output)) return;
+      const running = jobs.get(output);
+      if (running !== undefined) {
+        running.pinned = true;
+        return;
+      }
+      yield* start(request, output, true);
     });
 
   /** Deletes old converted segments, those whose source is gone, and the oldest over the cap. */
@@ -253,7 +341,15 @@ const makeTranscoder = Effect.gen(function* () {
           const path = join(directory, entry.name);
           if (entry.isDirectory()) {
             await walk(path);
-            await rmdir(path).catch(() => undefined);
+            // A job may just have made it and not opened its file yet.
+            const busy = [...jobs.keys()].some((output) => output.startsWith(`${path}/`));
+            const made = await stat(path).then(
+              (info) => info.mtimeMs,
+              () => 0,
+            );
+            if (!busy && now - made > DIRECTORY_GRACE_MILLIS) {
+              await rmdir(path).catch(() => undefined);
+            }
             continue;
           }
           if (!entry.name.endsWith(".ts")) continue;
@@ -296,30 +392,32 @@ const makeTranscoder = Effect.gen(function* () {
     /**
      * The converted segment's file, converting it first unless it is cached or already
      * converting; `undefined` when conversion failed (the route answers 503 and the player
-     * retries). `key` (`conversionKey`) keeps a picture conversion counted as in use.
+     * retries). The `requester` keeps its picture conversion counted as in use, and at the live
+     * edge its channel's new segments converted ahead.
      */
     segment: (request: SegmentRequest, requester: Requester | undefined) =>
       Effect.gen(function* () {
         if (requester !== undefined) {
           if (convertsVideo(request.variant)) {
-            yield* touchVideo(conversionKey(requester.channelId, request.name));
+            yield* touchVideo(conversionKey(requester.stream, request.name));
           }
-          if (requester.live) {
+          const channelId = requester.liveEdgeOf;
+          if (channelId !== undefined) {
             const now = yield* Clock.currentTimeMillis;
             yield* Ref.update(live, (map) => {
               const next = new Map(map);
-              const variants = new Map(map.get(requester.channelId));
+              const variants = new Map(map.get(channelId));
               variants.set(request.name, {
                 name: request.name,
                 variant: request.variant,
                 seen: now,
               });
-              next.set(requester.channelId, variants);
+              next.set(channelId, variants);
               return next;
             });
           }
         }
-        return yield* ensure(request, false);
+        return yield* ensure(request);
       }),
     /** The live conversions of a channel someone fetched from recently, to convert ahead. */
     liveInUse: (channelId: string) =>
@@ -330,9 +428,13 @@ const makeTranscoder = Effect.gen(function* () {
           (conversion) => now - conversion.seen < LIVE_AHEAD_IDLE_MILLIS,
         );
       }),
-    /** Starts converting a segment in the background (the one after a picture segment). */
-    warm: (request: SegmentRequest) =>
-      ensure(request, true).pipe(Effect.forkIn(scope), Effect.asVoid),
+    /**
+     * Starts converting a segment ahead in the background (the one after a picture segment, a
+     * new live segment), on a free job slot only.
+     */
+    warm: ahead,
+    /** Sweeps the cache now (it also runs every minute). */
+    sweep,
     /** Counts a picture conversion as in use from now on. */
     touchVideo,
     /**

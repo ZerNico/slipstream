@@ -93,6 +93,7 @@ const makeHls = Effect.gen(function* () {
           ...(grant.sid === undefined ? {} : { sid: grant.sid }),
           ...(grant.x === undefined ? {} : { x: grant.x }),
           ...(grant.c === undefined ? {} : { c: grant.c }),
+          ...(grant.k === undefined ? {} : { k: grant.k }),
           from: window.fromMs,
           to: window.toMs,
         });

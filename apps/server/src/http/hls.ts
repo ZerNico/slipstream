@@ -15,13 +15,13 @@
  * its segment links then serve the converted segment instead of the stored one.
  */
 import { stat } from "node:fs/promises";
-import { Effect, Layer, Schedule, Stream } from "effect";
+import { Cause, Clock, Effect, Layer, Schedule, Stream } from "effect";
 import { HttpPlatform, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 import { type HlsGrant, Signing } from "../auth/signing.ts";
 import { EventBus } from "../events.ts";
 import { Hls, insideWindow, parseByteRange, scopes } from "../hls/service.ts";
 import { type HlsTarget, Playback } from "../playback/service.ts";
-import { Transcoder } from "../transcode/service.ts";
+import { atLiveEdge, liveStream, Transcoder } from "../transcode/service.ts";
 import { parseVariant } from "../transcode/variant.ts";
 
 const playlistHeaders = {
@@ -51,6 +51,42 @@ const queryParam = (name: string) =>
 const FIRST_SEGMENT_WAIT = "20 seconds";
 /** How often a waiting live playlist request tells playback its viewer is still there. */
 const KEEP_WATCHING_EVERY = "1 second";
+
+/** How soon converting ahead starts again after its loop failed. */
+const CONVERT_AHEAD_RESTART = Schedule.min([
+  Schedule.exponential("1 second"),
+  Schedule.spaced("1 minute"),
+]);
+
+/**
+ * Runs `convert` for every channel in `indexed` for as long as the server runs: one failing
+ * (the database, a file) is logged and the next goes on, and the loop itself starts again
+ * (`restart`) if its stream fails.
+ */
+export const keepConvertingAhead = (
+  indexed: Stream.Stream<string>,
+  convert: (channelId: string) => Effect.Effect<void>,
+  restart: Schedule.Schedule<unknown> = CONVERT_AHEAD_RESTART,
+): Effect.Effect<void> =>
+  indexed.pipe(
+    Stream.runForEach((channelId) =>
+      convert(channelId).pipe(
+        Effect.catchCause((cause) =>
+          Cause.hasInterruptsOnly(cause)
+            ? Effect.failCause(cause)
+            : Effect.logWarning("Could not convert a live segment ahead", cause).pipe(
+                Effect.annotateLogs({ channelId }),
+              ),
+        ),
+      ),
+    ),
+    Effect.sandbox,
+    Effect.tapError((cause) =>
+      Effect.logError("Converting live segments ahead stopped; starting it again", cause),
+    ),
+    Effect.retry({ schedule: restart, while: (cause) => !Cause.hasInterruptsOnly(cause) }),
+    Effect.catchCause(() => Effect.void),
+  );
 
 const routeParam = (name: string) => Effect.map(HttpRouter.params, (params) => params[name] ?? "");
 
@@ -148,7 +184,12 @@ export const HlsRoutes = Layer.effectDiscard(
       grant: typeof HlsGrant.Type,
       captureId: string,
       sequence: number,
-      segment: { readonly file: string; readonly runId: string },
+      segment: {
+        readonly file: string;
+        readonly runId: string;
+        readonly startMs: number;
+        readonly durationMs: number;
+      },
       live: boolean,
     ) =>
       Effect.gen(function* () {
@@ -163,9 +204,19 @@ export const HlsRoutes = Layer.effectDiscard(
           file: segment.file,
           lookback: yield* hls.sameRunFile(captureId, sequence - 1, segment.runId),
         };
+        // At the live edge everyone watching the channel the same way shares the conversion;
+        // anywhere else (a recording, a range, live behind the edge) the session has its own.
+        const liveEdgeOf =
+          live && grant.c !== undefined && atLiveEdge(segment, yield* Clock.currentTimeMillis)
+            ? grant.c
+            : undefined;
+        const stream =
+          liveEdgeOf !== undefined
+            ? liveStream(liveEdgeOf)
+            : (grant.k ?? (grant.c === undefined ? undefined : liveStream(grant.c)));
         const file = yield* transcoder.segment(
           request,
-          grant.c === undefined ? undefined : { channelId: grant.c, live },
+          stream === undefined ? undefined : { stream, liveEdgeOf },
         );
         // A picture is slow to convert: the next segment starts while this one is sent.
         const next =
@@ -211,7 +262,7 @@ export const HlsRoutes = Layer.effectDiscard(
           });
         }
       });
-    yield* bus.segmentsIndexed.pipe(Stream.runForEach(convertAhead), Effect.forkScoped);
+    yield* keepConvertingAhead(bus.segmentsIndexed, convertAhead).pipe(Effect.forkScoped);
 
     const live = Effect.gen(function* () {
       const channelId = yield* routeParam("channelId");
