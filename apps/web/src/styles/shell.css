@@ -1,0 +1,650 @@
+/*
+ * The app shell (SPEC §2.2, §2.4): top bar, tablet rail, phone tab bar, the compact rail in short
+ * landscape at any width, the offline strip, the mini player and the toast layer. Everything
+ * here is fixed or absolute, so nothing in the page moves when a bar or a strip appears.
+ */
+
+.shell-skip {
+  position: fixed;
+  left: 12px;
+  top: -64px;
+  z-index: var(--z-skip);
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--brand);
+  color: var(--on-brand);
+  font-weight: 600;
+  transition: transform var(--t-fast) var(--ease);
+}
+.shell-skip:focus-visible {
+  transform: translateY(calc(76px + var(--safe-t)));
+}
+
+/* ---------- top bar ---------- */
+.shell-topbar {
+  position: fixed;
+  inset: 0 0 auto var(--rail-w);
+  z-index: var(--z-nav);
+  height: calc(var(--nav-h) + var(--safe-t));
+  padding-top: var(--safe-t);
+  background: var(--nav-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  border-bottom: 1px solid var(--line);
+  transition:
+    background-color var(--t-med) var(--ease),
+    border-color var(--t-med) var(--ease);
+}
+/* Transparent over the Home hero until the page scrolls: the hero's cinema colours apply. */
+.shell-topbar[data-over] {
+  background: linear-gradient(to bottom, var(--media-scrim), transparent);
+  border-bottom-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.shell-topbar-row {
+  height: var(--nav-h);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.shell-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--ctl-md);
+  min-width: var(--tap-min);
+  padding-right: 6px;
+  flex: none;
+  border-radius: 10px;
+  color: var(--fg);
+}
+.shell-logo .shell-lockup {
+  display: none;
+}
+.shell-navtabs {
+  display: none;
+  gap: 2px;
+  margin-left: 20px;
+}
+.shell-navtab {
+  position: relative;
+  height: var(--ctl-md);
+  padding: 0 14px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--fg-2);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.shell-navtab:hover {
+  color: var(--fg);
+  background: var(--hover);
+}
+.shell-navtab[aria-current="page"] {
+  color: var(--fg);
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.shell-spacer {
+  flex: 1;
+}
+
+/* The problems count: reserved in every nav item that can carry one (SPEC §6.1). */
+.shell-count {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  display: inline-grid;
+  place-items: center;
+  background: var(--warn);
+  color: var(--on-warn);
+  font-size: 11px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.shell-count:empty {
+  visibility: hidden;
+}
+/*
+ * In the top bar the count sits on the tab's corner, out of the flow: the count arriving,
+ * changing digits or going away never widens the tab or moves the tabs after it.
+ */
+.shell-navtab .shell-count {
+  position: absolute;
+  top: -5px;
+  right: -6px;
+  z-index: 1;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.shell-search {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: var(--ctl-md);
+  height: var(--ctl-md);
+  padding: 0;
+  border-radius: 999px;
+  color: var(--fg-2);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  font-size: 14px;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.shell-search:hover {
+  color: var(--fg);
+  background: var(--hover);
+}
+.shell-search-label,
+.shell-search-kbd {
+  display: none;
+}
+/* Below 600 px the search is an icon only, even with a keyboard (`.kbd` shows on fine pointers). */
+@media (max-width: 599px) {
+  .shell-search .shell-search-kbd {
+    display: none;
+  }
+}
+.shell-search-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.shell-recpill {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  height: var(--ctl-md);
+  padding: 0 12px 0 10px;
+  border-radius: 999px;
+  background: var(--live-soft);
+  color: var(--live-fg);
+  font-size: 13px;
+  font-weight: 650;
+}
+.shell-recpill-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--live);
+  animation: var(--animate-live-pulse);
+}
+
+.shell-settings {
+  display: none;
+  position: relative;
+}
+/* The lineup's problems on the gear's corner, out of the flow like the tabs' counts. */
+.shell-settings .shell-count {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  z-index: 1;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px var(--bg);
+}
+
+.shell-avatar-button {
+  display: grid;
+  place-items: center;
+  width: var(--ctl-md);
+  height: var(--ctl-md);
+  border-radius: 50%;
+  flex: none;
+}
+.shell-avatar-button:hover > * {
+  box-shadow: 0 0 0 2px var(--line-2);
+}
+
+/* ---------- tablet rail, and the compact rail in short landscape ---------- */
+.shell-rail {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: var(--z-nav);
+  width: var(--rail-w);
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: calc(var(--safe-t) + 10px) 0 calc(var(--safe-b) + 12px) var(--safe-l);
+  background: var(--bg-2);
+  border-right: 1px solid var(--line);
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.shell-rail .shell-logo {
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  margin-bottom: 10px;
+}
+.shell-rail-item {
+  position: relative;
+  width: 72px;
+  min-height: 60px;
+  flex: none;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--fg-3);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.shell-rail-item:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.shell-rail-item[aria-current="page"] {
+  color: var(--fg);
+}
+.shell-rail-pill {
+  width: 52px;
+  height: 30px;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  transition: background-color var(--t-fast) var(--ease);
+}
+.shell-rail-item[aria-current="page"] .shell-rail-pill {
+  background: var(--brand-soft);
+  color: var(--brand-fg);
+}
+.shell-rail-item .shell-count {
+  position: absolute;
+  top: 4px;
+  right: 10px;
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+
+/* ---------- phone tab bar ---------- */
+.shell-tabbar {
+  position: fixed;
+  inset: auto 0 0;
+  z-index: var(--z-nav);
+  height: calc(var(--tab-h) + var(--safe-b));
+  padding: 0 var(--safe-r) var(--safe-b) var(--safe-l);
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: var(--nav-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  backdrop-filter: blur(20px) saturate(1.6);
+  border-top: 1px solid var(--line);
+}
+.shell-tab {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 3px;
+  min-height: var(--tap-min);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-3);
+}
+.shell-tab[aria-current="page"] {
+  color: var(--fg);
+}
+.shell-tab[aria-current="page"] .shell-tab-icon {
+  color: var(--brand-fg);
+}
+.shell-tab .shell-count {
+  position: absolute;
+  top: 8px;
+  left: calc(50% + 6px);
+  min-width: 16px;
+  height: 16px;
+  font-size: 10px;
+}
+
+/* ---------- main ---------- */
+.shell-main {
+  display: block;
+  min-height: 100dvh;
+  padding-top: calc(var(--nav-h) + var(--safe-t));
+  padding-left: var(--rail-w);
+  padding-bottom: calc(var(--tab-h) + var(--mini-h) + var(--safe-b) + 24px);
+}
+.shell-main:focus {
+  outline: none;
+}
+/* Home: the hero runs under the transparent top bar. */
+.shell-main[data-under] {
+  padding-top: 0;
+}
+/* Player, setup, sign-in, TV approval: no chrome at all. */
+.shell-main[data-full] {
+  padding: 0;
+}
+
+/* ---------- offline strip: an overlay under the top bar, never in flow ---------- */
+.shell-offline {
+  position: fixed;
+  left: var(--rail-w);
+  right: 0;
+  top: calc(var(--nav-h) + var(--safe-t));
+  z-index: calc(var(--z-nav) - 1);
+  background: var(--glass);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  backdrop-filter: blur(20px) saturate(1.4);
+  border-bottom: 1px solid var(--line);
+  box-shadow: var(--elev-pop);
+  color: var(--fg);
+  font-size: 13.5px;
+  font-weight: 550;
+}
+.shell-offline-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding-block: 6px;
+}
+.shell-offline-icon {
+  color: var(--warn-fg);
+}
+
+/* ---------- breakpoints ---------- */
+@media (min-width: 600px) {
+  .shell-search {
+    width: auto;
+    min-width: var(--ctl-md);
+    padding: 0 8px 0 12px;
+    justify-content: flex-start;
+  }
+  .shell-search-kbd {
+    display: inline-grid;
+  }
+}
+
+@media (min-width: 768px) {
+  .shell-tabbar {
+    display: none;
+  }
+  .shell-recpill {
+    display: inline-flex;
+  }
+  .shell-main {
+    padding-bottom: calc(32px + var(--mini-h) + var(--safe-b));
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  .shell-rail {
+    display: flex;
+  }
+  .shell-topbar-row > .shell-logo {
+    display: none;
+  }
+}
+
+@media (min-width: 1100px) {
+  .shell-navtabs {
+    display: flex;
+  }
+  .shell-logo .shell-lockup {
+    display: block;
+  }
+  .shell-logo .shell-mark {
+    display: none;
+  }
+  .shell-rail .shell-logo .shell-mark {
+    display: block;
+  }
+  .shell-settings {
+    display: inline-grid;
+  }
+  .shell-search {
+    width: 260px;
+  }
+  .shell-search-label {
+    display: inline;
+    flex: 1;
+    text-align: left;
+  }
+}
+
+/* Short landscape at any width: compact rail, no tab bar, no top-bar tabs (owner notes 37, 38). */
+@media (max-height: 520px) and (orientation: landscape) {
+  .shell-tabbar {
+    display: none;
+  }
+  .shell-rail {
+    display: flex;
+    gap: 2px;
+    padding-top: calc(var(--safe-t) + 6px);
+  }
+  .shell-rail .shell-logo {
+    height: var(--tap-min);
+    margin-bottom: 2px;
+  }
+  .shell-rail-item {
+    min-height: 50px;
+  }
+  .shell-navtabs,
+  .shell-settings,
+  .shell-topbar-row > .shell-logo {
+    display: none;
+  }
+  .shell-recpill {
+    display: inline-flex;
+  }
+  .shell-main {
+    padding-bottom: calc(24px + var(--mini-h) + var(--safe-b));
+  }
+}
+
+/* ---------- mini player ---------- */
+/*
+ * What you left playing keeps playing here: a bar with the video as its thumbnail on phones, a
+ * small video card in the corner from 768 px.
+ */
+.mini-player {
+  position: fixed;
+  z-index: var(--z-mini);
+  left: 8px;
+  right: 8px;
+  bottom: calc(var(--tab-h) + var(--safe-b) + 8px);
+  height: 56px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  overflow: hidden;
+  border-radius: 16px;
+  background: color-mix(in oklab, var(--surface) 94%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.5);
+  backdrop-filter: blur(20px) saturate(1.5);
+  box-shadow: var(--elev-pop);
+}
+.mini-player-resize {
+  display: none;
+}
+.mini-player-open {
+  display: grid;
+  min-width: 0;
+  border-radius: 10px;
+}
+.mini-player-text {
+  display: grid;
+  min-width: 0;
+  text-align: left;
+}
+.mini-player-title {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 650;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.mini-player-actions {
+  display: flex;
+  gap: 2px;
+}
+.mini-player-stage {
+  position: relative;
+  width: 78px;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.mini-player-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: var(--art-base);
+  object-fit: cover;
+}
+/* The card's controls over the picture: only from 768 px, shown on hover or keyboard focus. */
+.mini-player-overlay {
+  display: none;
+}
+@media (min-width: 768px) {
+  .mini-player {
+    left: auto;
+    right: max(20px, var(--safe-r));
+    bottom: calc(20px + var(--safe-b));
+    height: auto;
+    width: var(--mini-w);
+    cursor: grab;
+    touch-action: none;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "video video" "open actions";
+    row-gap: 4px;
+  }
+  /* Dragged and let go, it rests in the nearest corner (mini-player-placement.ts). */
+  /* The left corners keep clear of the rail (tablet and desktop). */
+  .mini-player[data-corner="bl"] {
+    right: auto;
+    left: max(calc(var(--rail-w) + 20px), var(--safe-l));
+  }
+  .mini-player[data-corner="tr"],
+  .mini-player[data-corner="tl"] {
+    bottom: auto;
+    top: calc(var(--nav-h) + var(--safe-t) + 20px);
+  }
+  .mini-player[data-corner="tl"] {
+    right: auto;
+    left: max(calc(var(--rail-w) + 20px), var(--safe-l));
+  }
+  .mini-player[data-dragging] {
+    cursor: grabbing;
+    user-select: none;
+  }
+  /* The resize handle sits on the inner top corner, away from the docked edges. */
+  .mini-player-resize {
+    display: block;
+    position: absolute;
+    z-index: 3;
+    top: 0;
+    left: 0;
+    width: 18px;
+    height: 18px;
+    cursor: nwse-resize;
+  }
+  .mini-player[data-corner="bl"] .mini-player-resize,
+  .mini-player[data-corner="tl"] .mini-player-resize {
+    left: auto;
+    right: 0;
+    cursor: nesw-resize;
+  }
+  .mini-player[data-corner^="t"] .mini-player-resize {
+    top: auto;
+    bottom: 0;
+  }
+  .mini-player[data-corner="tr"] .mini-player-resize {
+    cursor: nesw-resize;
+  }
+  .mini-player[data-corner="tl"] .mini-player-resize {
+    cursor: nwse-resize;
+  }
+  .mini-player-stage {
+    grid-area: video;
+    width: 100%;
+  }
+  .mini-player-video {
+    object-fit: contain;
+  }
+  .mini-player-open {
+    grid-column: 1 / -1;
+    padding: 2px 6px 4px;
+  }
+  /* The overlay carries play/pause and close here; the row under the picture is the title. */
+  .mini-player-actions {
+    display: none;
+  }
+  .mini-player-overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: color-mix(in oklab, var(--art-base) 45%, transparent);
+    opacity: 0;
+    transition: opacity var(--t-fast) var(--ease);
+  }
+  .mini-player-stage:hover .mini-player-overlay,
+  .mini-player-overlay:focus-within {
+    opacity: 1;
+  }
+  .mini-player-overlay-open {
+    position: absolute;
+    inset: 0;
+    cursor: pointer;
+  }
+  .mini-player-overlay :is(.mini-player-expand, .mini-player-close, .mini-player-center) {
+    position: absolute;
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    cursor: pointer;
+    transition:
+      transform var(--t-fast) var(--ease),
+      background-color var(--t-fast) var(--ease);
+    color: var(--art-ink);
+    background: color-mix(in oklab, var(--art-ink) 14%, transparent);
+    -webkit-backdrop-filter: blur(12px) saturate(1.5);
+    backdrop-filter: blur(12px) saturate(1.5);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--art-ink) 12%, transparent);
+  }
+  .mini-player-overlay :is(.mini-player-expand, .mini-player-close, .mini-player-center):hover {
+    transform: scale(1.06);
+    background: color-mix(in oklab, var(--art-ink) 22%, transparent);
+  }
+  .mini-player-overlay
+    :is(.mini-player-expand, .mini-player-close, .mini-player-center):focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+  .mini-player-expand {
+    top: 8px;
+    left: 8px;
+  }
+  .mini-player-close {
+    top: 8px;
+    right: 8px;
+  }
+  .mini-player-overlay .mini-player-center {
+    width: 48px;
+    height: 48px;
+  }
+}

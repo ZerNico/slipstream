@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/ffmpeg
+      - run: pnpm format:check
+      - run: pnpm lint --format github
+      - run: pnpm knip
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  # The web journey in a real browser against a fresh server serving the built web app, with the
+  # fake source as its only source. `pnpm e2e` does the same locally.
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # Without a server the journeys would skip and pass: here that is a failure.
+      SLIPSTREAM_E2E_REQUIRED: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup
+      - uses: ./.github/actions/ffmpeg
+      - name: Install Playwright chromium
+        run: pnpm --filter @slipstream/web exec playwright install --with-deps chromium
+      - name: Build the web app, start fake source and server, run the journey
+        run: pnpm e2e
+      - name: Keep Playwright traces of a failed run
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-traces
+          path: apps/web/test-results
+          retention-days: 7
+
+  # The one required check for branch protection, so adding or renaming a job never means
+  # editing repository settings. The image is built and smoke-tested by docker.yml.
+  ci-ok:
+    if: always()
+    needs: [verify, e2e]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: All jobs passed
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1

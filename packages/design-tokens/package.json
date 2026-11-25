@@ -1,0 +1,23 @@
+{
+  "name": "@slipstream/design-tokens",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./native": "./src/generated/native.ts",
+    "./tailwind.css": "./src/generated/tailwind.css"
+  },
+  "scripts": {
+    "generate": "node scripts/generate.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tailwindcss": "4.3.5",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

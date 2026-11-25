@@ -1,0 +1,54 @@
+/*
+ * The skeleton contract (SPEC §6.2): loading is a state of the real component tree. Inside a
+ * `[data-loading]` scope every data text (`.sk`) keeps its box but shows nothing (no grey bars),
+ * artwork (`.sk-art`) is one quiet flat tone, controls take no pointer events, and nothing from
+ * the data shows through. When the data arrives it fades into the boxes it already had.
+ */
+[data-loading] .sk {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent;
+  box-shadow: none !important;
+  user-select: none;
+}
+[data-loading] .sk * {
+  visibility: hidden;
+}
+[data-loading] .sk-art {
+  background-color: var(--sk) !important;
+}
+[data-loading] .sk-art > * {
+  visibility: hidden;
+}
+[data-loading] .sk-hide {
+  visibility: hidden;
+}
+/* No ellipsis glyph at the end of a placeholder bar. */
+[data-loading],
+[data-loading] * {
+  text-overflow: clip !important;
+}
+/* Every control inside a loading route is inert to the pointer. */
+[data-loading] a,
+[data-loading] button,
+[data-loading] input,
+[data-loading] select,
+[data-loading] textarea,
+[data-loading] [tabindex] {
+  pointer-events: none;
+}
+/* State tints and selection marks that come from data stay neutral until it arrives. */
+[data-loading] [data-sk-neutral] {
+  background: transparent !important;
+  box-shadow: inset 0 0 0 1px var(--line) !important;
+}
+/* After load only the data nodes fade in, never the chrome around them. */
+[data-reveal] .sk,
+[data-reveal] .sk-art,
+[data-reveal] .sk-hide {
+  animation: sk-fade 300ms var(--ease);
+}
+@keyframes sk-fade {
+  from {
+    opacity: 0;
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreExportsUsedInFile": true,
+  "workspaces": {
+    ".": {
+      "entry": ["lint/*.mjs", "scripts/*.ts"]
+    },
+    "packages/domain": {
+      "entry": ["test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "test/**/*.ts"],
+      "includeEntryExports": true
+    },
+    "packages/api": {
+      "entry": ["scripts/*.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts"],
+      "includeEntryExports": true
+    },
+    "packages/*": {
+      "entry": ["scripts/*.ts", "src/**/*.test.ts", "test/**/*.test.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "messages/**/*.ts"]
+    },
+    "tools/*": {
+      "entry": ["src/bin/*.ts", "src/**/*.test.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "apps/web": {
+      "entry": ["src/routes/**/*.{ts,tsx}", "src/**/*.test.{ts,tsx}", "scripts/*.ts"],
+      "project": ["src/**/*.{ts,tsx}", "scripts/**/*.ts", "e2e/**/*.ts", "*.ts"],
+      "ignoreDependencies": ["shadcn", "tailwindcss"]
+    },
+    "apps/app": {
+      "entry": ["app/**/*.{ts,tsx}", "src/**/*.test.{ts,tsx}", "tests/**/*.test.ts"],
+      "project": ["app/**/*.{ts,tsx}", "src/**/*.{ts,tsx}", "tests/**/*.ts"],
+      "ignoreDependencies": ["babel-plugin-react-compiler"]
+    },
+    "apps/server": {
+      "entry": ["test/**/*.test.ts", "scripts/*.ts"],
+      "project": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts"]
+    }
+  }
+}

@@ -1,0 +1,410 @@
+/*
+ * Dialogs, toasts, the command palette and the watch choice (SPEC §4, §7.6). Dialogs and sheets
+ * leave with the motion they enter with; every overlay fits the screen with a scrolling body and
+ * a sticky footer.
+ */
+
+/* ---------- Dialog ---------- */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  background: color-mix(in oklab, var(--art-base) 45%, transparent);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  transition: opacity var(--t-med) var(--ease);
+}
+.dialog-backdrop[data-starting-style],
+.dialog-backdrop[data-ending-style] {
+  opacity: 0;
+}
+.dialog-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: 12vh 12px 0;
+  pointer-events: none;
+}
+.dialog {
+  --dialog-top: 12vh;
+  position: relative;
+  width: min(640px, calc(100vw - 24px));
+  max-height: calc(100dvh - var(--dialog-top) - var(--safe-b) - 16px);
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  pointer-events: auto;
+  border-radius: var(--r-xl);
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--elev-pop);
+  outline: none;
+  transition:
+    opacity 200ms var(--ease),
+    transform 200ms var(--ease);
+}
+.dialog[data-size="sm"] {
+  --dialog-top: 18vh;
+  width: min(460px, calc(100vw - 24px));
+}
+.dialog-viewport:has(.dialog[data-size="sm"]) {
+  padding-top: 18vh;
+}
+.dialog[data-starting-style],
+.dialog[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-8px) scale(0.98);
+}
+.dialog-head {
+  padding: 22px 22px 0;
+}
+.dialog-title {
+  font-family: var(--f-display);
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+/* The action row stays on screen while the dialog body scrolls. */
+.dialog-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 22px calc(16px + var(--safe-b));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+}
+@media (max-width: 599px) {
+  .dialog-viewport {
+    padding-top: 8px;
+  }
+  .dialog {
+    --dialog-top: 8px;
+  }
+}
+@media (max-height: 520px) and (orientation: landscape) {
+  .dialog-viewport,
+  .dialog-viewport:has(.dialog[data-size="sm"]) {
+    padding-top: max(8px, var(--safe-t));
+  }
+  .dialog,
+  .dialog[data-size="sm"] {
+    max-height: calc(100dvh - 16px - var(--safe-t) - var(--safe-b));
+  }
+}
+
+/* ---------- Toasts ---------- */
+.toasts {
+  position: fixed;
+  z-index: var(--z-toast);
+  left: 50%;
+  bottom: calc(var(--tab-h) + var(--safe-b) + 12px + var(--mini-h) + var(--save-h));
+  width: min(440px, calc(100vw - 24px));
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+@media (min-width: 768px) {
+  .toasts {
+    left: auto;
+    right: max(24px, var(--safe-r));
+    transform: none;
+    bottom: calc(24px + var(--mini-h) + var(--save-h) + var(--safe-b));
+  }
+  /* Left of an open side sheet, never under it. */
+  :root:has(.sheet[data-side="right"][data-open]) .toasts {
+    right: min(492px, calc(100vw - 460px));
+    bottom: 24px;
+  }
+}
+/* In the player: top centre, never over the controls. */
+:root:has([data-player]) .toasts {
+  top: calc(var(--safe-t) + 76px);
+  bottom: auto;
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+}
+.toast {
+  --gap: 8px;
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: calc(100 - var(--toast-index));
+  pointer-events: auto;
+  border-radius: 14px;
+  background: var(--raised);
+  color: var(--fg);
+  box-shadow: var(--elev-pop);
+  font-size: 14px;
+  user-select: none;
+  /* Every toast is shown whole, stacked upwards by the heights of the ones below it. */
+  transform: translateX(var(--toast-swipe-movement-x, 0px))
+    translateY(
+      calc(
+        var(--toast-offset-y, 0px) * -1 - var(--toast-index) * var(--gap) +
+          var(--toast-swipe-movement-y, 0px)
+      )
+    );
+  transition:
+    transform var(--t-med) var(--ease),
+    opacity var(--t-med) var(--ease);
+}
+:root:has([data-player]) .toast {
+  top: 0;
+  bottom: auto;
+  transform: translateY(calc(var(--toast-offset-y, 0px) + var(--toast-index) * var(--gap)));
+}
+.toast[data-starting-style],
+.toast[data-ending-style] {
+  opacity: 0;
+  transform: translateY(12px) scale(0.97);
+}
+.toast[data-limited] {
+  opacity: 0;
+}
+.toast-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px 12px 16px;
+}
+.toast-icon {
+  color: var(--ok);
+}
+.toast[data-type="recording"] .toast-icon,
+.toast[data-type="error"] .toast-icon {
+  color: var(--live-fg);
+}
+.toast-text {
+  flex: 1;
+  min-width: 0;
+}
+.toast-title {
+  display: block;
+  font-weight: 600;
+}
+.toast-description {
+  display: block;
+  color: var(--fg-2);
+  font-size: 13px;
+}
+.toast-action {
+  color: var(--brand-fg);
+  font-weight: 650;
+  font-size: 13.5px;
+  min-height: var(--tap-min);
+  padding: 0 10px;
+  border-radius: 8px;
+}
+@media (hover: hover) {
+  .toast-action:hover {
+    background: var(--hover);
+  }
+}
+
+/* ---------- Command palette ---------- */
+.cmdk-query {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: 60px;
+  padding: 0 18px;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg-3);
+}
+.cmdk-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--fg);
+  font-size: 17px;
+}
+.cmdk-results {
+  max-height: min(460px, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 8px;
+}
+.cmdk-group {
+  padding: 10px 10px 6px;
+  font-size: 12px;
+  font-weight: 650;
+  color: var(--fg-3);
+}
+.cmdk-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  text-align: left;
+  cursor: default;
+}
+.cmdk-option[aria-selected="true"] {
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.cmdk-option-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 8px;
+  background: var(--hover);
+  color: var(--fg-2);
+}
+.cmdk-option-text {
+  flex: 1;
+  min-width: 0;
+}
+.cmdk-option-title {
+  display: block;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 600;
+}
+.cmdk-option-meta {
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+.cmdk-none {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--fg-3);
+}
+
+/* ---------- Watch choice ---------- */
+.choice {
+  display: grid;
+  gap: 14px;
+  padding: 20px;
+}
+.choice-head {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+.choice-head .art {
+  border-radius: 10px;
+}
+.choice-title {
+  display: block;
+  font-family: var(--f-display);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.choice-sub {
+  font-size: 13px;
+  color: var(--fg-2);
+}
+.choice-options {
+  display: grid;
+  gap: 6px;
+}
+.choice-option {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+  padding: 8px 14px 8px 10px;
+  border-radius: 14px;
+  text-align: left;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+@media (hover: hover) {
+  .choice-option:hover {
+    background: var(--hover);
+  }
+}
+.choice-option:focus-visible {
+  outline: none;
+  background: var(--hover);
+  box-shadow: inset 0 0 0 2px var(--focus);
+}
+.choice-option-icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--hover);
+  color: var(--fg);
+}
+.choice-option[data-primary] .choice-option-icon {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.choice-option[data-kind="live"] .choice-option-icon {
+  background: var(--live-soft);
+  color: var(--live-fg);
+}
+.choice-option-label {
+  display: block;
+  font-size: 15px;
+  font-weight: 650;
+}
+.choice-option-detail {
+  font-size: 13px;
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+}
+/* Short landscape: artwork, title and timeline on the left, options on the right. */
+@media (max-height: 520px) and (orientation: landscape) {
+  .dialog:has(.choice) {
+    width: min(720px, calc(100vw - 24px));
+  }
+  .choice {
+    grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+    grid-template-areas:
+      "head options"
+      "timeline options"
+      "caption cancel";
+    column-gap: 20px;
+    row-gap: 10px;
+    padding: 16px 20px;
+    align-items: start;
+  }
+  .choice-head {
+    grid-area: head;
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .choice-head .art {
+    aspect-ratio: auto;
+    height: 110px;
+  }
+  .choice-timeline {
+    grid-area: timeline;
+  }
+  .choice-options {
+    grid-area: options;
+  }
+  .choice-cancel {
+    grid-area: cancel;
+  }
+  .choice-option {
+    min-height: 52px;
+  }
+}

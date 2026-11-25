@@ -1,0 +1,24 @@
+node_modules
+dist
+.output
+.tanstack
+.expo
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+coverage
+**/routeTree.gen.ts
+.vitest/
+test-results/
+playwright-report/
+# local data (segment store, SQLite) and generated previews
+.data/
+docs/design/preview.html
+# Android / Expo native builds
+apps/app/android/
+apps/app/ios/
+*.apk
+*.aab
+.claude/

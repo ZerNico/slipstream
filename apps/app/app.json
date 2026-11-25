@@ -1,0 +1,84 @@
+{
+  "expo": {
+    "name": "Slipstream",
+    "slug": "slipstream",
+    "scheme": "slipstream",
+    "version": "0.1.0",
+    "orientation": "default",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#0B0E13",
+    "icon": "./assets/brand/icon.png",
+    "platforms": ["android"],
+    "android": {
+      "package": "dev.slipstream.app",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/brand/adaptive-foreground.png",
+        "backgroundImage": "./assets/brand/adaptive-background.png",
+        "monochromeImage": "./assets/brand/adaptive-monochrome.png"
+      },
+      "permissions": [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE",
+        "android.permission.CHANGE_WIFI_MULTICAST_STATE"
+      ]
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-localization",
+        {
+          "supportedLocales": {
+            "android": ["en", "de"]
+          },
+          "allowDynamicLocaleChangesAndroid": true
+        }
+      ],
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/brand/splash-mark.png",
+          "imageWidth": 160,
+          "resizeMode": "contain",
+          "backgroundColor": "#0B0E13"
+        }
+      ],
+      [
+        "@react-native-tvos/config-tv",
+        {
+          "isTV": true,
+          "androidTVRequired": false,
+          "androidTVBanner": "./assets/brand/tv-banner.png"
+        }
+      ],
+      [
+        "react-native-video",
+        {
+          "enableNotificationControls": false,
+          "enableAndroidPictureInPicture": true
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          }
+        }
+      ],
+      "./plugins/with-digit-keys.cjs",
+      "./plugins/with-key-down-events.cjs",
+      "./plugins/with-device-link.cjs",
+      "./plugins/with-release-signing.cjs"
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    },
+    "updates": {
+      "enabled": false
+    }
+  }
+}

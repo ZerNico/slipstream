@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slipstream — Slip Ring iterations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Geist+Mono:wght@500&family=Big+Shoulders+Display:wght@700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page:#0B0E13; --panel:#121721; --panel2:#1A2130; --line:#232C3D;
+    --text:#E9EDF4; --muted:#8E99AD; --amber:#FFC233;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--page);color:var(--text)}
+  body{font-family:'Geist',system-ui,sans-serif;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .wrap{max-width:1240px;margin:0 auto;padding:56px 24px 96px}
+  @media (max-width:520px){.wrap{padding:32px 16px 64px}}
+
+  .eyebrow{font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
+  h1{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;font-size:clamp(40px,7vw,76px);line-height:.95;margin:10px 0 18px;letter-spacing:.01em}
+  h2{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;font-size:30px;letter-spacing:.03em;margin:0 0 6px}
+  .approach{max-width:74ch;color:#C3CBD9;font-size:16px;margin:0}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:26px 0 0;font-family:'Geist Mono',monospace;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+
+  .section{margin:64px 0 20px;padding-top:20px;border-top:1px solid var(--line)}
+  .section p{margin:0;color:var(--muted);max-width:70ch}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,350px),1fr));gap:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:14px;min-width:0}
+  .card.ref{border-style:dashed}
+  .card-head{display:flex;align-items:baseline;gap:12px}
+  .num{font-family:'Geist Mono',monospace;font-size:13px;color:var(--amber)}
+  .name{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:24px;letter-spacing:.04em;text-transform:uppercase;line-height:1}
+  .tag{margin-left:auto;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:3px 9px;white-space:nowrap}
+  .spec{font-family:'Geist Mono',monospace;font-size:11px;color:#5E697D;margin:-6px 0 0}
+
+  .icons{display:flex;align-items:flex-end;gap:18px;background:var(--page);border-radius:12px;padding:22px 20px}
+  .icons figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .icons figcaption{font-family:'Geist Mono',monospace;font-size:10px;color:#5E697D}
+  .tile{display:block;border-radius:22.5%;overflow:hidden;flex:none}
+  .tile.edge{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  .tile svg,.free svg{display:block;width:100%;height:100%}
+  .free{display:block;flex:none}
+
+  .lockups{display:grid;gap:8px}
+  .lock{display:flex;align-items:center;gap:12px;height:76px;padding:0 20px;border-radius:12px;overflow:hidden}
+  .lock.dark{background:#0B0E13;border:1px solid var(--line);color:#F3F5F8}
+  .lock.light{background:#F3F5F8;color:#111620}
+  .wm{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.035em;font-size:31px;line-height:1;white-space:nowrap}
+
+  .notes{display:grid;gap:8px;font-size:13.5px;line-height:1.5;margin-top:auto}
+  .notes div{display:grid;grid-template-columns:56px 1fr;gap:8px}
+  .notes b{font-family:'Geist Mono',monospace;font-weight:500;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding-top:3px;color:var(--muted)}
+  .notes .risk b{color:#E9A15B}
+  .notes .risk span{color:#AEB7C7}
+
+  .top2{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:20px;margin-top:24px}
+  .pick{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;display:grid;gap:14px;align-content:start}
+  .pick .rank{font-family:'Geist Mono',monospace;font-size:12px;color:var(--amber);letter-spacing:.06em}
+  .pick h3{margin:0;font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;font-size:26px;letter-spacing:.04em;line-height:1}
+  .pick p{margin:0;color:#C3CBD9;font-size:14px}
+  .pick .row{display:flex;align-items:center;gap:16px}
+  .foot{margin-top:40px;color:var(--muted);font-size:13px;max-width:78ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Slipstream · identity · Slip Ring, iteration round</div>
+    <h1>One ring,<br>twelve ways to slip</h1>
+    <p class="approach">Slip Ring was chosen; this round fixes its final form before any production assets are drawn. Each card moves <strong>one or two dials</strong> of the same construction — a ring, one cut, one slide along that cut — so the differences are comparable. <strong>#0</strong> is the untouched original. Unit <strong>u</strong> = one stroke width; angles are measured from vertical.</p>
+    <div class="legend">
+      <span><i style="background:#FFC233"></i>Amber #FFC233</span>
+      <span><i style="background:#1A2130;box-shadow:inset 0 0 0 1px #3A465C"></i>Graphite tile #1A2130</span>
+      <span><i style="background:#F3F5F8"></i>Light #F3F5F8</span>
+      <span>Tiles at 128 / 48 / 24 px · lockups show the mark free-standing · amber deepens to #F2A800 on light</span>
+    </div>
+  </header>
+
+  <div class="section">
+    <h2>Reference and iterations</h2>
+    <p>Look at the 24 px tile first: whatever survives there is the mark; everything else is decoration.</p>
+  </div>
+  <div class="grid" id="out"></div>
+
+  <div class="section">
+    <h2>Top 2</h2>
+    <p>Where I would land, and the one alternative worth a serious look.</p>
+  </div>
+  <div class="top2" id="top2"></div>
+  <p class="foot">Not shown as separate cards: square versus cut-parallel terminals are the same thing whenever the cut passes through the centre (#0–#5); they only differ on the off-centre cut (#6), which uses cut-parallel ends. Wordmarks here are live webfont text; they get outlined and spaced by hand in the production set, which follows once a form is picked.</p>
+</div>
+
+<script>
+const AMBER='#FFC233', AMBER_L='#F2A800', LIGHT='#F3F5F8', INK='#111620', TILE='#1A2130', GRAPH='#3A465C';
+// colour schemes: [first half (upper/left), second half (lower/right)] per context
+const SCH = {
+  two:   {tile:{bg:TILE,a:LIGHT,b:AMBER},  dark:{a:LIGHT,b:AMBER},  light:{a:INK,b:AMBER_L}},
+  amber: {tile:{bg:TILE,a:AMBER,b:AMBER},  dark:{a:AMBER,b:AMBER},  light:{a:INK,b:INK}},
+  lead:  {tile:{bg:TILE,a:AMBER,b:'#46536C'}, dark:{a:AMBER,b:'#46536C'}, light:{a:AMBER_L,b:INK}},
+  onamb: {tile:{bg:AMBER,a:'#0B0E13',b:'#0B0E13'}, dark:{bg:AMBER,a:'#0B0E13',b:'#0B0E13'}, light:{bg:AMBER,a:'#0B0E13',b:'#0B0E13'}},
+};
+
+let uid=0;
+const f = n => (Math.round(n*100)/100).toString();
+
+/* v: {R,w,gap,slip(in u),ang,off,shape:'ring'|'disc'|'screen',caps:'cut'|'round',raw} */
+function mark(v, col){
+  if (v.raw) return `<svg viewBox="0 0 100 100" aria-hidden="true">${v.raw(col)}</svg>`;
+  const id='k'+(uid++), th=v.ang*Math.PI/180;
+  const d=[Math.sin(th),-Math.cos(th)], n=[-Math.cos(th),-Math.sin(th)];
+  const R=v.R, w=v.w, g=v.gap, off=v.off||0, s=v.slip*w;
+  const P=(a,b)=>[50+d[0]*a+n[0]*b, 50+d[1]*a+n[1]*b];
+  const pt=p=>f(p[0])+' '+f(p[1]);
+  const ext = v.shape==='screen' ? 44 : R+w/2+s/2;
+  const sc = Math.min(1, 41.5/ext);
+  const tA=`translate(${f(d[0]*s/2)} ${f(d[1]*s/2)})`, tB=`translate(${f(-d[0]*s/2)} ${f(-d[1]*s/2)})`;
+  let body;
+  if (v.caps==='round'){
+    const b0=g/2+w/2, a0=Math.sqrt(R*R-b0*b0);
+    const A1=P(a0,b0), A2=P(-a0,b0), B1=P(-a0,-b0), B2=P(a0,-b0);
+    body=`<g fill="none" stroke-width="${w}" stroke-linecap="round">
+      <path transform="${tA}" stroke="${col.a}" d="M${pt(A1)}A${R} ${R} 0 0 0 ${pt(A2)}"/>
+      <path transform="${tB}" stroke="${col.b}" d="M${pt(B1)}A${R} ${R} 0 0 0 ${pt(B2)}"/></g>`;
+  } else {
+    const shape = c => v.shape==='disc' ? `<circle cx="50" cy="50" r="${R+w/2}" fill="${c}"/>`
+      : v.shape==='screen' ? `<rect x="${50-v.sw/2}" y="${50-v.sh/2}" width="${v.sw}" height="${v.sh}" rx="${v.rx}" fill="none" stroke="${c}" stroke-width="${w}"/>`
+      : `<circle cx="50" cy="50" r="${R}" fill="none" stroke="${c}" stroke-width="${w}"/>`;
+    const L=200, ba=off+g/2, bb=off-g/2;
+    const pa=[P(L,ba),P(-L,ba),P(-L,ba+L),P(L,ba+L)].map(pt).join(' ');
+    const pb=[P(L,bb),P(-L,bb),P(-L,bb-L),P(L,bb-L)].map(pt).join(' ');
+    body=`<defs><clipPath id="${id}a"><polygon points="${pa}"/></clipPath><clipPath id="${id}b"><polygon points="${pb}"/></clipPath></defs>
+      <g transform="${tA}"><g clip-path="url(#${id}a)">${shape(col.a)}</g></g>
+      <g transform="${tB}"><g clip-path="url(#${id}b)">${shape(col.b)}</g></g>`;
+  }
+  const wrap = sc<1 ? `<g transform="translate(50 50) scale(${f(sc)}) translate(-50 -50)">${body}</g>` : body;
+  return `<svg viewBox="0 0 100 100" aria-hidden="true">${wrap}</svg>`;
+}
+
+const V = [
+{ n:'Original v1', ref:true, sch:'two', spec:'slip 1u · 12° · stroke 13 · gap 4',
+  raw:c=>`<g transform="rotate(-78 50 50)" stroke-width="13" fill="none">
+    <path stroke="${c.a}" d="M23 48 A27 27 0 0 1 77 48" transform="translate(6.5 0)"/>
+    <path stroke="${c.b}" d="M77 52 A27 27 0 0 1 23 52" transform="translate(-6.5 0)"/></g>`,
+  what:'Nothing. The concept exactly as chosen, for reference.',
+  risk:'The 4-unit gap is under a pixel at 24 px and the halves are two semicircles pushed apart, so the ring is very slightly oval.' },
+
+{ n:'Tuned', sch:'two', R:27, w:14, gap:14/3, slip:1, ang:12,
+  what:'Same idea, corrected: a true circle with a slot of u/3 cut out of it, stroke up from 13 to 14, slip still exactly one stroke so each outer edge lands on the other half\'s inner edge.',
+  risk:'Deliberately undramatic; side by side with #0 most people will not see a change, only feel that it sits better small.' },
+
+{ n:'Half Slip', sch:'two', R:27, w:14, gap:14/3, slip:.5, ang:12,
+  what:'Slip reduced to half a stroke: reads as a ring first and a nudge second.',
+  risk:'At 24 px the step is about 1.5 px and looks like a rendering error rather than a decision; the S is gone.' },
+
+{ n:'Long Slip', sch:'two', R:27, w:14, gap:14/3, slip:1.75, ang:12,
+  what:'Slip pushed to 1.75 strokes: the halves clearly pass each other and the S steps forward.',
+  risk:'The ring stops closing in the eye — it becomes two brackets or a pair of C\'s — and the taller footprint shrinks it inside any tile.' },
+
+{ n:'Steep Cut', sch:'two', R:27, w:14, gap:14/3, slip:1, ang:32,
+  what:'Cut angle opened from 12° to 32°: more speed, and the S becomes the first read.',
+  risk:'Leaves the 12° slant used everywhere else in the UI, and the diagonal two-tone split drifts toward a sync / refresh icon.' },
+
+{ n:'Level Cut', sch:'two', R:27, w:14, gap:14/3, slip:1, ang:90,
+  what:'Cut laid flat: upper half slides right, lower half left, like two timeline tracks out of step.',
+  risk:'No slant and no S; reads as a sliced bagel or a generic "offset" icon, and the calm horizon removes the energy.' },
+
+{ n:'Off-centre Cut', sch:'two', R:27, w:14, gap:14/3, slip:1, ang:12, off:-11,
+  what:'Cut moved off the centre so the amber part is the smaller segment — "the bit you are behind" — with terminals parallel to the cut.',
+  risk:'Loses the point symmetry and the S, and an uneven two-tone ring is read as a donut chart or progress meter.' },
+
+{ n:'Fine Line', sch:'two', R:30, w:8, gap:3, slip:1, ang:12, caps:'round',
+  what:'Light stroke (8 instead of 14) with rounded terminals: watch-dial elegance, friendlier ends.',
+  risk:'Thin at 24 px and weak on a TV launcher row; round caps on a split ring are the vocabulary of loaders and power buttons.' },
+
+{ n:'Heavy Amber', sch:'amber', R:25.5, w:19, gap:7, slip:.8, ang:12,
+  what:'Heavy stroke, wider gap, both halves amber: the form alone carries the idea, no second colour needed.',
+  risk:'One-colour amber on a dark tile is exactly Plex\'s palette (not its shape), and the small counter starts to fill in at 16 px.' },
+
+{ n:'Amber Leads', sch:'lead', R:27, w:14, gap:14/3, slip:1, ang:12,
+  what:'Colours flipped and quietened: the leading upper half is amber (live), the trailing half recedes into graphite.',
+  risk:'The graphite half almost disappears at 24 px on a dark launcher, leaving a lone amber C — and on light it must be re-thought as ink.' },
+
+{ n:'Amber Tile', sch:'onamb', R:27, w:15, gap:5.5, slip:1, ang:12, tiled:true,
+  what:'Inverted: an amber tile carrying a single-colour ink ring. Loudest on a shelf and furthest from Plex\'s amber-on-dark.',
+  risk:'The mark can no longer live without its tile, the two-tone story is dropped, and a full amber square is a lot of colour in a dark UI.' },
+
+{ n:'Solid Disc', sch:'two', R:27, w:14, gap:14/3, slip:1, ang:12, shape:'disc',
+  what:'Not a ring but a filled disc, cut and slipped: maximum mass, bulletproof at 16 px.',
+  risk:'Without the hole there is no clock and no S; it reads as a split pill, a coin or a pie cut in two.' },
+
+{ n:'Screen Ring', sch:'two', R:27, w:12, gap:4, slip:1, ang:12, shape:'screen', sw:68, sh:46, rx:13,
+  what:'Wildcard: the ring squared up into a screen outline, same 12° cut and one-stroke slip — the only version that says "TV".',
+  risk:'Straight edges make the slip look like a broken or glitched frame, and rounded-rectangle outlines are the most common shape in app iconography.' },
+];
+
+const pad = n => String(n).padStart(2,'0');
+const tile = (v,s) => { const c=SCH[v.sch].tile;
+  return `<span class="tile${c.bg===TILE?' edge':''}" style="width:${s}px;height:${s}px;background:${c.bg}">${mark(v,c)}</span>`; };
+const lock = (v,ctx) => { const c=SCH[v.sch][ctx];
+  const m = v.tiled ? `<span class="tile" style="width:44px;height:44px;background:${c.bg}">${mark(v,c)}</span>`
+                    : `<span class="free" style="width:48px;height:48px;margin:0 -4px">${mark(v,c)}</span>`;
+  return `<div class="lock ${ctx}">${m}<span class="wm">Slipstream</span></div>`; };
+const spec = v => v.spec || `slip ${v.slip}u · ${v.ang}°${v.off?' · off-centre':''} · stroke ${v.w} · gap ${Math.round(v.gap*10)/10}${v.caps==='round'?' · round':''}`;
+
+document.getElementById('out').innerHTML = V.map((v,i)=>`<article class="card${v.ref?' ref':''}">
+  <div class="card-head"><span class="num">${pad(i)}</span><span class="name">${v.n}</span>${v.ref?'<span class="tag">reference</span>':''}</div>
+  <p class="spec">${spec(v)}</p>
+  <div class="icons">
+    <figure>${tile(v,128)}<figcaption>128</figcaption></figure>
+    <figure>${tile(v,48)}<figcaption>48</figcaption></figure>
+    <figure>${tile(v,24)}<figcaption>24</figcaption></figure>
+  </div>
+  <div class="lockups">${lock(v,'dark')}${lock(v,'light')}</div>
+  <div class="notes"><div><b>Changed</b><span>${v.what}</span></div><div class="risk"><b>Risk</b><span>${v.risk}</span></div></div>
+</article>`).join('');
+
+const picks = [
+  [1,'Tuned','The original decision, made precise. One stroke of slip is the only offset with a reason behind it — each half\'s outer edge lands exactly on the other\'s inner edge — and 12° keeps the mark on the same slant as the rest of the product. Ring first, S second, two colours that explain who is live and who is behind, and it is the only two-tone version that still holds both halves at 24 px. It also needs no tile, so it works free-standing next to the wordmark.'],
+  [10,'Amber Tile','The same geometry as Tuned, inverted into a single-colour ink ring on an amber tile. As an app icon it is the most visible thing on an Android TV row and the least Plex-like option in the set. It does not have to be either/or: Tuned can stay the brand mark in product and print while this becomes the launcher icon. If the S should be louder instead, the runner-up is #04 Steep Cut — at the cost of leaving the 12° system.'],
+];
+document.getElementById('top2').innerHTML = picks.map((p,i)=>`<div class="pick"><div class="rank">PICK ${i+1} · #${pad(p[0])}</div><div class="row">${tile(V[p[0]],88)}<h3>${p[1]}</h3></div><p>${p[2]}</p></div>`).join('');
+</script>
+</body>
+</html>

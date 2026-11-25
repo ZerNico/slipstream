@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Slipstream — logo exploration, round 2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700&family=Geist+Mono:wght@500&family=Big+Shoulders+Display:wght@700;800&family=Instrument+Serif:ital@1&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --page:#0B0E13; --panel:#121721; --panel2:#1A2130; --line:#232C3D;
+    --text:#E9EDF4; --muted:#8E99AD; --amber:#FFC233; --red:#FF4D5E;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--page);color:var(--text)}
+  body{font-family:'Geist',system-ui,sans-serif;font-size:15px;line-height:1.55;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+  .wrap{max-width:1240px;margin:0 auto;padding:56px 24px 96px}
+  @media (max-width:520px){.wrap{padding:32px 16px 64px}}
+
+  header .eyebrow{font-family:'Geist Mono',monospace;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--amber)}
+  h1{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;font-size:clamp(40px,7vw,76px);line-height:.95;margin:10px 0 18px;letter-spacing:.01em}
+  h2{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;font-size:30px;letter-spacing:.03em;margin:0 0 6px}
+  .approach{max-width:74ch;color:#C3CBD9;font-size:16px;margin:0}
+  .legend{display:flex;flex-wrap:wrap;gap:8px 18px;margin:26px 0 0;font-family:'Geist Mono',monospace;font-size:12px;color:var(--muted)}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:7px;vertical-align:-1px}
+
+  .section{margin:64px 0 20px;padding-top:20px;border-top:1px solid var(--line)}
+  .section p{margin:0;color:var(--muted);max-width:70ch}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,350px),1fr));gap:20px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:20px;display:flex;flex-direction:column;gap:16px;min-width:0}
+  .card-head{display:flex;align-items:baseline;gap:12px}
+  .num{font-family:'Geist Mono',monospace;font-size:13px;color:var(--amber)}
+  .name{font-family:'Big Shoulders Display',sans-serif;font-weight:800;font-size:24px;letter-spacing:.04em;text-transform:uppercase;line-height:1}
+  .tag{margin-left:auto;font-family:'Geist Mono',monospace;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:3px 9px;white-space:nowrap}
+
+  .icons{display:flex;align-items:flex-end;gap:18px;background:var(--page);border-radius:12px;padding:22px 20px}
+  .icons figure{margin:0;display:flex;flex-direction:column;align-items:center;gap:8px}
+  .icons figcaption{font-family:'Geist Mono',monospace;font-size:10px;color:#5E697D}
+  .tile{display:block;border-radius:22.5%;overflow:hidden;background:var(--bg);flex:none}
+  .tile svg,.free svg{display:block;width:100%;height:100%}
+  .free{display:block;flex:none}
+
+  /* colour contexts */
+  .c-dark{--bg:#1A2130;--fg:#F3F5F8;--ac:#FFC233;--dim:#3A465C}
+  .c-dark.tile{box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+  .c-amber{--bg:#FFC233;--fg:#0B0E13;--ac:#0B0E13;--dim:#C9952A}
+  .c-ondark{--bg:#0B0E13;--fg:#F3F5F8;--ac:#FFC233;--dim:#3A465C}
+  .c-onlight{--bg:#F3F5F8;--fg:#0B0E13;--ac:#F2A800;--dim:#C5CCD8}
+
+  .f{fill:var(--fg)} .a{fill:var(--ac)} .b{fill:var(--bg)} .d{fill:var(--dim)}
+  .sf{stroke:var(--fg);fill:none} .sa{stroke:var(--ac);fill:none} .sb{stroke:var(--bg);fill:none} .sd{stroke:var(--dim);fill:none}
+  .bs{font-family:'Big Shoulders Display',sans-serif;font-weight:800}
+  .is{font-family:'Instrument Serif',serif;font-style:italic}
+
+  .lockups{display:grid;gap:8px}
+  .lock{display:flex;align-items:center;gap:13px;height:76px;padding:0 20px;border-radius:12px;background:var(--bg);overflow:hidden}
+  .lock.c-ondark{border:1px solid var(--line)}
+  .wm{font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;letter-spacing:.035em;font-size:31px;line-height:1;color:var(--fg);white-space:nowrap}
+  .wm.solo{font-size:40px}
+  .split{position:relative;display:inline-block}
+  .split .top{display:block;clip-path:inset(0 -.3em 60.5% -.3em);transform:translateX(.075em)}
+  .split .bot{position:absolute;left:0;top:0;clip-path:inset(41.5% -.3em 0 -.3em);transform:translateX(-.075em)}
+  .ol{color:transparent;-webkit-text-stroke:1.5px var(--fg);margin-left:.05em}
+  .wm.serif{font-family:'Instrument Serif',serif;font-style:italic;font-weight:400;text-transform:none;letter-spacing:-.005em;font-size:46px;padding-bottom:6px}
+
+  .notes{display:grid;gap:8px;font-size:13.5px;line-height:1.5;margin-top:auto}
+  .notes div{display:grid;grid-template-columns:42px 1fr;gap:8px}
+  .notes b{font-family:'Geist Mono',monospace;font-weight:500;font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;padding-top:3px;color:var(--muted)}
+  .notes .risk b{color:#E9A15B}
+  .notes .risk span{color:#AEB7C7}
+
+  .top3{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:20px;margin-top:24px}
+  .pick{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:22px;display:grid;gap:14px;align-content:start}
+  .pick .rank{font-family:'Geist Mono',monospace;font-size:12px;color:var(--amber);letter-spacing:.06em}
+  .pick h3{margin:0;font-family:'Big Shoulders Display',sans-serif;font-weight:800;text-transform:uppercase;font-size:26px;letter-spacing:.04em;line-height:1}
+  .pick p{margin:0;color:#C3CBD9;font-size:14px}
+  .pick .row{display:flex;align-items:center;gap:16px}
+  .foot{margin-top:40px;color:var(--muted);font-size:13px;max-width:78ch}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Slipstream · identity · round 2</div>
+    <h1>Live TV that<br>waits for you</h1>
+    <h2>How I approached it</h2>
+    <p class="approach">Round one failed because the marks were pictograms <em>of</em> a feature. This round I started from the one verb in the name — <strong>slip</strong> — and from the product's own 12° slant, and asked which simple, solid forms can carry a displacement in time: a ring whose halves slide past each other, a body that tapers into its own wake, a tile whose notches leave an S. Every mark is built from one or two geometric moves with a single stroke weight, drawn to survive at 24&nbsp;px, and none uses a chevron, an arrow-head, a lone slanted amber bar or a play triangle. Motorsport stays in the metaphor (drafting, tandem, wake), never in the picture, and live red is left out entirely so it keeps its meaning in the UI.</p>
+    <div class="legend">
+      <span><i style="background:#FFC233"></i>Amber #FFC233</span>
+      <span><i style="background:#1A2130;box-shadow:inset 0 0 0 1px #3A465C"></i>Graphite tile #1A2130</span>
+      <span><i style="background:#F3F5F8"></i>Light #F3F5F8</span>
+      <span>Icons at 128 / 48 / 24 px · amber deepened to #F2A800 on light backgrounds for contrast</span>
+    </div>
+  </header>
+
+  <div id="out"></div>
+
+  <div class="section">
+    <h2>Top 3 recommendations</h2>
+    <p>Ranked by ownability, small-size behaviour and how much of the product promise the form carries without explanation.</p>
+  </div>
+  <div class="top3" id="top3"></div>
+  <p class="foot">Notes: wordmark concepts (12–14) rely on webfonts and would be converted to outlines and kerned by hand before use. All marks are concept-level constructions; the chosen direction needs one more pass for optical corrections, a monochrome version, an Android adaptive-icon safe zone and an Android TV banner (320×180).</p>
+</div>
+
+<script>
+const M = [
+/* ---------- RING / TIME-SHIFT ---------- */
+{ g:'Ring / time-shift', gd:'Four different readings of the one idea that tested "okay": time as a ring, and you somewhere behind on it.',
+  n:'Slip Ring', tile:'dark',
+  svg:`<g transform="rotate(-78 50 50)" stroke-width="13">
+    <path class="sf" d="M23 48 A27 27 0 0 1 77 48" transform="translate(6.5 0)"/>
+    <path class="sa" d="M77 52 A27 27 0 0 1 23 52" transform="translate(-6.5 0)"/></g>`,
+  why:'A clock ring cut on the product\'s 12° slant, its halves slipped by exactly one stroke width — the name as a single geometric move, with a hidden S.',
+  risk:'Split or offset rings exist in other identities; the 12° cut and two-tone are what make it ours, so they cannot be dropped.' },
+
+{ n:'Wake Ring', tile:'dark',
+  svg:`<path class="a" d="M50 12 A38 38 0 0 1 50 88 A38 38 0 0 1 50 12 L50 18 A28 28 0 0 0 50 74 A20 20 0 0 0 50 34 Z"/>
+    <path class="sb" stroke-width="5" d="M53.2 6 L46.4 38"/>`,
+  why:'One body that thins into its own wake and has almost caught its tail: catching up with live, drawn as a two-centre spiral with a slanted head.',
+  risk:'Tapered swirls are a crowded genre (browsers, loaders); can also read as a letter G or C.' },
+
+{ n:'Behind Live', tile:'dark',
+  svg:`<g stroke-width="12" stroke-linecap="round">
+    <path class="sd" d="M80.5 55.4 A31 31 0 0 1 19.5 44.6"/>
+    <path class="sa" d="M19.5 44.6 A31 31 0 0 1 65.5 23.2"/></g>
+    <circle class="b" cx="65.5" cy="23.2" r="3.3"/>`,
+  why:'The "okay" ring pushed further: the past is grey, your lag is amber, and the future is simply missing because it has not aired yet.',
+  risk:'Still the closest to the rejected clock ring, and can be mistaken for a progress spinner.' },
+
+{ n:'Shear', tile:'dark',
+  svg:`<defs>
+    <clipPath id="shL"><path d="M-50 -20H51.9L22.1 120H-50Z"/></clipPath>
+    <clipPath id="shM"><path d="M55.9 -20H73.9L44.1 120H26.1Z"/></clipPath>
+    <clipPath id="shR"><path d="M77.9 -20H150V120H48.1Z"/></clipPath></defs>
+    <g transform="translate(-1.4 6.6)"><g clip-path="url(#shL)"><circle class="a" cx="50" cy="50" r="33"/></g></g>
+    <g clip-path="url(#shM)"><circle class="a" cx="50" cy="50" r="33"/></g>
+    <g transform="translate(1.4 -6.6)"><g clip-path="url(#shR)"><circle class="a" cx="50" cy="50" r="33"/></g></g>`,
+  why:'A full disc sheared into three 12° strips, each a step later than the last — a time-lapse of one shape, bold and single-colour.',
+  risk:'More "motion graphics" than "television"; the time idea needs the tagline next to it.' },
+
+/* ---------- DRAFT ---------- */
+{ g:'Draft / tandem', gd:'The motorsport origin as physics, not as cars: a leader, a follower, and the calm pocket in between.',
+  n:'Pocket', tile:'dark',
+  svg:`<g stroke-width="6" stroke-linecap="round">
+    <path class="sf" d="M9 39 C21 39 23 28 37 28 C55 28 63 38 91 38"/>
+    <path class="sf" d="M9 61 C21 61 23 72 37 72 C55 72 63 62 91 62"/></g>
+    <circle class="f" cx="36" cy="50" r="9"/><circle class="a" cx="63" cy="50" r="7.5"/>`,
+  why:'The literal wind-tunnel diagram of a slipstream: air parts around the leader and the amber follower sits in the quiet pocket behind — you, behind live.',
+  risk:'Reads as an eye or a fish at a glance, and is the most illustrative mark in the set.' },
+
+{ n:'Draft Pause', tile:'amber',
+  svg:`<g transform="translate(50 50) skewX(-12)"><rect class="f" x="-22" y="-30" width="16" height="47" rx="2.5"/><rect class="f" x="6" y="-17" width="16" height="47" rx="2.5"/></g>`,
+  why:'Pause — the thing you can now do to live TV — leaned 12° with the second bar slipped back along the slant like a car tucked in behind another.',
+  risk:'A pause glyph is generic; two dark bars on amber are far from Plex, but the idea is only ownable through the stagger.' },
+
+{ n:'Chase', tile:'dark',
+  svg:`<g transform="rotate(12 50 50) translate(100 0) scale(-1 1)" stroke-width="5" stroke-linejoin="round">
+    <path class="a sbk" d="M50 12 A38 38 0 0 1 50 88 A19 19 0 0 1 50 50 A19 19 0 0 0 50 12Z"/>
+    <path class="f sbk" d="M50 12 A38 38 0 0 1 50 88 A19 19 0 0 1 50 50 A19 19 0 0 0 50 12Z" transform="rotate(180 50 50)"/></g>`,
+  why:'Two identical bodies drafting each other round a circle; the channel between them is a leaning S, so the monogram is made of air.',
+  risk:'Unavoidable yin-yang association (and a little Pepsi); needs the lean and the gap to stay clear of it.' },
+
+/* ---------- MONOGRAM ---------- */
+{ g:'Monogram', gd:'Not a typeset S on a tile — three S forms that only exist because of how they are constructed.',
+  n:'Slot S', tile:'amber',
+  svg:`<path class="f" d="M100 26H30.6L28 38H100Z"/><path class="f" d="M0 62H72L69.4 74H0Z"/>`,
+  why:'The amber tile itself becomes the S: two slots slide in from opposite edges and stop on a 12° cut. Two shapes, zero strokes, perfect at 16 px.',
+  risk:'Can read as a 5 or as stacked shelves for a moment; depends on the tile shape, so needs a boxed variant everywhere.' },
+
+{ n:'Track S', tile:'dark',
+  svg:`<g transform="translate(50 50) scale(1.2) translate(-50 -50)"><g stroke-width="12" stroke-linecap="round" stroke-linejoin="round">
+    <path class="sd" d="M70 26H42a12 12 0 0 0 0 24H58a12 12 0 0 1 0 24H30"/>
+    <path class="sa" d="M70 26H42a12 12 0 0 0 0 24H58"/></g>
+    <circle class="b" cx="58" cy="50" r="3.2"/></g>`,
+  why:'The timeline folded twice into an S: amber is what you have watched, grey is the buffer still waiting for you, the dot is where you are.',
+  risk:'Two-tone is essential to the idea but weakens it in one colour; angular S feels slightly "digital display".' },
+
+{ n:'Relay S', tile:'dark',
+  svg:`<g stroke-width="13">
+    <path class="sf" d="M63.5 24 A16.5 16.5 0 1 0 50 50"/>
+    <path class="sa" d="M50 50 A16.5 16.5 0 1 1 36.5 76"/></g>
+    <path class="sb" stroke-width="4" d="M52.4 39 L47.6 61"/>`,
+  why:'An S of two equal arcs — leader and follower — handing over at a 12° cut in the middle: tandem running, built from pure circles.',
+  risk:'The most conventional monogram here; a two-arc S has been drawn before, so distinctiveness rests on colour and the cut.' },
+
+/* ---------- EMBLEM ---------- */
+{ g:'Emblem', gd:'One mark that says "television" outright.',
+  n:'Slip Screen', tile:'amber',
+  svg:`<defs>
+    <clipPath id="ssL"><path d="M-50 -20H70.9L41.1 120H-50Z"/></clipPath>
+    <clipPath id="ssR"><path d="M75.9 -20H150V120H46.1Z"/></clipPath></defs>
+    <g transform="translate(-1.1 5)"><g clip-path="url(#ssL)"><rect class="f" x="15" y="26" width="70" height="48" rx="11"/></g></g>
+    <g transform="translate(1.1 -5)"><g clip-path="url(#ssR)"><rect class="f" x="15" y="26" width="70" height="48" rx="11"/></g></g>`,
+  why:'A screen cut where you joined: the part that already aired drops back, the live part moves on — the only mark that names the category.',
+  risk:'Same slicing trick as Slip Ring with a less elegant base shape; could be read as a broken screen or a battery.' },
+
+/* ---------- WORDMARKS ---------- */
+{ g:'Typographic wordmarks', gd:'The name is long and good. These let the letters do the work; each has an app-icon derivative.',
+  n:'Split Flap', tile:'amber', solo:true,
+  svg:`<defs><clipPath id="sfT"><rect x="-10" y="0" width="120" height="49"/></clipPath><clipPath id="sfB"><rect x="-10" y="51.5" width="120" height="50"/></clipPath></defs>
+    <g transform="translate(4 0)"><g clip-path="url(#sfT)"><text class="bs f" x="50" y="83" text-anchor="middle" font-size="94">S</text></g></g>
+    <g transform="translate(-4 0)"><g clip-path="url(#sfB)"><text class="bs f" x="50" y="83" text-anchor="middle" font-size="94">S</text></g></g>`,
+  wm:`<span class="wm solo split"><span class="top">Slipstream</span><span class="bot">Slipstream</span></span>`,
+  why:'Big Shoulders cut through the waist and slipped: the upper half is live, the lower half is you, a beat behind. Also a nod to split-flap timing boards.',
+  risk:'Sliced type is a known device and loses a little legibility at very small sizes; needs hand-tuned cut height per letter.' },
+
+{ n:'Outline Draft', tile:'dark', solo:true,
+  svg:`<text class="bs" x="33" y="76" text-anchor="middle" font-size="74" fill="none" stroke="var(--fg)" stroke-width="3" style="stroke:var(--fg)">S</text>
+    <text class="bs a" x="67" y="76" text-anchor="middle" font-size="74">S</text>`,
+  wm:`<span class="wm solo">Slip<span class="ol">stream</span></span>`,
+  why:'SLIP is solid, STREAM is only its outline — the hole in the air that the leader leaves behind. The icon pairs a solid S with its hollow follower.',
+  risk:'Outlined type dies below ~20 px and on video; the icon needs a solid-only fallback.' },
+
+{ n:'Late Show', tile:'dark', solo:true,
+  svg:`<text class="is a" x="49" y="78" text-anchor="middle" font-size="118">s</text>`,
+  wm:`<span class="wm serif">slipstream</span>`,
+  why:'Wildcard in type: a lowercase italic serif (Instrument Serif) — unhurried, cinematic, and nothing like the geometric sans of every other media server.',
+  risk:'Breaks from the Big Shoulders timing-board voice of the UI; the icon is a typeset letter, which round one already punished.' },
+
+/* ---------- WILDCARDS ---------- */
+{ g:'Wildcards', gd:'Two ideas from outside the brief\'s vocabulary.',
+  n:'Almost Live', tile:'dark',
+  svg:`<g stroke-width="10" stroke-linecap="round">
+    <path class="sf" d="M18 50 C28.7 35 39.3 35 50 50 S71.3 65 82 50" transform="translate(-5 -12)"/>
+    <path class="sa" d="M18 50 C28.7 35 39.3 35 50 50 S71.3 65 82 50" transform="translate(5 12)"/></g>`,
+  why:'The ≈ sign, slipped: the same signal twice, the second one delayed. "Approximately live" is the most honest description of timeshift there is.',
+  risk:'Reads as water or waves first; the joke needs a second look, and wavy lines are close to generic "streaming" imagery.' },
+
+{ n:'Comma', tile:'dark',
+  svg:`<g transform="translate(35 47) scale(1.2)"><path class="a" d="M12 0A12 12 0 1 0 0 12C0 20-4 26-10 30C4 30 12 16 12 0Z"/></g>
+    <g transform="translate(64 37) scale(1.2)"><path class="f" d="M12 0A12 12 0 1 0 0 12C0 20-4 26-10 30C4 30 12 16 12 0Z"/></g>`,
+  why:'A comma is a pause in a sentence that keeps going. Two of them in tandem are also two teardrop bodies, one tucked in behind the other.',
+  risk:'Will be read as a quotation mark by most people; charming but the furthest from "TV".' },
+];
+
+const pad = n => String(n).padStart(2,'0');
+const svg = m => `<svg viewBox="0 0 100 100" aria-hidden="true">${m.svg}</svg>`;
+const tile = (m,s) => `<span class="tile c-${m.tile}" style="width:${s}px;height:${s}px">${svg(m)}</span>`;
+const lock = (m,ctx) => {
+  let inner;
+  if (m.wm) inner = m.wm;
+  else if (m.tile==='amber') inner = tile(m,44) + `<span class="wm">Slipstream</span>`;
+  else inner = `<span class="free" style="width:46px;height:46px">${svg(m)}</span><span class="wm">Slipstream</span>`;
+  return `<div class="lock c-${ctx}">${inner}</div>`;
+};
+
+let html = '', open = false;
+M.forEach((m,i) => {
+  if (m.g) {
+    if (open) html += '</div>';
+    html += `<div class="section"><h2>${m.g}</h2><p>${m.gd}</p></div><div class="grid">`;
+    open = true;
+  }
+  html += `<article class="card">
+    <div class="card-head"><span class="num">${pad(i+1)}</span><span class="name">${m.n}</span><span class="tag">${m.tile} tile</span></div>
+    <div class="icons">
+      <figure>${tile(m,128)}<figcaption>128</figcaption></figure>
+      <figure>${tile(m,48)}<figcaption>48</figcaption></figure>
+      <figure>${tile(m,24)}<figcaption>24</figcaption></figure>
+    </div>
+    <div class="lockups">${lock(m,'ondark')}${lock(m,'onlight')}</div>
+    <div class="notes"><div><b>Why</b><span>${m.why}</span></div><div class="risk"><b>Risk</b><span>${m.risk}</span></div></div>
+  </article>`;
+});
+html += '</div>';
+document.getElementById('out').innerHTML = html;
+
+const picks = [
+  [0,'Slip Ring','It is the name, drawn. One ring, one 12° cut, one stroke-width of slip — it explains time-shifting without a clock hand, a dot or a play button, hides an S for those who look, and holds at 24 px. It also animates naturally (the halves slide into place when you reach live).'],
+  [7,'Slot S','The strongest pure app icon: the tile is the letter, so it is unmistakable at 16 px, on an Android TV row and as a favicon. Amber-dominant rather than amber-on-dark, which puts the most distance between Slipstream and Plex.'],
+  [1,'Wake Ring','The most characterful single-colour mark: a body, its wake and the catch-up in one continuous shape. Choose it if the brand should feel warmer and less technical than Slip Ring; it needs a trademark look-around first because swirls are common.'],
+];
+document.getElementById('top3').innerHTML = picks.map((p,i)=>{
+  const m = M[p[0]];
+  return `<div class="pick"><div class="rank">PICK ${i+1} · MARK ${pad(p[0]+1)}</div><div class="row">${tile(m,88)}<h3>${p[1]}</h3></div><p>${p[2]}</p></div>`;
+}).join('');
+</script>
+<style>.sbk{stroke:var(--bg)}</style>
+</body>
+</html>

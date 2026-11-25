@@ -1,0 +1,187 @@
+@import "tailwindcss";
+/* Colours, radii, type sizes, control heights and motion from the shared tokens. They switch
+   Tailwind's palette and breakpoints off, so a raw colour or a stray breakpoint cannot compile. */
+@import "@slipstream/design-tokens/tailwind.css";
+@import "./fonts.css";
+@import "./base.css";
+/* The shell's and the shared components' own CSS sits in the components layer, so a utility at a
+   call site (`absolute`, `hidden`, `w-20`) wins over a component's default, as in shadcn. */
+@import "./shell.css" layer(components);
+@import "../ui/controls.css" layer(components);
+@import "../ui/sheet/sheet.css" layer(components);
+@import "../ui/artwork/artwork.css" layer(components);
+@import "../ui/timeline/timeline.css" layer(components);
+@import "../ui/media.css" layer(components);
+@import "../ui/overlays.css" layer(components);
+/* The skeleton contract stays unlayered: while loading it must beat every utility colour. */
+@import "../ui/skeleton.css";
+
+/* Dark is the default. It applies unless the reader asks for light, by system or by choice. */
+@custom-variant dark {
+  &:where([data-theme="dark"], [data-theme="dark"] *, [data-surface="cine"] *) {
+    @slot;
+  }
+  @media not (prefers-color-scheme: light) {
+    &:where(:root:not([data-theme="light"]), :root:not([data-theme="light"]) *) {
+      @slot;
+    }
+  }
+}
+
+/* Phones turned sideways at any width (SPEC §2.1, owner notes): the compact layout. */
+@custom-variant short (@media (max-height: 520px) and (orientation: landscape));
+/* Touch screens: bigger targets, no hover-only affordances. */
+@custom-variant coarse (@media (pointer: coarse));
+/* A mouse or trackpad: keyboard hints, tooltips and hover reveals live here. */
+@custom-variant fine (@media (hover: hover) and (pointer: fine));
+/* Inside a loading route (skeleton contract, SPEC §6.2). */
+@custom-variant loading (&:where([data-loading] *));
+
+/*
+ * Layout variables of the shell (SPEC §2.2). They are layout, not design tokens: the gutter,
+ * the bar heights and the reserved space for the mini player and the save bar.
+ */
+:root {
+  --gutter: 16px;
+  --maxw: 1520px;
+  --nav-h: 56px;
+  --tab-h: 64px;
+  --rail-w: 0px;
+  --mini-h: 0px;
+  --save-h: 0px;
+  --safe-t: env(safe-area-inset-top, 0px);
+  --safe-r: env(safe-area-inset-right, 0px);
+  --safe-b: env(safe-area-inset-bottom, 0px);
+  --safe-l: env(safe-area-inset-left, 0px);
+  /* The Home hero's fixed height (SPEC §6.1): the same in all five states. */
+  --hero-h: 480px;
+}
+
+@media (min-width: 600px) {
+  :root {
+    --gutter: 24px;
+    --hero-h: 540px;
+  }
+}
+
+@media (min-width: 768px) {
+  :root {
+    --tab-h: 0px;
+  }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  :root {
+    --rail-w: calc(84px + var(--safe-l));
+  }
+}
+
+@media (min-width: 1100px) {
+  :root {
+    --nav-h: 64px;
+    --gutter: 40px;
+    --hero-h: clamp(560px, 62vh, 660px);
+  }
+}
+
+@media (min-width: 1400px) {
+  :root {
+    --gutter: 56px;
+  }
+}
+
+/* Short landscape at any width: the compact rail replaces the tab bar (owner notes 37, 38). */
+@media (max-height: 520px) and (orientation: landscape) {
+  :root {
+    --tab-h: 0px;
+    --rail-w: calc(84px + var(--safe-l));
+    --nav-h: 56px;
+    --hero-h: max(360px, 100dvh);
+  }
+}
+
+/* The page reserves the mini player only on routes that render it, decided per route render. */
+:root:has([data-mini-player]) {
+  --mini-h: 64px;
+}
+
+:root:has([data-save-bar]) {
+  --save-h: 64px;
+}
+
+@media (min-width: 1100px) {
+  :root:has([data-save-bar]) {
+    --save-h: 0px;
+  }
+}
+
+/* Type roles: a screen asks for a role, never a size. */
+@utility type-display {
+  @apply font-display text-display;
+}
+@utility type-h1 {
+  @apply font-display text-h1;
+  text-wrap: balance;
+}
+@utility type-h2 {
+  @apply font-display text-h2;
+}
+@utility type-h3 {
+  @apply font-display text-h3;
+}
+@utility type-body {
+  @apply font-sans text-body;
+}
+@utility type-label {
+  @apply font-sans text-label;
+}
+@utility type-meta {
+  @apply font-sans text-meta text-fg-2;
+}
+@utility type-caption {
+  @apply font-sans text-caption tabular-nums;
+}
+@utility type-eyebrow {
+  @apply font-sans text-eyebrow text-fg-3 uppercase;
+}
+
+/* The content column: centred, capped, with the gutter and the safe areas on both sides. */
+@utility wrap {
+  width: 100%;
+  max-width: var(--maxw);
+  margin-inline: auto;
+  padding-inline: max(var(--gutter), var(--safe-l)) max(var(--gutter), var(--safe-r));
+}
+
+/* A horizontal scroller (chips, rows): no scrollbar, never scrolls the page sideways. */
+@utility scroller {
+  display: flex;
+  overflow-x: auto;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/*
+ * Fades the edges of a scroller that hide more content (`useScrollEdges` sets the attributes),
+ * so a chip cut by the edge reads as "more this way". The mask only uses the colour's alpha.
+ */
+@utility scroller-fade {
+  --fade-start: 0px;
+  --fade-end: 0px;
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    var(--fg) var(--fade-start),
+    var(--fg) calc(100% - var(--fade-end)),
+    transparent
+  );
+  &[data-fade-start] {
+    --fade-start: 28px;
+  }
+  &[data-fade-end] {
+    --fade-end: 28px;
+  }
+}

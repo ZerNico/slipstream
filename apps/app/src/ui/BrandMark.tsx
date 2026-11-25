@@ -1,0 +1,19 @@
+import Svg, { Path } from "react-native-svg";
+import { useTheme } from "../theme/theme.ts";
+
+/** The Slipstream mark (docs/design/brand/mark.svg) in the theme's foreground and amber. */
+export const BrandMark = ({ size }: { readonly size: number }) => {
+  const { colors } = useTheme();
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Path
+        fill={colors.fg}
+        d="M55.21 14.65L40.4 14.65A23.75 23.75 0 0 0 16.65 38.4L16.65 48.4A23.75 23.75 0 0 0 40.4 72.15L42.99 72.15L45.86 58.65L40.4 58.65A10.25 10.25 0 0 1 30.15 48.4L30.15 38.4A10.25 10.25 0 0 1 40.4 28.15L52.34 28.15Z"
+      />
+      <Path
+        fill={colors.brand}
+        d="M44.79 85.35L59.6 85.35A23.75 23.75 0 0 0 83.35 61.6L83.35 51.6A23.75 23.75 0 0 0 59.6 27.85L57.01 27.85L54.14 41.35L59.6 41.35A10.25 10.25 0 0 1 69.85 51.6L69.85 61.6A10.25 10.25 0 0 1 59.6 71.85L47.66 71.85Z"
+      />
+    </Svg>
+  );
+};

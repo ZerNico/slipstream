@@ -1,0 +1,888 @@
+/*
+ * Controls (SPEC §3.5, §4): one height scale for every control in a row. `md` is 40 px (44 under
+ * a coarse pointer), `sm` 32 px (40, plus an invisible hit area to 44), `lg` 48 px. Hover lives
+ * behind (hover: hover); press scales; nothing animates layout.
+ */
+
+/* ---------- Button ---------- */
+.btn {
+  --bh: var(--ctl-md);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: var(--bh);
+  min-width: 0;
+  padding: 0 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+  user-select: none;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease),
+    opacity var(--t-fast) var(--ease);
+}
+.btn:active {
+  transform: scale(0.97);
+}
+.btn-sm {
+  --bh: var(--ctl-sm);
+  padding: 0 12px;
+  gap: 6px;
+  font-size: 13px;
+}
+.btn-lg {
+  --bh: var(--ctl-lg);
+  padding: 0 22px;
+  font-size: 15px;
+}
+.btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.btn-primary {
+  background: var(--brand);
+  color: var(--on-brand);
+}
+.btn-secondary {
+  background: var(--hover);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.btn-glass {
+  background: color-mix(in oklab, var(--art-ink) 14%, transparent);
+  color: var(--art-ink);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--art-ink) 14%, transparent);
+}
+.btn-ghost {
+  color: var(--fg-2);
+}
+.btn-danger {
+  background: var(--live-soft);
+  color: var(--live-fg);
+}
+.btn-live {
+  background: var(--live-solid);
+  color: var(--on-live);
+}
+@media (hover: hover) {
+  .btn-primary:hover {
+    background: color-mix(in oklab, var(--brand) 86%, var(--art-ink));
+  }
+  .btn-secondary:hover {
+    background: var(--press);
+  }
+  .btn-glass:hover {
+    background: color-mix(in oklab, var(--art-ink) 22%, transparent);
+  }
+  .btn-ghost:hover {
+    background: var(--hover);
+    color: var(--fg);
+  }
+  .btn-danger:hover {
+    background: var(--live-solid);
+    color: var(--on-live);
+  }
+  .btn-live:hover {
+    background: color-mix(in oklab, var(--live-solid) 90%, var(--art-ink));
+  }
+}
+.btn:disabled,
+.btn[aria-disabled="true"] {
+  opacity: 0.45;
+  pointer-events: none;
+}
+/* Busy: the spinner replaces the label and the width stays (the label keeps its box). */
+.btn[data-busy] > * {
+  visibility: hidden;
+}
+.btn[data-busy]::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  animation: spin 0.7s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ---------- IconButton ---------- */
+.ibtn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: var(--ctl-md);
+  height: var(--ctl-md);
+  border-radius: 999px;
+  color: var(--fg-2);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    transform var(--t-fast) var(--ease);
+}
+.ibtn:active {
+  background: var(--press);
+}
+@media (hover: hover) {
+  .ibtn:hover {
+    background: var(--hover);
+    color: var(--fg);
+  }
+}
+.ibtn-sm {
+  width: var(--ctl-sm);
+  height: var(--ctl-sm);
+}
+.ibtn-lg {
+  width: var(--ctl-lg);
+  height: var(--ctl-lg);
+}
+.ibtn-outline {
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.ibtn-glass {
+  color: var(--art-ink);
+  background: color-mix(in oklab, var(--art-ink) 14%, transparent);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  backdrop-filter: blur(16px) saturate(1.4);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--art-ink) 14%, transparent);
+}
+.ibtn-live {
+  color: var(--live-fg);
+}
+.ibtn[aria-pressed="true"] {
+  color: var(--brand-fg);
+  background: var(--brand-soft);
+}
+.ibtn:disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+/*
+ * Under a coarse pointer, small targets get an invisible hit area of at least 44 × 44 px around
+ * their centre (SPEC §9), whatever their own size: each inset is half of what is missing, never
+ * positive, so a target that is already big enough keeps its box. One rule for every small
+ * control (small buttons and icon buttons, the stepper's −/+, small chips, switches) and, as
+ * `.tap-area`, for any other target such as an inline link; the box drawn never changes.
+ */
+.tap-area {
+  position: relative;
+}
+@media (pointer: coarse) {
+  .btn-sm::before,
+  .ibtn-sm::before,
+  .chip-sm::before,
+  .switch::before,
+  .hit::before,
+  .tap-area::before {
+    content: "";
+    position: absolute;
+    /* Half a pixel more each side, so subpixel boxes (flexed pills) still reach a whole 44. */
+    inset: min(0px, calc((100% - var(--tap-min)) / 2 - 0.5px))
+      min(0px, calc((100% - var(--tap-min)) / 2 - 0.5px));
+  }
+}
+
+/* ---------- Chip ---------- */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex: none;
+  height: var(--ctl-md);
+  min-width: var(--ctl-md);
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 13.5px;
+  font-weight: 550;
+  color: var(--fg-2);
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+@media (hover: hover) {
+  .chip:hover {
+    color: var(--fg);
+    background: var(--hover);
+  }
+}
+.chip[aria-pressed="true"],
+.chip[data-pressed] {
+  background: var(--fg);
+  color: var(--bg);
+  box-shadow: none;
+}
+.chip-sm {
+  position: relative;
+  height: var(--ctl-sm);
+  min-width: var(--ctl-sm);
+  padding: 0 12px;
+  font-size: 13px;
+}
+.chip-count {
+  font-size: 12px;
+  opacity: 0.7;
+  font-variant-numeric: tabular-nums;
+}
+@media (pointer: coarse) {
+  .chip {
+    min-width: var(--tap-min);
+  }
+}
+
+/* ---------- Segmented ---------- */
+.seg {
+  display: inline-flex;
+  flex: none;
+  align-items: stretch;
+  gap: 2px;
+  height: var(--ctl-md);
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.seg-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-2);
+  white-space: nowrap;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+  margin: -3px 0;
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+@media (hover: hover) {
+  .seg-item:hover {
+    color: var(--fg);
+  }
+}
+.seg-item[data-pressed],
+.seg-item[aria-pressed="true"] {
+  background-color: var(--surface);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+/* Touch: the whole 44 px is the button; the pill is drawn inside a transparent border. */
+@media (pointer: coarse) {
+  .seg {
+    padding: 0 3px;
+  }
+  .seg-item {
+    margin: 0;
+  }
+}
+
+/* ---------- Badge ---------- */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 6px;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  flex: none;
+}
+.badge-live {
+  background: var(--live-solid);
+  color: var(--on-live);
+}
+.badge-rec {
+  background: var(--live-soft);
+  color: var(--live-fg);
+}
+.badge-live::before,
+.badge-rec::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: var(--animate-live-pulse);
+}
+.badge-sched {
+  background: var(--brand-soft);
+  color: var(--brand-fg);
+}
+.badge-warn {
+  background: var(--warn-soft);
+  color: var(--warn-ink);
+}
+.badge-ok {
+  background: var(--ok-soft);
+  color: var(--ok-fg);
+}
+.badge-neutral {
+  background: var(--hover);
+  color: var(--fg-2);
+}
+.badge-glass {
+  background: var(--media-scrim);
+  color: var(--art-ink);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+
+/* ---------- Fields ---------- */
+.field {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+.field-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+/* A hint or an error can quote a stored address: it wraps inside the field on a phone. */
+.field-hint,
+.field-error {
+  overflow-wrap: anywhere;
+}
+.field-hint {
+  font-size: 12.5px;
+  color: var(--fg-3);
+}
+/* A reserved message line: the hint, the error or nothing, one 20 px line each. */
+.field[data-reserve] > :is(.field-hint, .field-error) {
+  min-height: 20px;
+  line-height: 20px;
+}
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--live-fg);
+}
+.input {
+  width: 100%;
+  min-width: 0;
+  height: var(--ctl-md);
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  color: var(--fg);
+  font-size: 15px;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  transition: box-shadow var(--t-fast) var(--ease);
+}
+.input::placeholder {
+  color: var(--fg-3);
+}
+@media (hover: hover) {
+  .input:hover {
+    box-shadow: inset 0 0 0 1px var(--fg-4);
+  }
+}
+.input:focus,
+.input:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--brand);
+}
+.input[aria-invalid="true"] {
+  box-shadow: inset 0 0 0 2px var(--live);
+}
+.search {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.search-icon {
+  position: absolute;
+  left: 12px;
+  color: var(--fg-3);
+  pointer-events: none;
+}
+.search .input {
+  padding-left: 40px;
+  border-radius: 999px;
+}
+
+/* ---------- Switch and checkbox ---------- */
+.switch {
+  position: relative;
+  display: inline-block;
+  vertical-align: middle;
+  width: 42px;
+  height: 26px;
+  flex: none;
+  border-radius: 999px;
+  background: var(--line-2);
+  transition: background-color var(--t-fast) var(--ease);
+}
+.switch[data-checked] {
+  background: var(--ok);
+}
+/* On touch the switch answers in 44 × 44 px around its 42 × 26 px track (`.tap-area`, above). */
+.switch-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--art-ink);
+  box-shadow: var(--elev-card);
+  transition: transform var(--t-fast) var(--ease);
+}
+.switch[data-checked] .switch-thumb {
+  transform: translateX(16px);
+}
+.switch:disabled,
+.switch[data-disabled] {
+  opacity: 0.45;
+}
+.check {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border-radius: 6px;
+  box-shadow: inset 0 0 0 1.5px var(--fg-4);
+  color: var(--on-brand);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    box-shadow var(--t-fast) var(--ease);
+}
+.check[data-checked] {
+  background: var(--brand);
+  box-shadow: none;
+}
+
+/* ---------- Keyboard hint: only where there is a keyboard and a fine pointer ---------- */
+.kbd {
+  display: none;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  font: 600 11.5px/1 var(--f-ui);
+  color: var(--fg-2);
+  background: var(--hover);
+  box-shadow:
+    inset 0 0 0 1px var(--line-2),
+    inset 0 -1px 0 var(--line-2);
+}
+@media (hover: hover) and (pointer: fine) {
+  .kbd {
+    display: inline-grid;
+  }
+}
+
+/* ---------- Menu (desktop popover; under 768 px on touch it becomes a Sheet) ---------- */
+.menu {
+  z-index: var(--z-menu);
+  min-width: 240px;
+  max-height: min(var(--available-height, 100dvh), calc(100dvh - 16px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 6px;
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: var(--elev-pop);
+  transform-origin: var(--transform-origin);
+  transition:
+    opacity 150ms var(--ease),
+    transform 150ms var(--ease);
+}
+.menu[data-starting-style],
+.menu[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-4px) scale(0.98);
+}
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 40px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 14px;
+  text-align: left;
+  color: var(--fg);
+  cursor: default;
+  outline: none;
+}
+/*
+ * The highlighted row is the menu's focus, from the pointer and the arrow keys alike (Base UI
+ * moves focus with the pointer): a filled row, as native menus do, never the amber ring, which
+ * would follow the mouse. The popup itself takes focus while it opens and draws no ring either.
+ */
+.menu:focus-visible {
+  outline: none;
+}
+.menu-item[data-highlighted],
+.menu-item:focus-visible {
+  background: var(--hover);
+}
+.menu-item[data-disabled] {
+  opacity: 0.45;
+}
+.menu-item-icon {
+  width: 20px;
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--fg-2);
+}
+.menu-item-end {
+  margin-left: auto;
+  display: flex;
+  gap: 4px;
+  color: var(--fg-3);
+  font-size: 12.5px;
+}
+.menu-item[data-checked] .menu-item-end,
+.menu-item[aria-checked="true"] .menu-item-end {
+  color: var(--brand-fg);
+}
+.menu-sep {
+  height: 1px;
+  margin: 6px 4px;
+  background: var(--line);
+}
+.menu-head {
+  padding: 8px 10px 4px;
+  font-size: 11.5px;
+  font-weight: 650;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--fg-3);
+}
+/* Two short choices side by side in a menu (Fit and Fill): a segmented control, full width. */
+.menu-pair {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  margin: 2px 6px 6px;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--hover);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.menu-pair .menu-item {
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 999px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--fg-2);
+}
+.menu-pair .menu-item-end {
+  display: none;
+}
+.menu-pair .menu-item[data-checked],
+.menu-pair .menu-item[aria-checked="true"] {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+@media (pointer: coarse) {
+  .menu-item,
+  .menu-pair .menu-item {
+    min-height: var(--tap-min);
+  }
+}
+/* A menu rendered inside a Sheet keeps its rows and drops the popover chrome. */
+.menu-inline {
+  padding: 4px 8px 12px;
+}
+
+/* ---------- Tooltip: only with a hovering pointer, after 250 ms ---------- */
+.tip {
+  z-index: var(--z-toast);
+  padding: 6px 9px;
+  border-radius: 7px;
+  background: var(--raised);
+  color: var(--fg);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: pre;
+  box-shadow: var(--elev-pop);
+  transition: opacity var(--t-fast) var(--ease);
+}
+.tip[data-starting-style],
+.tip[data-ending-style] {
+  opacity: 0;
+}
+@media not (hover: hover) {
+  .tip {
+    display: none;
+  }
+}
+
+/* ---------- Stepper ---------- */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  width: max-content;
+  height: var(--ctl-sm);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.stepper-md {
+  height: var(--ctl-md);
+}
+.stepper-value {
+  min-width: 64px;
+  text-align: center;
+  font-size: 13.5px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- Avatar and channel logo ---------- */
+.avatar {
+  display: grid;
+  place-items: center;
+  width: var(--avatar-size, 34px);
+  height: var(--avatar-size, 34px);
+  flex: none;
+  border-radius: 50%;
+  background: var(--av-amber);
+  color: var(--av-amber-ink);
+  font-weight: 700;
+  font-size: calc(var(--avatar-size, 34px) * 0.4);
+  line-height: 1;
+}
+.avatar[data-tone="teal"] {
+  background: var(--av-teal);
+  color: var(--av-teal-ink);
+}
+.avatar[data-tone="violet"] {
+  background: var(--av-violet);
+  color: var(--av-violet-ink);
+}
+.avatar[data-tone="rose"] {
+  background: var(--av-rose);
+  color: var(--av-rose-ink);
+}
+.avatar[data-tone="green"] {
+  background: var(--av-green);
+  color: var(--av-green-ink);
+}
+.avatar[data-tone="blue"] {
+  background: var(--av-blue);
+  color: var(--av-blue-ink);
+}
+.chlogo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 32px;
+  overflow: hidden;
+  border-radius: var(--r-s);
+  background: var(--art-off);
+  color: var(--art-ink);
+  font: 800 12px/1 var(--f-ui);
+  letter-spacing: -0.02em;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--art-ink) 12%, transparent);
+}
+.chlogo-sm {
+  width: 32px;
+  height: 24px;
+  font-size: 10px;
+  border-radius: 6px;
+}
+.chlogo-lg {
+  width: 56px;
+  height: 40px;
+  font-size: 14px;
+  border-radius: 10px;
+}
+.chlogo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* ---------- Token field, tokens, weekday pills, the quiet select ---------- */
+/* A value in a token field (SPEC §4 Tokens input); with × it keeps less room on its right. */
+.token {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 10px;
+  border-radius: var(--r-s);
+  background: var(--hover);
+  font-size: 13.5px;
+  font-weight: 550;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.token:has(.token-remove) {
+  padding-right: 4px;
+}
+.token[data-tone="info"] {
+  color: var(--info);
+}
+.token[data-tone="ok"] {
+  color: var(--ok-fg);
+}
+.token-remove {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: var(--r-s);
+  color: var(--fg-3);
+}
+.token-remove:hover {
+  background: var(--press);
+  color: var(--fg);
+}
+/* The field: tokens and the input wrap inside one input-like box; a tap anywhere focuses it. */
+.token-field {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: var(--ctl-md);
+  padding: 4px 6px 4px 8px;
+  border-radius: var(--r-m);
+  background: var(--bg-2);
+  cursor: text;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+}
+.token-field:focus-within {
+  box-shadow: inset 0 0 0 2px var(--brand);
+}
+.token-field[data-invalid] {
+  box-shadow: inset 0 0 0 2px var(--live);
+}
+.token-input {
+  flex: 1;
+  min-width: 80px;
+  height: 28px;
+  padding: 0 0 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--fg);
+  font-size: var(--text-body);
+  outline: none;
+}
+.token-input::placeholder {
+  color: var(--fg-3);
+}
+@media (pointer: coarse) {
+  .token-field {
+    min-height: var(--tap-min);
+  }
+  .token-input {
+    height: var(--tap-min);
+  }
+}
+/* A weekday pill: pressed is the soft amber fill with an amber hairline (SPEC §8.6). */
+.weekday {
+  position: relative;
+  width: 44px;
+  height: var(--ctl-md);
+  border-radius: 999px;
+  color: var(--fg-2);
+  font-size: var(--text-meta);
+  font-weight: 650;
+  box-shadow: inset 0 0 0 1px var(--line-2);
+  transition:
+    background-color var(--t-fast) var(--ease),
+    color var(--t-fast) var(--ease);
+}
+.weekday:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+.weekday:disabled {
+  opacity: 0.6;
+}
+.weekday[aria-pressed="true"] {
+  background: var(--brand-soft);
+  color: var(--fg);
+  box-shadow: inset 0 0 0 1.5px var(--brand-edge);
+}
+@media (max-width: 599.98px) {
+  .weekday {
+    flex: 1;
+    width: auto;
+    min-width: 38px;
+  }
+}
+/* A select set as plain text in a sentence or a row ("Keep 5 ▾"): no box, the value only. */
+.select-quiet {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--r-s);
+  color: var(--fg-2);
+  font-size: var(--text-body);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.select-quiet:focus-visible {
+  color: var(--fg);
+}
+.select-quiet:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+@media (hover: hover) and (pointer: fine) {
+  .select-quiet:hover {
+    color: var(--fg);
+  }
+}
+@media (pointer: coarse) {
+  .select-quiet {
+    height: var(--tap-min);
+  }
+}

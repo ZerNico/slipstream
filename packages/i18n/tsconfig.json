@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "include": ["src/**/*.ts", "messages/**/*.ts", "vitest.config.ts"],
+  "compilerOptions": {
+    // Runs in browsers and Hermes alike: no DOM or Node types, so a platform global fails here.
+    "types": []
+  }
+}

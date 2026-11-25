@@ -1,0 +1,8 @@
+{
+  "extends": "./tsconfig.base.json",
+  // Root-level config files and the dev tooling in scripts/ (plus the app's, which the app's
+  // React Native tsconfig cannot see). Each package typechecks its own sources; this keeps
+  // `oxlint.config.ts` honest (a misspelled rule or plugin fails here, not silently at lint time).
+  "include": ["*.ts", "scripts/**/*.ts", "apps/app/scripts/**/*.ts"],
+  "compilerOptions": { "types": ["node"] }
+}

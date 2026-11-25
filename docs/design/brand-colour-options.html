@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slipstream Brand Colour Options</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600&family=Geist+Mono:wght@500&family=Big+Shoulders+Display:wght@800&display=swap">
+<style>
+:root { --bg:#0B0E13; --surface:#121721; --raised:#1A2130; --line:#273145; --fg:#E9EDF4; --fg2:#A0AABB; --live:#FF4D5E; color-scheme:dark; }
+body { margin:0; background:var(--bg); color:var(--fg); font-family:"Geist",system-ui,sans-serif; padding:32px max(16px,4vw); }
+h1 { font-family:"Big Shoulders Display","Arial Narrow",sans-serif; font-weight:800; text-transform:uppercase; font-size:44px; margin:0 0 6px; }
+p.lede { color:var(--fg2); max-width:70ch; margin:0 0 28px; }
+.grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px; }
+.opt { background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:22px; display:grid; gap:18px; }
+.opt h2 { font-size:17px; margin:0; display:flex; justify-content:space-between; align-items:baseline; }
+.opt h2 span { font-family:"Geist Mono",monospace; font-size:12px; color:var(--fg2); font-weight:500; }
+.row { display:flex; gap:16px; align-items:center; flex-wrap:wrap; }
+.icon { width:72px; height:72px; border-radius:20px; background:#0B0E13; box-shadow:inset 0 0 0 1px rgba(255,255,255,.1); display:grid; place-items:center; }
+.icon.s { width:32px; height:32px; border-radius:9px; }
+.dm { position:relative; width:72%; height:72%; }
+.dm i { position:absolute; display:block; }
+.dm i:nth-child(1) { left:0; right:12%; top:50%; height:15%; transform:translateY(-50%); border-radius:9px; background:rgba(233,237,244,.85); }
+.dm i:nth-child(2) { left:40%; top:12%; width:18%; height:76%; background:var(--b); transform:skewX(-12deg); border-radius:2px; box-shadow:0 0 0 2px #0B0E13; }
+.dm i:nth-child(3) { right:0; top:50%; width:26%; height:26%; transform:translateY(-50%); border-radius:50%; background:var(--live); }
+.btn { font-weight:600; padding:12px 18px; border-radius:10px; background:var(--raised); border:1px solid var(--line); }
+.btn.f { background:var(--b); color:var(--on); border-color:transparent; box-shadow:0 0 0 3px var(--bg),0 0 0 6px var(--b); }
+.tl { position:relative; height:10px; border-radius:9px; background:repeating-linear-gradient(135deg,rgba(233,237,244,.16) 0 2px,transparent 2px 6px); flex:1; min-width:180px; }
+.tl .c { position:absolute; left:0; top:0; bottom:0; width:45%; background:rgba(233,237,244,.4); border-radius:9px 0 0 9px; }
+.tl .p { position:absolute; left:0; top:0; bottom:0; width:25%; background:rgba(233,237,244,.85); border-radius:9px 0 0 9px; }
+.tl .h { position:absolute; left:25%; top:50%; width:8px; height:30px; transform:translate(-50%,-50%) skewX(-12deg); background:var(--b); border-radius:2px; box-shadow:0 0 0 4px var(--surface); }
+.tl .e { position:absolute; left:45%; top:50%; width:14px; height:14px; transform:translate(-50%,-50%); border-radius:50%; background:var(--live); }
+.light { background:#F3F5F8; border-radius:10px; padding:14px; display:flex; gap:14px; align-items:center; color:#111620; }
+.light .pb { font-weight:600; padding:10px 16px; border-radius:9px; background:var(--b); color:var(--on); }
+.light .lk { color:var(--bt); font-weight:600; }
+.note { font-size:14px; color:var(--fg2); margin:0; }
+.note b { color:var(--fg); }
+</style></head>
+<body>
+<h1>Brand colour options</h1>
+<p class="lede">The same mark, TV focus, playhead and light-mode button in each candidate colour. The shape is settled; the question is whether amber keeps the brand too close to Plex.</p>
+<div class="grid">
+  <div class="opt" style="--b:#FFC233;--on:#1B1403;--bt:#8A5E00">
+    <h2>A · Amber (current) <span>#FFC233</span></h2>
+    <div class="row"><span class="icon"><span class="dm"><i></i><i></i><i></i></span></span><span class="icon s"><span class="dm"><i></i><i></i><i></i></span></span><span class="btn f">Watch from start</span><span class="btn">Watch live</span></div>
+    <div class="row"><div class="tl"><span class="c"></span><span class="p"></span><span class="h"></span><span class="e"></span></div></div>
+    <div class="light"><span class="pb">Save rule</span><span class="lk">Edit collection</span></div>
+    <p class="note"><b>Warmest and most legible as focus.</b> Same hue as Plex's brand colour (about 41–42°), so with a dark tile it stays Plex-adjacent at launcher size. Reviewer rated the risk medium.</p>
+  </div>
+  <div class="opt" style="--b:#D4F53C;--on:#16200A;--bt:#5E6E00">
+    <h2>B · Chartreuse <span>#D4F53C</span></h2>
+    <div class="row"><span class="icon"><span class="dm"><i></i><i></i><i></i></span></span><span class="icon s"><span class="dm"><i></i><i></i><i></i></span></span><span class="btn f">Watch from start</span><span class="btn">Watch live</span></div>
+    <div class="row"><div class="tl"><span class="c"></span><span class="p"></span><span class="h"></span><span class="e"></span></div></div>
+    <div class="light"><span class="pb">Save rule</span><span class="lk">Edit collection</span></div>
+    <p class="note"><b>Reviewer's pick.</b> Nobody in the media-server space uses it, and it's the most visible TV focus (15.6:1). Risk: green-yellow on near-black is a common "tech" look, and it sits between warn orange and ok green, so those need care.</p>
+  </div>
+  <div class="opt" style="--b:#3CD2F0;--on:#04161B;--bt:#00718A">
+    <h2>C · Ice cyan <span>#3CD2F0</span></h2>
+    <div class="row"><span class="icon"><span class="dm"><i></i><i></i><i></i></span></span><span class="icon s"><span class="dm"><i></i><i></i><i></i></span></span><span class="btn f">Watch from start</span><span class="btn">Watch live</span></div>
+    <div class="row"><div class="tl"><span class="c"></span><span class="p"></span><span class="h"></span><span class="e"></span></div></div>
+    <div class="light"><span class="pb">Save rule</span><span class="lk">Edit collection</span></div>
+    <p class="note"><b>Fits the name</b> (airflow, slipstream) and clashes with no status colour. It's near Jellyfin's and Kodi's blues, and cool focus is less warm and inviting on a TV.</p>
+  </div>
+</div>
+</body></html>

@@ -1,0 +1,19 @@
+name: Install ffmpeg 9
+description: >-
+  The static ffmpeg and ffprobe the Docker image ships (same digest), so CI tests against the
+  version users run. Ubuntu's own package is ffmpeg 6.
+
+runs:
+  using: composite
+  steps:
+    - name: Copy ffmpeg and ffprobe from the pinned image
+      shell: bash
+      run: |
+        id=$(docker create mwader/static-ffmpeg:9.0.2@sha256:7d9bdaaf887f7e6ce6151f67325c344074b5ff1fb75316011c3376503e449a7b)
+        sudo docker cp "$id:/ffmpeg" /usr/local/bin/ffmpeg
+        sudo docker cp "$id:/ffprobe" /usr/local/bin/ffprobe
+        docker rm "$id" > /dev/null
+        # The fake source's drawtext overlay needs a font.
+        sudo apt-get update -qq
+        sudo apt-get install -y -qq --no-install-recommends fonts-dejavu-core > /dev/null
+        ffmpeg -hide_banner -version | head -n 1

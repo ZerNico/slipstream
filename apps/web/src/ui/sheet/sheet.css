@@ -1,0 +1,287 @@
+/*
+ * The one sheet pattern (SPEC §4 Sheet, §8.3; owner notes): a bottom sheet under 768 px with a
+ * grab handle, drag to dismiss on the handle, the header and the content at scroll top, half and
+ * full snap points and a pinned footer; a side drawer from 768 px with a header row and a close
+ * button. Base UI's Drawer does the gestures (velocity, snapping, rubber band); this file only
+ * places and paints it. The motion is transform only.
+ */
+
+.sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-overlay);
+  min-height: 100dvh;
+  background: color-mix(in oklab, var(--art-base) 55%, transparent);
+  -webkit-backdrop-filter: blur(2px);
+  backdrop-filter: blur(2px);
+  opacity: max(var(--sheet-backdrop-min, 0), calc(1 - var(--drawer-swipe-progress, 0)));
+  transition: opacity var(--t-slow) var(--ease);
+}
+/* With snap points the backdrop stays half dim at the half snap and fades only past it. */
+.sheet-backdrop[data-snap-points] {
+  --sheet-backdrop-min: 0.5;
+}
+.sheet-backdrop[data-starting-style],
+.sheet-backdrop[data-ending-style] {
+  opacity: 0;
+}
+.sheet-backdrop[data-swiping] {
+  transition-duration: 0ms;
+}
+.sheet-backdrop[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * var(--t-slow));
+}
+
+.sheet-viewport {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-sheet);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.sheet {
+  --bleed: 48px;
+  /* Base UI registers its drawer variables without inheritance; these copies reach children. */
+  --sheet-snap: var(--drawer-snap-point-offset, 0px);
+  --sheet-swipe-y: var(--drawer-swipe-movement-y, 0px);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-height: calc(100dvh - var(--safe-t) - 24px);
+  pointer-events: auto;
+  background: var(--surface);
+  color: var(--fg);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  box-shadow: var(--elev-pop);
+  outline: none;
+  transform: translateY(
+    calc(var(--drawer-snap-point-offset, 0px) + var(--drawer-swipe-movement-y, 0px))
+  );
+  transition: transform var(--t-slow) var(--ease);
+  will-change: transform;
+  touch-action: none;
+}
+/* The bottom edge continues below the sheet, so a rubber band upwards never shows a gap. */
+.sheet::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  top: 100%;
+  height: var(--bleed);
+  background: inherit;
+  pointer-events: none;
+}
+.sheet[data-starting-style],
+.sheet[data-ending-style] {
+  transform: translateY(calc(100% + 2px));
+}
+.sheet[data-swiping] {
+  transition-duration: 0ms;
+  user-select: none;
+}
+.sheet[data-ending-style] {
+  transition-duration: calc(var(--drawer-swipe-strength, 1) * var(--t-slow));
+}
+
+/* Phones in landscape: a centred column, art capped (no half snap: see snap.ts). */
+@media (max-width: 767px) and (orientation: landscape) {
+  .sheet {
+    max-width: 560px;
+  }
+  .sheet .sheet-art {
+    height: min(40dvh, calc(min(100vw, 560px) * 9 / 16));
+  }
+}
+
+/* The grab handle zone sits over the top edge (and over artwork, on a soft scrim). */
+.sheet-grab {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 4;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  cursor: grab;
+  touch-action: none;
+}
+.sheet-grab::before {
+  content: "";
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--line-2);
+}
+.sheet[data-has-art] .sheet-grab {
+  background: linear-gradient(var(--media-scrim), transparent);
+}
+.sheet[data-has-art] .sheet-grab::before {
+  background: color-mix(in oklab, var(--art-ink) 75%, transparent);
+}
+
+/* The header row: context and (side drawer only) the close button. Never over artwork. */
+.sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: none;
+  min-height: 28px;
+  padding: 28px 20px 0;
+  touch-action: none;
+}
+.sheet[data-has-art] .sheet-header {
+  display: none;
+}
+/* Content that names itself (the watch choice, menus): the header row is for assistive tech only. */
+.sheet[data-header="hidden"]:not([data-side="right"]) .sheet-header {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.sheet[data-header="hidden"]:not([data-side="right"]) .sheet-body {
+  padding-top: 24px;
+}
+.sheet-context {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sheet-close {
+  display: none;
+}
+
+.sheet-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+.sheet:not([data-has-footer]) .sheet-body {
+  padding-bottom: var(--safe-b);
+}
+/* At the half snap the content does not scroll: dragging up expands the sheet first. */
+.sheet[data-snap-points]:not([data-expanded]) .sheet-body {
+  overflow-y: hidden;
+}
+
+/* Artwork in a sheet: flush at the top edge on phones, inset under the header from 768 px. */
+.sheet-art {
+  flex: none;
+}
+.sheet-art > * {
+  border-radius: 0;
+}
+
+/* The footer is pinned to the screen: at the half snap it rises by the snap offset. */
+.sheet-footer {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  flex: none;
+  padding: 12px 20px calc(12px + var(--safe-b));
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  transform: translateY(calc(-1 * max(0px, var(--sheet-snap) + var(--sheet-swipe-y))));
+  transition: transform var(--t-slow) var(--ease);
+}
+.sheet[data-swiping] .sheet-footer {
+  transition-duration: 0ms;
+}
+.sheet-footer > * {
+  flex: 1 1 auto;
+}
+
+/* ---------- side drawer from 768 px ---------- */
+@media (min-width: 768px) {
+  .sheet-viewport[data-side="right"] {
+    justify-content: flex-end;
+    align-items: stretch;
+    padding: max(8px, var(--safe-t)) max(8px, var(--safe-r)) max(8px, var(--safe-b)) 8px;
+  }
+  .sheet[data-side="right"] {
+    width: min(460px, calc(100vw - 16px));
+    max-height: none;
+    height: 100%;
+    border-radius: var(--r-xl);
+    transform: translateX(var(--drawer-swipe-movement-x, 0px));
+  }
+  .sheet[data-side="right"]::after {
+    display: none;
+  }
+  .sheet[data-side="right"][data-starting-style],
+  .sheet[data-side="right"][data-ending-style] {
+    transform: translateX(calc(100% + 24px));
+  }
+  .sheet[data-side="right"] .sheet-grab {
+    display: none;
+  }
+  .sheet[data-side="right"] .sheet-header,
+  .sheet[data-side="right"][data-has-art] .sheet-header {
+    display: flex;
+    min-height: 60px;
+    padding: 10px 10px 10px 20px;
+    border-bottom: 1px solid var(--line);
+  }
+  .sheet[data-side="right"] .sheet-close {
+    display: inline-grid;
+  }
+  .sheet[data-side="right"] .sheet-footer {
+    padding-bottom: 12px;
+    transform: none;
+  }
+  .sheet[data-side="right"] .sheet-art {
+    padding: 16px 20px 0;
+  }
+  .sheet[data-side="right"] .sheet-art > * {
+    border-radius: var(--r-m);
+  }
+}
+
+/*
+ * Short landscape (SPEC decision 14): every sheet's artwork is an 88 px band, bottom sheet and
+ * side drawer alike, so the title, the facts and more than a line of the description fit
+ * above the footer.
+ */
+@media (max-height: 520px) and (orientation: landscape) {
+  .sheet .sheet-art {
+    height: auto;
+  }
+  .sheet .sheet-art .art {
+    aspect-ratio: auto;
+    height: 88px;
+  }
+}
+
+/* Short landscape side drawer: a compact header over the band. */
+@media (min-width: 768px) and (max-height: 520px) and (orientation: landscape) {
+  .sheet[data-side="right"] .sheet-header,
+  .sheet[data-side="right"][data-has-art] .sheet-header {
+    min-height: 48px;
+    padding-block: 4px;
+  }
+  .sheet[data-side="right"] .sheet-art {
+    padding-top: 12px;
+  }
+}
+
+/* The cinema surface keeps sheets opened from the player dark. */
+.sheet[data-surface="cine"] {
+  background: var(--surface);
+}

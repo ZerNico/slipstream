@@ -1,0 +1,12 @@
+/* The UI faces themselves are imported in main.tsx ("Inter Variable", "Inter Tight Variable";
+   browsers fetch only the subsets a page uses). This file holds the metric-matched fallback. */
+
+/* Arial tuned to Inter's metrics, so swapping to Inter does not reflow a line. */
+@font-face {
+  font-family: "Inter Fallback";
+  src: local("Arial"), local("Helvetica"), local("Liberation Sans");
+  size-adjust: 107.12%;
+  ascent-override: 90.44%;
+  descent-override: 22.52%;
+  line-gap-override: 0%;
+}

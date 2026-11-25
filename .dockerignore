@@ -1,0 +1,20 @@
+**/node_modules
+**/dist
+**/.data
+**/.tanstack
+**/.expo
+**/coverage
+**/test-results
+**/playwright-report
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+.git
+.github
+.claude
+.vscode
+docs
+# The app is not part of the image; its manifest stays so the workspace matches the lockfile.
+apps/app/*
+!apps/app/package.json

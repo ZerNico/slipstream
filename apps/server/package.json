@@ -1,0 +1,36 @@
+{
+  "name": "@slipstream/server",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.ts",
+    "start": "node src/main.ts",
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run",
+    "db:generate": "drizzle-kit generate"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:",
+    "@effect/sql-sqlite-node": "catalog:",
+    "@slipstream/api": "workspace:*",
+    "@slipstream/domain": "workspace:*",
+    "@slipstream/recorder": "workspace:*",
+    "@slipstream/sources": "workspace:*",
+    "bonjour-service": "1.4.4",
+    "drizzle-orm": "catalog:",
+    "effect": "catalog:"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@slipstream/fake-source": "workspace:*",
+    "@types/node": "catalog:",
+    "drizzle-kit": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

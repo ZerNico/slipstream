@@ -1,0 +1,23 @@
+{
+  "name": "@slipstream/i18n",
+  "version": "0.0.0",
+  "private": true,
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./kitchen-sink": "./src/kitchen-sink.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@slipstream/domain": "workspace:*"
+  },
+  "devDependencies": {
+    "effect": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

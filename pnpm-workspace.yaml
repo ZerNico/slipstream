@@ -1,0 +1,36 @@
+# pnpm >= 11 reads non-auth settings from here, not .npmrc. A `pnpm` block in
+# package.json is silently ignored.
+packages:
+  - apps/*
+  - packages/*
+  - tools/*
+
+# A wrong Node fails `pnpm install` loudly instead of half-working: `engines.node` in package.json
+# names the version (.node-version is what fnm installs).
+engineStrict: true
+
+# Every package resolves ONE copy of effect: two copies mean two Context key identities, so a
+# service provided by one is invisible to the other (a silent missing-service at runtime).
+# Bump effect, every @effect/* package and drizzle-orm (its Effect driver imports Effect paths)
+# together.
+catalog:
+  effect: 4.1.5
+  "@effect/platform-node": 4.1.5
+  "@effect/sql-sqlite-node": 4.1.5
+  drizzle-orm: 1.0.0-rc.6
+  drizzle-kit: 1.0.0-rc.6
+  "@effect/vitest": 4.1.5
+  vitest: 5.1.1
+  typescript: 7.0.2
+  "@types/node": 26.6.6
+
+# Same cooldown as chat and siva: a compromised release is live for a day before we can pull it.
+# Exclusions are packages deliberately tracked at exact pre-release pins.
+minimumReleaseAge: 1440
+minimumReleaseAgeExclude:
+  - drizzle-orm
+  - drizzle-kit
+
+# Install-time scripts are denied unless listed.
+allowBuilds:
+  esbuild: true

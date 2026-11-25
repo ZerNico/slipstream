@@ -1,0 +1,90 @@
+/* Base element styles (SPEC §3, §6.1). */
+@layer base {
+  *,
+  *::before,
+  *::after {
+    border-color: var(--line);
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    /* Opening a modal (scroll lock) or a short page never shifts the layout sideways. */
+    scrollbar-gutter: stable;
+    scroll-padding-top: calc(var(--nav-h) + var(--safe-t) + 16px);
+    background-color: var(--bg);
+    color-scheme: inherit;
+  }
+
+  body {
+    min-height: 100dvh;
+    margin: 0;
+    background-color: var(--bg);
+    color: var(--fg);
+    font-family: var(--f-ui);
+    font-size: 15px;
+    line-height: 1.5;
+    font-feature-settings:
+      "cv11" 1,
+      "ss01" 1;
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--f-display);
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  button {
+    cursor: pointer;
+  }
+
+  :focus {
+    outline: none;
+  }
+
+  /* One ring for everything: 2 px focus colour, 2 px gap (SPEC §7.3). */
+  :focus-visible {
+    outline: var(--focus-width) solid var(--focus);
+    outline-offset: var(--focus-offset);
+  }
+
+  ::selection {
+    background-color: var(--brand);
+    color: var(--on-brand);
+  }
+
+  /* The cinema surface reads its own colours, whatever the page theme. */
+  [data-surface="cine"] {
+    color: var(--fg);
+  }
+
+  /*
+   * The fixed player is the whole screen and the page behind it never scrolls: no gutter, or
+   * classic scroll bars (Windows, a Mac with a mouse) leave an empty stripe beside the video.
+   */
+  html:has([data-player]:not([data-layout="portrait"])) {
+    scrollbar-gutter: auto;
+  }
+
+  /* While a modal layer is open the page does not scroll; scrollbar-gutter keeps the width. */
+  html[data-scroll-locked],
+  html[data-scroll-locked] body {
+    overflow: hidden;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

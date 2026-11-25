@@ -1,0 +1,17 @@
+{
+  "indentWidth": 2,
+  "lineWidth": 100,
+  "quoteStyle": "double",
+  "semicolons": "asNeeded",
+  "ignorePatterns": [
+    "dist",
+    ".output",
+    ".tanstack",
+    ".expo",
+    "node_modules",
+    "**/routeTree.gen.ts",
+    "**/drizzle/**",
+    "**/openapi.json",
+    "docs/design/**"
+  ]
+}

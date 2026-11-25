@@ -1,0 +1,13 @@
+import { Switch as SwitchPrimitive } from "@base-ui/react/switch";
+import { cn } from "~/ui/utils.ts";
+
+/** An on/off switch: green when on (healthy, will record). Gets a 44 px hit area on touch. */
+function Switch({ className, ...props }: SwitchPrimitive.Root.Props) {
+  return (
+    <SwitchPrimitive.Root data-slot="switch" className={cn("switch", className)} {...props}>
+      <SwitchPrimitive.Thumb data-slot="switch-thumb" className="switch-thumb" />
+    </SwitchPrimitive.Root>
+  );
+}
+
+export { Switch };

@@ -1,0 +1,21 @@
+#EXTM3U url-tvg="http://tvproxy.example:64321/epg.xml" x-tvg-url="http://tvproxy.example:64321/epg.xml"
+#EXTINF:-1 channel-number="1" channel-id="streamId9001" tvg-id="ch1001" tvg-chno="1" tvg-name="ProSiebenSat.1 UHD" group-title="UHD Test" tvg-logo="http://tvproxy.example:64321/logo/ch1001.png", ProSiebenSat.1 UHD
+http://tvproxy.example:64321/?token=example-token-1&client=&hash=0000000000000000&expire=1700000000
+
+#EXTINF:-1 channel-number="4" channel-id="streamId9002" tvg-id="ch1004" tvg-chno="4" tvg-name="Sky Sport F1" group-title="Sky Sport" tvg-logo="http://tvproxy.example:64321/logo/ch1004.png", Sky Sport F1
+http://tvproxy.example:64321/?token=example-token-2&client=&hash=0000000000000000&expire=1700000000
+
+#EXTINF:-1 channel-number="7" channel-id="streamId9003" tvg-id="ch1007" tvg-chno="7" tvg-name="Sky Sport News" group-title="Sky Sport" tvg-logo="http://tvproxy.example:64321/logo/ch1007.png", Sky Sport News
+http://tvproxy.example:64321/?token=example-token-3&client=&hash=0000000000000000&expire=1700000000
+
+#EXTINF:-1 channel-number="19" channel-id="streamId9004" tvg-id="ch1004" tvg-chno="19" tvg-name="Sky Sport F1" group-title="Sky Sport - simpliTV" tvg-logo="http://tvproxy.example:64321/logo/ch1004.png", Sky Sport F1
+http://tvproxy.example:64321/?token=example-token-4&client=&hash=0000000000000000&expire=1700000000
+
+#EXTINF:-1 channel-number="22" channel-id="streamId9005" tvg-id="ch1007" tvg-chno="22" tvg-name="Sky Sport News" group-title="Sky Sport - simpliTV" tvg-logo="http://tvproxy.example:64321/logo/ch1007.png", Sky Sport News
+http://tvproxy.example:64321/?token=example-token-5&client=&hash=0000000000000000&expire=1700000000
+
+#EXTINF:-1 channel-number="53" channel-id="streamId9006" tvg-id="3f0c2a9d8e7b6a5f4e3d2c1b0a9f8e7d6c5b4a39" tvg-chno="53" tvg-name="Alarm für Cobra 11 / Balko" group-title="RTL+", Alarm für Cobra 11 / Balko
+http://tvproxy.example:64321/?token=example-token-6&client=&hash=0000000000000000&expire=1700000000
+
+#EXTINF:-1 channel-number="61" channel-id="streamId9007" tvg-id="eventbeta0" tvg-chno="61" tvg-name="RTL+ Event" group-title="RTL+ Event" tvg-logo="http://tvproxy.example:64321/logo/eventbeta0.png", RTL+ Event
+http://tvproxy.example:64321/?token=example-token-7&client=&hash=0000000000000000&expire=1700000000

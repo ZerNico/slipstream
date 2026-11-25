@@ -1,0 +1,1 @@
+ALTER TABLE `recordings` ADD `padding_source` text;

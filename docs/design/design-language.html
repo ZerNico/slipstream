@@ -1,0 +1,1390 @@
+<title>Slipstream Design Language</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800&display=swap">
+<style>
+/* Layout: one long spec column (1200px). Product screens live in scaled device frames; inside a frame 1em = 1 design px / 16 at 1280 (= 24 px at 1080p on TV), via container units. Dark-first: TV is always dark, web and phone follow the theme. Component rules only use semantic tokens. */
+:root, .tv {
+  --bg: #0B0E13;
+  --surface: #121721;
+  --raised: #1A2130;
+  --line: #273145;
+  --border-strong: #606B82;
+  --fg: #E9EDF4;
+  --fg-2: #A0AABB;
+  --fg-3: #7C889E;
+  --brand: #FFC233;          /* amber: TV focus, web primary action, playhead */
+  --on-brand: #1B1403;
+  --brand-text: #FFC233;
+  --brand-line: #FFC233;
+  --brand-edge: #FFC233;
+  --focus-ring: #E9EDF4;      /* web keyboard focus; TV focus uses brand */
+  --live: #FF4D5E;
+  --live-solid: #E12C46;
+  --live-text: #FF6B79;
+  --tl-cap: rgba(233, 237, 244, .38);
+  --tl-played: rgba(233, 237, 244, .92);
+  --ok: #3DD68C; --ok-text: #3DD68C;
+  --warn: #FF9B57; --warn-text: #FF9B57;
+  --orig: #B98CFF; --orig-text: #B98CFF;
+  --mark-a: #F3F5F8; --mark-b: #FFC233;   /* logo halves: broadcast, you */
+  --glow: rgba(255, 194, 51, .30);
+  --scrim: rgba(6, 8, 12, .78);
+  --f-display: "Big Shoulders Display", "Big Shoulders", "Oswald", "Arial Narrow", sans-serif;
+  --f-ui: "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "Geist Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --r-s: 6px; --r-m: 10px; --r-l: 16px;
+  --t-focus: 140ms cubic-bezier(.2, .8, .2, 1);
+  --t-panel: 260ms cubic-bezier(.2, .8, .2, 1);
+  color-scheme: dark;
+}
+.tv { --fg-3: #8E9AAE; --mark-a: #F3F5F8; --mark-b: #FFC233; color-scheme: dark; color: var(--fg); }
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    --bg: #F3F5F8; --surface: #FFFFFF; --raised: #E9EDF3; --line: #D5DBE5; --border-strong: #838992;
+    --fg: #111620; --fg-2: #4B5566; --fg-3: #626C7E;
+    --brand: #FFC233; --on-brand: #1B1403; --brand-text: #8A5E00; --brand-line: #B07800; --brand-edge: #8A5E00; --focus-ring: #111620; --tl-cap: rgba(17, 22, 32, .45); --tl-played: rgba(17, 22, 32, .92);
+    --live: #D7263D; --live-solid: #D11E38; --live-text: #BA0026;
+    --ok: #13834C; --ok-text: #006D37; --warn: #C2540F; --warn-text: #A63A00; --orig: #7440DB; --orig-text: #6C35D1; --mark-a: #111620; --mark-b: #E89B00;
+    --glow: rgba(176, 120, 0, .22); --scrim: rgba(243, 245, 248, .86);
+    color-scheme: light;
+  }
+}
+:root[data-theme="light"] {
+  --bg: #F3F5F8; --surface: #FFFFFF; --raised: #E9EDF3; --line: #D5DBE5; --border-strong: #838992;
+  --fg: #111620; --fg-2: #4B5566; --fg-3: #626C7E;
+  --brand: #FFC233; --on-brand: #1B1403; --brand-text: #8A5E00; --brand-line: #B07800; --brand-edge: #8A5E00; --focus-ring: #111620; --tl-cap: rgba(17, 22, 32, .45); --tl-played: rgba(17, 22, 32, .92);
+  --live: #D7263D; --live-solid: #D11E38; --live-text: #BA0026;
+  --ok: #13834C; --ok-text: #006D37; --warn: #C2540F; --warn-text: #A63A00; --orig: #7440DB; --orig-text: #6C35D1; --mark-a: #111620; --mark-b: #E89B00;
+  --glow: rgba(176, 120, 0, .22); --scrim: rgba(243, 245, 248, .86);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--f-ui); font-size: 16px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+.wrap { max-width: 1200px; margin: 0 auto; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+h1, h2, h3, h4 { text-wrap: balance; margin: 0; }
+p { margin: 0; }
+code { font-family: var(--f-mono); font-size: .92em; }
+.num { font-variant-numeric: tabular-nums; }
+.mono { font-family: var(--f-mono); }
+.i { width: 1.25em; height: 1.25em; flex: none; stroke: currentColor; fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+
+/* brand mark: the 12° slash */
+.slash { display: inline-block; background: var(--brand); transform: skewX(-12deg); border-radius: .06em; }
+.app-icon { width: 2.4em; height: 2.4em; border-radius: .7em; background: #0B0E13; display: grid; place-items: center; box-shadow: inset 0 0 0 1px rgba(255,255,255,.08); flex: none; }
+.app-icon.launcher { background: #FFC233; box-shadow: none; }
+.app-icon svg { width: 78%; height: 78%; }
+.brandmark { width: 2.1em; height: 2.1em; flex: none; }
+.dmark { position: relative; width: 72%; height: 72%; display: block; }
+.dmark i { position: absolute; display: block; }
+.dmark i:nth-child(1) { left: 0; right: 12%; top: 50%; height: 11%; transform: translateY(-50%); border-radius: 999px; background: rgba(233, 237, 244, .85); }
+.dmark i:nth-child(2) { left: 40%; top: 12%; width: 15%; height: 76%; background: #FFC233; transform: skewX(-12deg); border-radius: .06em; box-shadow: 0 0 0 .07em #0B0E13; }
+.dmark i:nth-child(3) { right: 0; top: 50%; width: 22%; height: 22%; transform: translateY(-50%); border-radius: 50%; background: #FF4D5E; }
+.lockup { font-family: var(--f-display); font-weight: 800; text-transform: uppercase; letter-spacing: .02em; line-height: 1; white-space: nowrap; }
+.wake { position: relative; width: 72%; height: 72%; display: block; }
+.wake i { position: absolute; top: 10%; width: 17%; height: 80%; transform: skewX(-12deg); border-radius: .06em; background: #FFC233; }
+.wake i:nth-child(1) { left: 22%; opacity: .35; }
+.wake i:nth-child(2) { left: 50%; }
+.ulock { position: relative; display: inline-block; padding-bottom: .42em; font-family: var(--f-display); font-weight: 800; text-transform: uppercase; letter-spacing: .02em; line-height: 1; }
+.ulock .u { position: absolute; left: 0; right: 0; bottom: 0; height: .3em; }
+.ulock .u i { position: absolute; display: block; }
+.ulock .u i:nth-child(1) { left: 0; right: .12em; top: 50%; height: .07em; transform: translateY(-50%); border-radius: 999px; background: var(--fg-2); }
+.ulock .u i:nth-child(2) { left: 62%; top: -.05em; width: .1em; height: .4em; background: var(--brand); transform: skewX(-12deg); border-radius: .02em; box-shadow: 0 0 0 1.5px var(--brand-edge), 0 0 0 .05em var(--bg); }
+.ulock .u i:nth-child(3) { right: 0; top: 50%; width: .2em; height: .2em; transform: translateY(-50%); border-radius: 50%; background: var(--live); }
+.marks { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.markcard { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 22px; display: grid; gap: 14px; align-content: start; }
+.markcard.chosen { box-shadow: inset 0 0 0 2px var(--fg); }
+.markcard .stage2 { display: flex; align-items: flex-end; gap: 18px; min-height: 110px; flex-wrap: wrap; }
+.markcard h4 { font-size: 15px; font-weight: 600; display: flex; gap: 8px; align-items: center; }
+.markcard p { color: var(--fg-2); font-size: 14px; }
+.tag { font-family: var(--f-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; padding: 3px 7px; border-radius: 5px; background: var(--fg); color: var(--bg); }
+.tag.no { background: transparent; color: var(--fg-3); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.sizes { display: flex; align-items: flex-end; gap: 14px; }
+.sizes span { display: grid; justify-items: center; gap: 4px; font-family: var(--f-mono); font-size: 11px; color: var(--fg-3); }
+
+/* page chrome */
+.masthead { padding-block: 56px 40px; }
+.eyebrow { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); }
+.wordmark { font-family: var(--f-display); font-weight: 800; text-transform: uppercase; font-size: clamp(64px, 13vw, 168px); line-height: .84; letter-spacing: -.01em; margin-top: 18px; }
+.tagline { font-size: clamp(20px, 2.4vw, 28px); font-weight: 500; margin-top: 18px; }
+.lede { max-width: 62ch; color: var(--fg-2); margin-top: 12px; }
+.hero-demo { margin-top: 40px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-l); padding: 30px 30px 22px; display: grid; grid-template-columns: auto 1fr; gap: 30px; align-items: center; }
+.delta { font-family: var(--f-display); font-weight: 700; font-size: 64px; line-height: .9; font-variant-numeric: tabular-nums; letter-spacing: .01em; }
+.delta small { display: block; font-family: var(--f-mono); font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-2); font-weight: 500; margin-top: 8px; }
+.hero-demo .tl-wrap { min-width: 0; }
+.toc { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: color-mix(in oklab, var(--bg) 88%, transparent); backdrop-filter: blur(10px); border-block: 1px solid var(--line); }
+.toc .wrap { display: flex; gap: 4px; overflow-x: auto; padding-block: 8px; scrollbar-width: none; }
+.toc a { color: var(--fg-2); text-decoration: none; font-size: 14px; padding: 6px 12px; border-radius: 999px; white-space: nowrap; }
+.toc a:hover { color: var(--fg); background: var(--raised); }
+section.block { padding-block: 72px 8px; }
+.block-head { display: grid; gap: 10px; margin-bottom: 32px; max-width: 70ch; }
+.block-head h2 { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: clamp(36px, 5vw, 56px); line-height: .95; letter-spacing: .005em; }
+.block-head p { color: var(--fg-2); }
+.principles { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--r-l); overflow: hidden; }
+.principle { background: var(--surface); padding: 24px; display: grid; gap: 8px; align-content: start; }
+.principle h3 { font-size: 18px; font-weight: 600; }
+.principle p { color: var(--fg-2); font-size: 15px; }
+.principle .eg { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-3); margin-top: 6px; }
+.swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
+.sw { border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; background: var(--surface); }
+.sw .swc { height: 72px; border-bottom: 1px solid var(--line); }
+.sw .meta { padding: 10px 12px 12px; display: grid; gap: 2px; }
+.sw .meta b { font-size: 14px; font-weight: 600; }
+.sw .meta span { font-family: var(--f-mono); font-size: 12px; color: var(--fg-3); }
+.sw .meta em { font-style: normal; font-size: 12.5px; color: var(--fg-2); }
+.sub { font-family: var(--f-mono); font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); margin: 36px 0 14px; }
+.type-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.type-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 22px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.type-card .role { font-family: var(--f-mono); font-size: 12px; color: var(--fg-3); text-transform: uppercase; letter-spacing: .08em; }
+.type-card .spec-d { font-family: var(--f-display); font-weight: 700; font-size: 54px; line-height: .9; text-transform: uppercase; }
+.type-card .spec-u { font-size: 22px; font-weight: 600; line-height: 1.25; }
+.type-card .spec-m { font-family: var(--f-mono); font-size: 26px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.type-card p { color: var(--fg-2); font-size: 14.5px; }
+.scale { display: grid; border: 1px solid var(--line); border-radius: var(--r-m); overflow: hidden; }
+.scale-row { display: grid; grid-template-columns: 110px 130px minmax(0, 1fr); gap: 16px; align-items: baseline; padding: 12px 18px; background: var(--surface); border-bottom: 1px solid var(--line); }
+.scale-row:last-child { border-bottom: 0; }
+.scale-row .k, .scale-row .v { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-3); }
+.scale-row .v { color: var(--fg-2); }
+.scale-row .s { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.split { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 12px; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 22px; display: grid; gap: 14px; align-content: start; min-width: 0; }
+.panel h4 { font-size: 15px; font-weight: 600; }
+.panel p { color: var(--fg-2); font-size: 14.5px; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 14px; }
+.kv dt { font-family: var(--f-mono); font-size: 12.5px; color: var(--fg-3); }
+.kv dd { margin: 0; color: var(--fg-2); }
+.layers { font-family: var(--f-mono); font-size: 12.5px; line-height: 1.7; color: var(--fg-2); margin: 0; white-space: pre; overflow-x: auto; }
+.panel.wide { grid-column: 1 / -1; }
+.layers b { color: var(--fg); font-weight: 600; }
+
+/* buttons, chips */
+.btn { display: inline-flex; align-items: center; gap: .5em; font: inherit; font-weight: 600; font-size: 1em; line-height: 1; padding: .8em 1.15em; border-radius: .65em; border: 1px solid var(--line); background: var(--raised); color: var(--fg); white-space: nowrap; transition: transform var(--t-focus), box-shadow var(--t-focus), background var(--t-focus); }
+.btn.primary { background: var(--brand); border-color: transparent; color: var(--on-brand); box-shadow: inset 0 0 0 1px var(--brand-edge); }
+.btn.ghost { background: transparent; border-color: transparent; color: var(--fg-2); }
+.btn.danger { color: var(--live-text); }
+.btn .i { width: 1.15em; height: 1.15em; }
+.is-focus { background: var(--brand) !important; color: var(--on-brand) !important; border-color: transparent !important; transform: scale(1.04); box-shadow: 0 0 0 .17em var(--bg), 0 0 0 .34em var(--brand); }
+.card.focus .thumb { transform: scale(1.06); box-shadow: 0 0 0 .17em var(--bg), 0 0 0 .34em var(--brand); }
+.card.focus .card-t { color: var(--fg); }
+.card .card-t { color: var(--fg-2); }
+.btn.web-focus { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--focus-ring); }
+.chip { display: inline-flex; align-items: center; gap: .4em; font-size: .8em; font-weight: 600; letter-spacing: .02em; line-height: 1; padding: .42em .6em; border-radius: .45em; background: var(--raised); color: var(--fg-2); white-space: nowrap; }
+.chip.live { background: var(--live-solid); color: #fff; letter-spacing: .08em; }
+.chip.live::before { content: ""; width: .5em; height: .5em; border-radius: 50%; background: currentColor; }
+.chip.rec { background: color-mix(in oklab, var(--live) 16%, transparent); color: var(--live-text); }
+.chip.media { background: rgba(6, 8, 12, .86); color: #FF6B79; }
+.chip.orig.media { background: rgba(6, 8, 12, .86); color: #B98CFF; }
+.tv .chip { font-size: .92em; }
+.chip.rec::before { content: ""; width: .55em; height: .55em; border-radius: 50%; background: currentColor; }
+.chip.sched::before { content: ""; width: .5em; height: .5em; border-radius: 50%; box-shadow: inset 0 0 0 .13em currentColor; }
+.chip.orig { background: color-mix(in oklab, var(--orig) 18%, transparent); color: var(--orig-text); }
+.chip.ok { background: color-mix(in oklab, var(--ok) 16%, transparent); color: var(--ok-text); }
+.chip.warn { background: color-mix(in oklab, var(--warn) 16%, transparent); color: var(--warn-text); }
+.chip.sched, .chip.outline { background: transparent; color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--border-strong); }
+.av { display: inline-grid; place-items: center; width: 1.7em; height: 1.7em; border-radius: 50%; background: var(--raised); color: var(--fg); font-weight: 600; font-size: .85em; flex: none; }
+.av.b { background: color-mix(in oklab, var(--ok) 22%, var(--raised)); }
+
+/* timeline */
+.tl { position: relative; height: .6em; border-radius: 999px; background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--fg) 16%, transparent) 0 2px, transparent 2px 6px); }
+.tl > span { position: absolute; top: 0; bottom: 0; left: calc(var(--a) * 1%); width: calc((var(--b) - var(--a)) * 1%); }
+.tl .cap { background: var(--tl-cap); border-radius: 999px 0 0 999px; }
+.tl .played { background: var(--tl-played); border-radius: 999px 0 0 999px; }
+.tl .gap { background: repeating-linear-gradient(90deg, var(--warn) 0 2px, transparent 2px 4px); top: -.15em; bottom: -.15em; border-radius: 2px; }
+.tl .mark { width: 2px !important; top: -.45em; bottom: -.45em; background: var(--fg-2); border-radius: 1px; }
+.tl .head { width: .5em !important; height: 1.9em; top: 50%; transform: translate(-50%, -50%) skewX(-12deg); border-radius: .1em; background: var(--brand); box-shadow: 0 0 0 1.5px var(--brand-edge), 0 0 0 .3em var(--bg); }
+.tl .edge { width: .95em !important; height: .95em; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; background: var(--live); }
+.tl .edge::after { content: ""; position: absolute; inset: -.45em; border-radius: 50%; border: 2px solid var(--live); animation: ring 1.8s ease-out infinite; }
+@keyframes ring { from { transform: scale(.5); opacity: .9; } to { transform: scale(1.4); opacity: 0; } }
+.tl-labels { position: relative; height: 1.5em; margin-top: .8em; font-family: var(--f-mono); font-size: .8em; color: var(--fg-3); font-variant-numeric: tabular-nums; }
+.tl-labels span { position: absolute; left: calc(var(--a) * 1%); transform: translateX(-50%); white-space: nowrap; }
+.tl-labels span.start { transform: none; }
+.tl-labels span.end { transform: translateX(-100%); }
+.tl-labels .now { color: var(--live-text); font-weight: 600; }
+.tl-labels .here { color: var(--fg); font-weight: 600; }
+.pins { position: relative; height: 2.6em; }
+.pins span { position: absolute; left: calc(var(--a) * 1%); bottom: .6em; transform: translateX(-50%); width: 1.6em; height: 1.6em; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-mono); font-size: .72em; font-weight: 600; background: var(--fg); color: var(--bg); }
+.legend { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px 28px; margin-top: 26px; }
+.legend div { display: grid; grid-template-columns: 26px 1fr; gap: 10px; align-items: start; font-size: 14.5px; color: var(--fg-2); }
+.legend b { color: var(--fg); font-weight: 600; display: block; }
+.legend i { font-style: normal; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; font-family: var(--f-mono); font-size: 12px; font-weight: 600; background: var(--fg); color: var(--bg); }
+
+/* device frames */
+.mock { display: grid; gap: 14px; margin-bottom: 48px; }
+.mock figcaption { display: grid; gap: 4px; max-width: 74ch; }
+.mock figcaption b { font-size: 16px; font-weight: 600; }
+.mock figcaption span { color: var(--fg-2); font-size: 14.5px; }
+figure { margin: 0; }
+.bezel { background: linear-gradient(#20242d, #0c0e12); border-radius: 18px; padding: clamp(5px, 1vw, 12px); box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .55); }
+.frame { container-type: inline-size; border-radius: 8px; overflow: hidden; }
+.browser { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; box-shadow: 0 30px 60px -34px rgba(0, 0, 0, .45); background: var(--surface); }
+.browser-bar { display: flex; align-items: center; gap: 8px; padding: 9px 12px; border-bottom: 1px solid var(--line); background: var(--raised); }
+.browser-bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.browser-bar .url { flex: 1; min-width: 0; margin-left: 8px; font-family: var(--f-mono); font-size: 12px; color: var(--fg-3); background: var(--surface); border-radius: 6px; padding: 4px 10px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.phones { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 320px)); gap: 32px; justify-content: start; }
+.phone { background: #0c0e12; border-radius: 42px; padding: 9px; box-shadow: 0 30px 60px -30px rgba(0, 0, 0, .55); }
+.phone .frame { border-radius: 34px; }
+.screen-tv { aspect-ratio: 16 / 9; font-size: calc(100cqw / 80); position: relative; overflow: hidden; background: var(--bg); color: var(--fg); line-height: 1.3; }
+.screen-web { aspect-ratio: 16 / 10; font-size: calc(100cqw / 90); position: relative; overflow: hidden; background: var(--bg); color: var(--fg); line-height: 1.4; }
+.screen-web.tall { aspect-ratio: 16 / 11.6; }
+.screen-phone { aspect-ratio: 390 / 844; font-size: calc(100cqw / 24.375); position: relative; overflow: hidden; background: var(--bg); color: var(--fg); line-height: 1.35; }
+
+/* placeholder artwork: hues only from 140–240 so art never competes with the signal colours */
+.streaks { position: relative; isolation: isolate; background:
+  radial-gradient(90% 120% at 88% 20%, hsl(var(--h, 215) 50% 46% / .5), transparent 62%),
+  linear-gradient(100deg, #0B0E13 20%, hsl(var(--h, 215) 42% 21%)); }
+.streaks { overflow: hidden; }
+.streaks::before { content: ""; position: absolute; inset: -30% -10%; z-index: -1; transform: rotate(-12deg); background:
+  linear-gradient(90deg, transparent, rgba(255,255,255,.34), transparent) 78% 18% / 34% 1px no-repeat,
+  linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent) 95% 27% / 52% 1px no-repeat,
+  linear-gradient(90deg, transparent, rgba(255,255,255,.28), transparent) 70% 36% / 22% 1px no-repeat,
+  linear-gradient(90deg, transparent, rgba(255,255,255,.14), transparent) 100% 46% / 60% 1px no-repeat,
+  linear-gradient(90deg, transparent, rgba(255,255,255,.24), transparent) 86% 58% / 30% 1px no-repeat,
+  linear-gradient(90deg, transparent, rgba(255,255,255,.12), transparent) 92% 71% / 46% 1px no-repeat,
+  linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent) 74% 84% / 26% 1px no-repeat; }
+
+/* TV shared */
+.rail { position: absolute; inset: 0 auto 0 0; width: 7.4em; padding: 2.7em 0 2.7em 2.7em; display: grid; grid-template-rows: auto 1fr; gap: 2.4em; background: linear-gradient(90deg, rgba(6,8,12,.92), rgba(6,8,12,0)); z-index: 2; }
+.rail .app-icon { font-size: 1.1em; }
+.rail ul { list-style: none; margin: 0; padding: 0; display: grid; gap: .9em; align-content: start; }
+.rail li { width: 3.2em; height: 3.2em; border-radius: .9em; display: grid; place-items: center; color: var(--fg-3); }
+.rail li .i { width: 1.6em; height: 1.6em; }
+.rail li.on { color: var(--fg); background: rgba(255,255,255,.1); }
+
+/* TV home */
+.home-hero { position: absolute; inset: 0 0 17em 0; background: linear-gradient(90deg, rgba(6,8,12,.86), rgba(6,8,12,.5) 45%, rgba(6,8,12,0) 70%); padding: 2.7em 4em 0 11em; display: grid; align-content: start; gap: .85em; }
+.home-hero::after { content: ""; position: absolute; inset: auto 0 -1px 0; height: 8em; background: linear-gradient(transparent, var(--bg)); z-index: -1; }
+.hero-eyebrow { display: flex; gap: .7em; align-items: center; font-size: 1.15em; color: var(--fg-2); }
+.hero-eyebrow .chip { font-size: .8em; }
+.hero-title { font-family: var(--f-display); font-weight: 800; text-transform: uppercase; font-size: 4.6em; line-height: .86; letter-spacing: .005em; }
+.hero-title span { color: var(--fg-2); }
+.hero-meta { font-size: 1.2em; color: var(--fg-2); }
+.hero-tl { width: 34em; display: grid; gap: .55em; margin-top: .3em; }
+.hero-tl .cap-row { display: flex; justify-content: space-between; font-size: 1em; color: var(--fg-2); }
+.hero-tl .cap-row b { color: var(--fg); font-weight: 600; }
+.hero-actions { display: flex; gap: 1em; margin-top: .4em; font-size: 1.2em; }
+.home-rows { position: absolute; inset: auto 0 0 0; height: 16.2em; padding-left: 11em; display: grid; gap: .9em; align-content: start; }
+.home-rows h3 { font-size: 1.25em; font-weight: 600; }
+.cards { display: flex; gap: 1.4em; }
+.card { width: 17.5em; flex: none; display: grid; gap: .5em; }
+.thumb { position: relative; aspect-ratio: 16 / 9; border-radius: .7em; overflow: hidden; transition: transform var(--t-focus), box-shadow var(--t-focus); }
+.thumb::after { content: ""; position: absolute; inset: 0; background: linear-gradient(rgba(0,0,0,.65), transparent 42%, transparent 48%, rgba(0,0,0,.68)); }
+.thumb > span { z-index: 1; }
+.thumb .ch { position: absolute; left: .8em; top: .75em; font-size: .95em; font-weight: 600; color: rgba(255,255,255,.88); }
+.thumb .big { position: absolute; left: .55em; right: .55em; bottom: .4em; font-family: var(--f-display); font-weight: 800; font-size: 2.4em; line-height: .9; text-transform: uppercase; color: rgba(255,255,255,.94); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.thumb .dur { position: absolute; right: .7em; top: .7em; font-family: var(--f-mono); font-size: .95em; background: rgba(0,0,0,.6); color: #fff; padding: .2em .45em; border-radius: .35em; }
+.thumb .prog { position: absolute; left: 0; right: 0; bottom: 0; height: .32em; background: rgba(255,255,255,.2); }
+.thumb .prog i { position: absolute; inset: 0 auto 0 0; width: var(--p); background: #fff; }
+.card-t { font-size: 1.1em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-m { font-size: 1em; color: var(--fg-3); margin-top: -.25em; }
+
+/* TV guide */
+.guide-top { position: absolute; inset: 0 0 auto 0; height: 15.5em; padding: 2.7em 4em 0 4em; display: grid; grid-template-columns: minmax(0, 1fr) 24em; gap: 3em; }
+.guide-top .g-title { font-family: var(--f-display); font-weight: 800; font-size: 3.4em; line-height: .9; text-transform: uppercase; margin: .25em 0 .3em; }
+.guide-top .g-meta { display: flex; gap: .7em; align-items: center; font-size: 1.15em; color: var(--fg-2); }
+.guide-top .g-desc { font-size: 1.1em; color: var(--fg-2); margin-top: .7em; max-width: 44em; }
+.guide-top .g-day { justify-self: end; text-align: right; display: grid; gap: .3em; align-content: start; }
+.guide-top .g-day b { font-family: var(--f-display); font-weight: 700; font-size: 2.6em; line-height: .9; text-transform: uppercase; }
+.guide-top .g-day span { font-size: 1em; color: var(--fg-3); }
+.keys { display: flex; flex-wrap: wrap; gap: .5em 1.3em; font-size: 1em; color: var(--fg-2); margin-top: 1em; justify-content: end; }
+.keys kbd { font-family: var(--f-mono); font-size: .92em; border: 1px solid var(--border-strong); border-radius: .35em; padding: .1em .45em; color: var(--fg); margin-right: .35em; }
+.guide-body { position: absolute; inset: 15.5em 0 0 0; padding: 0 0 0 4em; }
+.g-ruler { display: grid; grid-template-columns: 15em 1fr; height: 2.4em; align-items: end; position: relative; z-index: 4; }
+.g-ruler .ticks { position: relative; height: 100%; border-bottom: 1px solid var(--line); }
+.g-ruler .ticks span { position: absolute; bottom: .5em; left: calc(var(--a) * 1%); font-family: var(--f-mono); font-size: .95em; color: var(--fg-3); padding-left: .4em; border-left: 1px solid var(--line); line-height: 1; }
+.g-ruler .ticks .nowpill { border: 0; padding: .2em .45em; transform: translateX(-50%); background: var(--live-solid); color: #fff; font-weight: 600; border-radius: .35em; bottom: .3em; }
+.g-row { display: grid; grid-template-columns: 15em 1fr; height: 4.3em; }
+.g-ch { display: flex; align-items: center; gap: .8em; padding-right: 1em; border-bottom: 1px solid color-mix(in oklab, var(--line) 60%, transparent); }
+.g-ch .no { font-family: var(--f-mono); font-size: .95em; color: var(--fg-3); width: 2.2em; }
+.g-ch .logo { width: 2.6em; height: 1.9em; border-radius: .35em; background: var(--raised); display: grid; place-items: center; font-weight: 700; font-size: .92em; color: var(--fg-2); }
+.g-ch .nm { font-size: 1.1em; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.g-track { position: relative; border-bottom: 1px solid color-mix(in oklab, var(--line) 60%, transparent); }
+.cell { position: absolute; top: .3em; bottom: .3em; left: calc(var(--a) * 1%); width: calc((var(--b) - var(--a)) * 1% - .3em); background: var(--surface); border-radius: .5em; padding: .4em .75em; display: grid; align-content: center; gap: .15em; overflow: hidden; z-index: 2; }
+.cell .t { font-size: 1.1em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: .4em; align-items: center; }
+.cell .t .dot { width: .6em; height: .6em; border-radius: 50%; background: var(--live); flex: none; }
+.cell .t .ring { width: .6em; height: .6em; border-radius: 50%; box-shadow: inset 0 0 0 .14em var(--live); flex: none; }
+.cell .t .i { width: 1em; height: 1em; color: var(--warn); stroke-width: 2.2; }
+.cell .s { font-family: var(--f-mono); font-size: .95em; color: var(--fg-3); white-space: nowrap; }
+.cell .pg { position: absolute; left: 0; bottom: 0; height: .22em; width: var(--p); background: color-mix(in oklab, var(--fg) 45%, transparent); }
+.cell.past { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
+.cell.past .t { color: var(--fg-3); font-weight: 500; }
+.cell.airing { background: var(--raised); }
+.cell.clip-l { border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.cell.is-focus { z-index: 3; transform: none; }
+.cell.is-focus .s { color: color-mix(in oklab, var(--on-brand) 75%, transparent); }
+.cell.is-focus .t .dot { background: var(--on-brand); }
+.cell.is-focus .pg { background: color-mix(in oklab, var(--on-brand) 40%, transparent); }
+.now-line { position: absolute; top: 2.4em; bottom: 0; width: 2px; background: var(--live); left: calc(19em + (100% - 19em) * var(--n) / 100); z-index: 1; }
+.guide-fade { position: absolute; inset: auto 0 0 0; height: 5em; background: linear-gradient(transparent, var(--bg)); z-index: 5; }
+
+/* TV record sheet */
+.rs-bg { position: absolute; inset: 0; }
+.rs-dim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(6,8,12,.55), rgba(6,8,12,.92) 55%); }
+.rs-left { position: absolute; left: 4em; top: 3em; width: 34em; display: grid; gap: .8em; opacity: .55; }
+.rs-left b { font-family: var(--f-display); font-weight: 800; font-size: 3.4em; line-height: .9; text-transform: uppercase; }
+.rs-left span { font-size: 1.15em; color: var(--fg-2); }
+.rs-rows { display: grid; gap: .5em; margin-top: 1em; }
+.rs-rows div { display: flex; gap: .4em; }
+.rs-rows i { display: block; height: 3.4em; border-radius: .5em; background: var(--raised); font-style: normal; font-size: 1em; color: var(--fg-2); padding: .9em .8em; white-space: nowrap; overflow: hidden; }
+.rs-rows i.f { background: var(--surface); box-shadow: inset 0 0 0 2px var(--fg-3); color: var(--fg); }
+.sheet-tv { position: absolute; top: 0; right: 0; bottom: 0; width: 34em; background: var(--surface); border-left: 1px solid var(--line); padding: 3em 3.2em; display: grid; align-content: start; gap: 1.2em; }
+.sheet-tv .k { font-family: var(--f-mono); font-size: .95em; color: var(--fg-3); letter-spacing: .06em; text-transform: uppercase; }
+.sheet-tv h3 { font-size: 1.8em; font-weight: 650; line-height: 1.15; }
+.sheet-tv .m { font-size: 1.1em; color: var(--fg-2); margin-top: -.5em; }
+.opts { display: grid; gap: .6em; margin-top: .4em; }
+.opt { display: grid; grid-template-columns: 2.2em 1fr auto; gap: .9em; align-items: center; padding: .95em 1.1em; border-radius: .7em; background: var(--raised); font-size: 1.15em; }
+.opt .i { width: 1.4em; height: 1.4em; }
+.opt small { display: block; font-size: .92em; color: var(--fg-3); margin-top: .15em; font-weight: 500; }
+.opt b { font-weight: 600; }
+.opt.is-focus small { color: color-mix(in oklab, var(--on-brand) 70%, transparent); }
+.opt .val { font-family: var(--f-mono); font-size: .85em; color: var(--fg-2); }
+.status-line { display: flex; gap: .6em; align-items: center; font-size: 1.05em; color: var(--ok-text); margin-top: .4em; }
+.status-line .i { width: 1.2em; height: 1.2em; stroke-width: 2.4; }
+
+/* TV player */
+.player { position: absolute; inset: 0; }
+.player .video { position: absolute; inset: 0; }
+.player .top { position: absolute; inset: 0 0 auto 0; padding: 2.7em 4em 6em; background: linear-gradient(rgba(6,8,12,.85), transparent); display: flex; justify-content: space-between; align-items: start; gap: 2em; }
+.player .top .who { display: grid; gap: .45em; }
+.player .top .who span { font-size: 1.1em; color: var(--fg-2); display: flex; gap: .6em; align-items: center; }
+.player .top .who b { font-family: var(--f-display); font-weight: 800; font-size: 2.8em; line-height: .9; text-transform: uppercase; }
+.player .top .q { display: flex; gap: .6em; font-size: 1.2em; }
+.player .bottom { position: absolute; inset: auto 0 0 0; padding: 8em 4em 2.7em; background: linear-gradient(transparent, rgba(6,8,12,.95) 45%); display: grid; gap: 1.6em; }
+.player .scrub { display: grid; grid-template-columns: auto 1fr; gap: 2.4em; align-items: center; }
+.player .delta { font-size: 4.4em; }
+.player .delta small { font-size: .23em; }
+.player .tl { font-size: 1.1em; }
+.player .tl-labels { font-size: .95em; }
+.player .bottom > * { min-width: 0; }
+.player .ctrls { display: flex; gap: .8em; align-items: center; justify-content: center; font-size: 1.05em; }
+.player .ctrls .round { width: 3.4em; height: 3.4em; padding: 0; justify-content: center; border-radius: 50%; position: relative; }
+.player .ctrls .round .i { width: 1.4em; height: 1.4em; }
+.player .ctrls .round.big { width: 4.2em; height: 4.2em; }
+.player .ctrls .round.big .i { width: 1.8em; height: 1.8em; }
+.player .ctrls .round .tx { font-family: var(--f-mono); font-weight: 600; font-size: .95em; }
+.player .ctrls .label { position: absolute; top: calc(100% + .7em); left: 50%; transform: translateX(-50%); font-size: .92em; white-space: nowrap; color: var(--fg); font-weight: 600; }
+.player .ctrls .sep { width: 1px; height: 2.2em; background: var(--line); margin: 0 .5em; }
+.player .hint { text-align: center; font-size: 1em; color: var(--fg-3); margin-top: -.2em; }
+.player .hint kbd { font-family: var(--f-mono); font-size: .9em; border: 1px solid var(--border-strong); border-radius: .3em; padding: 0 .35em; color: var(--fg-2); }
+
+/* TV sign-in */
+.signin { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 24em; gap: 5em; align-items: center; padding: 0 7em; }
+.signin h3 { font-family: var(--f-display); font-weight: 800; font-size: 4.4em; line-height: .88; text-transform: uppercase; }
+.signin .steps { list-style: none; margin: 1.8em 0 0; padding: 0; display: grid; gap: 1.1em; counter-reset: s; }
+.signin .steps li { counter-increment: s; display: grid; grid-template-columns: 2.2em 1fr; gap: .9em; font-size: 1.3em; color: var(--fg-2); align-items: start; }
+.signin .steps li::before { content: counter(s); width: 1.7em; height: 1.7em; border-radius: 50%; border: 1px solid var(--border-strong); display: grid; place-items: center; font-family: var(--f-mono); font-size: .8em; color: var(--fg); }
+.signin .steps b { color: var(--fg); font-weight: 600; }
+.signin .code { font-family: var(--f-mono); font-weight: 600; font-size: 3em; letter-spacing: .14em; margin-top: .6em; }
+.signin .server { margin-top: 2.2em; display: flex; gap: .8em; align-items: center; font-size: 1.05em; color: var(--fg-2); }
+.signin .server .okd { width: .6em; height: .6em; border-radius: 50%; background: var(--ok); }
+.signin .alt { margin-top: 1.4em; font-size: 1.15em; }
+.qr-card { background: #fff; border-radius: 1.4em; padding: 1.6em; display: grid; gap: 1em; justify-items: center; box-shadow: 0 2em 4em -2em rgba(0,0,0,.6); }
+.qr-card canvas { width: 100%; height: auto; image-rendering: pixelated; display: block; }
+.qr-card span { font-size: 1em; color: #3F4857; font-weight: 500; }
+.signin-bg { position: absolute; inset: 0; opacity: .8; }
+.signin > * { position: relative; z-index: 1; }
+
+/* TV profile picker */
+.who-pick { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 3.2em; }
+.who-pick h3 { font-family: var(--f-display); font-weight: 800; font-size: 4em; line-height: .9; text-transform: uppercase; }
+.profiles { display: flex; gap: 3.4em; }
+.pf { display: grid; justify-items: center; gap: .8em; font-size: 1.3em; color: var(--fg-2); }
+.pf .avt { width: 6.4em; height: 6.4em; border-radius: 50%; display: grid; place-items: center; background: hsl(var(--h) 40% 24%); color: #fff; transition: transform var(--t-focus); }
+.pf .avt b { font-family: var(--f-display); font-weight: 800; font-size: 2.6em; }
+.pf .avt .i { width: 2em; height: 2em; }
+.pf small { font-size: .78em; color: var(--fg-3); display: flex; gap: .3em; align-items: center; }
+.pf small .i { width: 1em; height: 1em; }
+.pf.focus { color: var(--fg); font-weight: 600; }
+.pf.focus .avt { transform: scale(1.06); box-shadow: 0 0 0 .17em var(--bg), 0 0 0 .34em var(--brand); }
+.pf.add .avt { background: transparent; box-shadow: inset 0 0 0 2px var(--border-strong); color: var(--fg-2); }
+
+/* web */
+.app { position: absolute; inset: 0; display: grid; grid-template-columns: 16em 1fr; }
+.side { background: var(--surface); border-right: 1px solid var(--line); padding: 1.6em 1em; display: grid; grid-template-rows: auto 1fr auto; gap: 2em; }
+.brand { display: flex; align-items: center; gap: .7em; padding: 0 .6em; }
+.brand .app-icon { font-size: .85em; }
+.brand .lockup { font-size: 1.45em; }
+.nav { list-style: none; margin: 0; padding: 0; display: grid; gap: .15em; align-content: start; }
+.nav li { display: flex; align-items: center; gap: .8em; padding: .6em .7em; border-radius: .55em; font-size: .95em; color: var(--fg-2); font-weight: 500; }
+.nav li .i { width: 1.15em; height: 1.15em; }
+.nav li.on { background: var(--raised); color: var(--fg); font-weight: 600; box-shadow: inset 3px 0 0 var(--fg); }
+.nav li .count { margin-left: auto; font-family: var(--f-mono); font-size: .82em; color: var(--fg-3); }
+.nav li .count.warn { color: var(--warn-text); font-weight: 600; }
+.nav .sec { font-family: var(--f-mono); font-size: .75em; text-transform: uppercase; letter-spacing: .1em; color: var(--fg-3); padding: 1.4em .9em .4em; }
+.storage { padding: .9em; border-radius: .7em; background: var(--raised); display: grid; gap: .5em; font-size: .85em; }
+.storage .bar { height: .4em; border-radius: 999px; background: var(--line); overflow: hidden; display: flex; }
+.storage .bar i { display: block; height: 100%; }
+.storage .row { display: flex; justify-content: space-between; color: var(--fg-2); }
+.main { padding: 2.2em 3em; display: grid; gap: 1.5em; align-content: start; overflow: hidden; min-width: 0; }
+.main-head { display: flex; align-items: center; gap: 1em; }
+.main-head h3 { font-size: 1.9em; font-weight: 650; letter-spacing: -.01em; margin-right: auto; }
+.search { display: flex; align-items: center; gap: .6em; width: 22em; padding: .6em .8em; border-radius: .6em; background: var(--surface); border: 1px solid var(--border-strong); color: var(--fg-3); font-size: .9em; }
+.search kbd { margin-left: auto; font-family: var(--f-mono); font-size: .85em; border: 1px solid var(--line); border-radius: .3em; padding: 0 .35em; }
+.tabs { display: flex; gap: 1.6em; border-bottom: 1px solid var(--line); font-size: .95em; margin-top: -.4em; }
+.tabs span { padding: .6em 0; color: var(--fg-2); font-weight: 500; display: flex; gap: .45em; align-items: center; }
+.tabs span.on { color: var(--fg); font-weight: 650; box-shadow: inset 0 -2px 0 var(--fg); }
+.tabs .n { font-family: var(--f-mono); font-size: .82em; color: var(--fg-3); }
+.tabs .n.warn { color: var(--warn-text); }
+.filters { display: flex; gap: .5em; align-items: center; font-size: .9em; flex-wrap: wrap; }
+.seg { display: inline-flex; background: var(--raised); border-radius: .6em; padding: .2em; }
+.seg span { padding: .4em .8em; border-radius: .45em; color: var(--fg-2); font-weight: 500; white-space: nowrap; }
+.seg span.on { background: var(--surface); color: var(--fg); font-weight: 600; box-shadow: 0 1px 2px rgba(0,0,0,.18), 0 0 0 1px var(--line); }
+.fchip { padding: .45em .8em; border-radius: 999px; border: 1px solid var(--border-strong); color: var(--fg-2); font-weight: 500; }
+.fchip.on { background: var(--fg); color: var(--bg); border-color: transparent; }
+.now-card { display: grid; grid-template-columns: 15em 1fr auto; gap: 1.6em; align-items: center; padding: 1.1em; border-radius: .9em; background: var(--surface); border: 1px solid var(--line); }
+.now-card .thumb { border-radius: .55em; }
+.now-card .thumb .big { font-size: 1.9em; }
+.now-card .info { display: grid; gap: .55em; min-width: 0; }
+.now-card .info h4 { font-size: 1.25em; font-weight: 650; }
+.now-card .info .m { display: flex; gap: .6em; align-items: center; font-size: .9em; color: var(--fg-2); flex-wrap: wrap; }
+.now-card .info .m.warnline { flex-wrap: nowrap; align-items: flex-start; color: var(--warn-text); }
+.now-card .info .m.warnline span { min-width: 0; }
+.now-card .tl { font-size: .8em; margin-top: .3em; }
+.now-card .acts { display: flex; gap: .6em; font-size: .9em; }
+.group-h { display: flex; align-items: baseline; gap: .6em; font-size: 1em; }
+.group-h .crumb { color: var(--fg-3); }
+.group-h b { font-size: 1.15em; font-weight: 650; }
+.group-h .meta { margin-left: auto; font-size: .85em; color: var(--fg-3); font-family: var(--f-mono); }
+.rows { border: 1px solid var(--line); border-radius: .9em; overflow: hidden; background: var(--surface); }
+.r { display: grid; grid-template-columns: 2em minmax(0, 1.7fr) minmax(0, 1fr) 5em 5.5em minmax(0, 1.4fr) 2em; gap: 1.2em; align-items: center; padding: .85em 1.1em; border-bottom: 1px solid var(--line); font-size: .92em; }
+.r:last-child { border-bottom: 0; }
+.r .st { width: 1.4em; height: 1.4em; border-radius: 50%; display: grid; place-items: center; }
+.r .st.done { background: color-mix(in oklab, var(--ok) 16%, transparent); color: var(--ok-text); }
+.r .st.part { background: conic-gradient(var(--fg-2) var(--p), var(--line) 0); }
+.r .st.part::after { content: ""; width: .8em; height: .8em; border-radius: 50%; background: var(--surface); }
+.r .st.new { box-shadow: inset 0 0 0 2px var(--fg); }
+.r .st.new::after { content: ""; width: .45em; height: .45em; border-radius: 50%; background: var(--fg); }
+.r .st.rec { background: var(--live-solid); }
+.r .st.rec::after { content: ""; width: .45em; height: .45em; border-radius: 50%; background: #fff; }
+.r .st .i { width: .9em; height: .9em; stroke-width: 2.6; }
+.r .tt { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.r .tt small { display: block; font-weight: 400; color: var(--fg-3); font-size: .9em; margin-top: .1em; }
+.r .who { display: flex; gap: .5em; align-items: center; color: var(--fg-2); font-size: .92em; white-space: nowrap; min-width: 0; }
+.r .w { color: var(--fg-2); font-family: var(--f-mono); font-size: .9em; white-space: nowrap; }
+.r .note { color: var(--fg-2); font-size: .92em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: .5em; align-items: center; }
+.r .note.warn { color: var(--warn-text); }
+.r .note .i { width: 1.05em; height: 1.05em; }
+.r .more { color: var(--fg-3); }
+.r.hl { background: color-mix(in oklab, var(--live) 6%, var(--surface)); }
+
+/* upcoming */
+.up { border: 1px solid var(--line); border-radius: .9em; overflow: hidden; background: var(--surface); }
+.u { display: grid; grid-template-columns: 7.5em minmax(0, 1.8fr) minmax(0, 1fr) minmax(0, 1.5fr); gap: 1.2em; align-items: center; padding: .8em 1.1em; border-bottom: 1px solid var(--line); font-size: .92em; }
+.u:last-child { border-bottom: 0; }
+.u .tm { font-family: var(--f-mono); color: var(--fg-2); font-size: .92em; }
+.u .tt { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.u .tt small { display: block; font-weight: 400; color: var(--fg-3); font-size: .9em; margin-top: .1em; }
+.u .src { color: var(--fg-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: .45em; align-items: center; }
+.u .src .i { width: 1em; height: 1em; }
+.u.conflict { background: color-mix(in oklab, var(--warn) 8%, var(--surface)); grid-template-rows: auto auto; }
+.u.conflict .why { grid-column: 2 / -1; display: grid; gap: .6em; font-size: .95em; color: var(--warn-text); }
+.u.conflict .why .txt { display: flex; gap: .5em; align-items: flex-start; }
+.u.conflict .why .bts { display: flex; gap: .5em; flex-wrap: wrap; }
+.u.conflict .why .i { width: 1.1em; height: 1.1em; }
+.u.conflict .why .btn { font-size: .9em; padding: .55em .8em; }
+
+/* rule editor */
+.rule { display: grid; grid-template-columns: minmax(0, 1fr) 29em; gap: 2.2em; align-items: start; }
+.form { display: grid; gap: 1em; }
+.field { display: grid; gap: .45em; }
+.field label, .field .lab { font-size: .85em; font-weight: 600; color: var(--fg); }
+.field .hint { font-size: .82em; color: var(--fg-3); }
+.input { padding: .65em .85em; border-radius: .6em; background: var(--surface); border: 1px solid var(--border-strong); font-size: .95em; display: flex; align-items: center; gap: .6em; min-width: 0; }
+.input.active { border-color: var(--focus-ring); box-shadow: 0 0 0 3px color-mix(in oklab, var(--fg) 14%, transparent); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+.title-row { display: grid; grid-template-columns: auto 1fr; gap: .6em; }
+.words { display: flex; flex-wrap: wrap; gap: .4em; padding: .5em; border-radius: .6em; border: 1px solid var(--border-strong); background: var(--surface); }
+.word { display: inline-flex; align-items: center; gap: .4em; padding: .35em .6em; border-radius: .45em; background: var(--raised); font-size: .88em; font-weight: 550; }
+.word i { font-style: normal; color: var(--fg-3); }
+.word.add { background: transparent; color: var(--brand-text); font-weight: 600; }
+.days { display: flex; gap: .35em; }
+.days span { width: 2.3em; text-align: center; padding: .4em 0; border-radius: .45em; background: var(--fg); color: var(--bg); font-size: .82em; font-weight: 650; }
+.days span.off { background: transparent; color: var(--fg-2); box-shadow: inset 0 0 0 1px var(--border-strong); font-weight: 500; }
+.adv { font-size: .85em; color: var(--brand-text); font-weight: 600; display: flex; gap: .3em; align-items: center; white-space: nowrap; }
+.adv .i { width: 1em; height: 1em; }
+.pad { display: grid; gap: .6em; padding: .9em 1em; border: 1px solid var(--line); border-radius: .7em; background: var(--surface); }
+.pad .bar { position: relative; height: 2em; border-radius: .4em; display: grid; grid-template-columns: 5fr 120fr 60fr; overflow: hidden; font-size: .78em; font-family: var(--f-mono); }
+.pad .bar span { display: grid; place-items: center; white-space: nowrap; }
+.pad .bar .p1 { background: color-mix(in oklab, var(--brand) 45%, transparent); }
+.pad .bar .pr { background: var(--raised); color: var(--fg-2); }
+.pad .bar .p2 { background: repeating-linear-gradient(135deg, color-mix(in oklab, var(--brand) 38%, transparent) 0 4px, color-mix(in oklab, var(--brand) 18%, transparent) 4px 8px); color: var(--fg); }
+.pad .lbl { display: flex; justify-content: space-between; gap: 1em; font-size: .82em; color: var(--fg-2); }
+.pad .lbl b { color: var(--fg); }
+.org { display: grid; gap: .8em; padding: .9em 1em; border: 1px solid var(--line); border-radius: .7em; background: var(--surface); }
+.org .lab { font-size: .85em; font-weight: 600; }
+.parts { display: flex; flex-wrap: wrap; align-items: flex-end; gap: .3em .35em; font-size: .95em; }
+.parts .pt { display: inline-grid; justify-items: center; gap: .2em; }
+.parts .pt span { padding: .15em .4em; border-radius: .3em; background: color-mix(in oklab, var(--brand) 30%, transparent); font-weight: 600; }
+.parts .pt small { font-family: var(--f-mono); font-size: .7em; color: var(--brand-text); text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+.parts .plain { padding-bottom: .15em; color: var(--fg-2); }
+.tokens-path { display: flex; flex-wrap: wrap; align-items: center; gap: .35em; font-size: .85em; color: var(--fg-3); }
+.tokens-path b { font-weight: 600; color: var(--fg); background: var(--raised); border: 1px solid var(--line); border-radius: .35em; padding: .25em .5em; }
+.tokens-path .add { color: var(--brand-text); font-weight: 600; }
+.check { display: flex; gap: .6em; align-items: center; font-size: .85em; color: var(--fg-2); flex-wrap: wrap; }
+.check .box { width: 1.15em; height: 1.15em; border-radius: .25em; background: var(--fg); color: var(--bg); display: grid; place-items: center; flex: none; }
+.check .box .i { width: .85em; height: .85em; stroke-width: 3; }
+.check code { color: var(--fg); }
+.preview { border: 1px solid var(--line); border-radius: .9em; background: var(--surface); overflow: hidden; }
+.preview .ph { padding: 1em 1.1em; border-bottom: 1px solid var(--line); display: grid; gap: .25em; }
+.preview .ph b { font-size: 1em; font-weight: 650; }
+.preview .ph span { font-size: .82em; color: var(--fg-3); }
+.preview ul { list-style: none; margin: 0; padding: 0; }
+.preview li { padding: .7em 1.1em; border-bottom: 1px solid var(--line); display: grid; gap: .2em; font-size: .85em; }
+.preview li:last-child { border-bottom: 0; }
+.preview li .t { font-weight: 550; }
+.preview li .t mark { background: color-mix(in oklab, var(--brand) 30%, transparent); color: inherit; border-radius: .2em; padding: 0 .15em; font-weight: 650; }
+.preview li .w { font-family: var(--f-mono); font-size: .9em; color: var(--fg-3); }
+.preview li .grp { font-size: .9em; color: var(--fg-2); }
+.preview li.no .t { color: var(--fg-3); }
+.preview li.no .why { font-size: .92em; color: var(--fg-2); }
+.preview .sec { padding: .55em 1.1em; font-family: var(--f-mono); font-size: .75em; letter-spacing: .1em; text-transform: uppercase; color: var(--fg-3); background: var(--raised); }
+
+/* grouping explainer */
+.tscroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-m); }
+.gtable { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 760px; background: var(--surface); }
+.gtable th { text-align: left; font-family: var(--f-mono); font-size: 11.5px; font-weight: 500; letter-spacing: .08em; text-transform: uppercase; color: var(--fg-3); padding: 12px 14px; border-bottom: 1px solid var(--line); background: var(--raised); }
+.gtable td { padding: 12px 14px; border-bottom: 1px solid var(--line); vertical-align: top; color: var(--fg-2); }
+.gtable tr:last-child td { border-bottom: 0; }
+.gtable td:first-child { color: var(--fg); font-weight: 500; }
+.gtable .src { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 7px; border-radius: 5px; background: var(--raised); color: var(--fg); margin-bottom: 4px; }
+.gtable .path { color: var(--fg); }
+.gtable .path i { font-style: normal; color: var(--fg-3); margin: 0 4px; }
+.gtable .path b { font-weight: 650; }
+.steps3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.step3 { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 18px; display: grid; gap: 6px; align-content: start; }
+.step3 .n { font-family: var(--f-mono); font-size: 12px; color: var(--fg-3); }
+.step3 b { font-size: 15px; font-weight: 600; }
+.step3 p { color: var(--fg-2); font-size: 14px; }
+.step3 code { color: var(--fg); }
+
+/* settings */
+.settings { display: grid; gap: 1.1em; max-width: 60em; }
+.scard { border: 1px solid var(--line); border-radius: .9em; background: var(--surface); padding: 1.3em 1.4em; display: grid; gap: 1em; }
+.scard-h { display: flex; gap: 1em; align-items: start; }
+.scard-h .ic { width: 2.6em; height: 2.6em; border-radius: .7em; background: var(--raised); display: grid; place-items: center; flex: none; }
+.scard-h .ic .i { width: 1.4em; height: 1.4em; }
+.scard-h .tx { display: grid; gap: .25em; margin-right: auto; min-width: 0; }
+.scard-h b { font-size: 1.05em; font-weight: 650; }
+.scard-h p { font-size: .9em; color: var(--fg-2); }
+.select { padding: .55em .8em; border: 1px solid var(--border-strong); border-radius: .55em; font-size: .9em; display: flex; gap: .6em; align-items: center; white-space: nowrap; background: var(--bg); }
+.works { display: flex; gap: .8em; align-items: center; padding: .8em 1em; border-radius: .6em; background: color-mix(in oklab, var(--ok) 10%, transparent); font-size: .92em; }
+.works .okd { color: var(--ok-text); display: flex; gap: .4em; align-items: center; font-weight: 650; white-space: nowrap; }
+.works .okd .i { width: 1.1em; height: 1.1em; stroke-width: 2.4; }
+.works span { color: var(--fg-2); }
+.works .lnk { margin-left: auto; color: var(--brand-text); font-weight: 600; }
+.slider { display: grid; grid-template-columns: auto 1fr auto; gap: 1em; align-items: center; font-size: .88em; color: var(--fg-2); }
+.slider .track { position: relative; height: .35em; border-radius: 999px; background: var(--line); }
+.slider .track i { position: absolute; inset: 0 40% 0 0; border-radius: 999px; background: var(--fg-2); }
+.slider .track b { position: absolute; left: 60%; top: 50%; width: 1.2em; height: 1.2em; border-radius: 50%; transform: translate(-50%, -50%); background: var(--surface); box-shadow: 0 0 0 2px var(--fg-2), 0 1px 3px rgba(0,0,0,.25); }
+.qrow { display: grid; grid-template-columns: 1fr auto; gap: 1em; align-items: center; padding-top: .9em; border-top: 1px solid var(--line); font-size: .92em; }
+.qrow small { display: block; color: var(--fg-3); font-size: .9em; }
+.advanced { display: flex; justify-content: space-between; align-items: center; font-size: .92em; color: var(--fg-2); }
+
+/* phone */
+.ph-status { display: flex; justify-content: space-between; padding: 1.1em 1.8em .4em; font-size: .9em; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ph-head { padding: .8em 1.2em .6em; display: flex; align-items: center; justify-content: space-between; }
+.ph-head .lockup { font-size: 1.9em; }
+.ph-head .av { width: 3em; height: 3em; font-size: 1em; }
+.ph-body { padding: .4em 1.2em; display: grid; gap: 1.1em; }
+.ph-live { border-radius: 1.1em; overflow: hidden; background: var(--surface); border: 1px solid var(--line); }
+.ph-live .thumb { border-radius: 0; }
+.ph-live .thumb .big { font-size: 2.3em; }
+.ph-live .in { padding: .9em 1em 1em; display: grid; gap: .8em; }
+.ph-live .in .m { display: flex; gap: .5em; align-items: center; font-size: .85em; color: var(--fg-2); flex-wrap: wrap; }
+.ph-live .tl { font-size: .75em; }
+.ph-live .in .m .chip { font-size: .95em; }
+.ph-live .acts { display: grid; grid-template-columns: 1fr 1fr; gap: .5em; font-size: .95em; }
+.ph-live .acts .btn { justify-content: center; min-height: 3.2em; padding-inline: .6em; }
+.ph-sec { font-size: 1.05em; font-weight: 650; display: flex; justify-content: space-between; align-items: center; }
+.ph-sec span { font-size: .85em; color: var(--brand-text); font-weight: 600; padding: 1.1em 0 1.1em 1.2em; }
+.ph-list { display: grid; gap: .8em; }
+.ph-item { display: grid; grid-template-columns: 6.4em 1fr; gap: .8em; align-items: center; }
+.ph-item .thumb { border-radius: .55em; }
+.ph-item .thumb .big { font-size: 1.15em; }
+.ph-item .thumb .ch { font-size: .75em; }
+.ph-item b { font-size: .95em; font-weight: 600; display: block; line-height: 1.25; }
+.ph-item span { font-size: .85em; color: var(--fg-3); }
+.tabbar { position: absolute; inset: auto 0 0 0; padding: .6em 1em 1.8em; display: grid; grid-template-columns: repeat(4, 1fr); background: color-mix(in oklab, var(--surface) 94%, transparent); border-top: 1px solid var(--line); backdrop-filter: blur(10px); }
+.tabbar span { display: grid; justify-items: center; gap: .3em; font-size: .78em; color: var(--fg-3); font-weight: 500; padding-top: .3em; }
+.tabbar span .i { width: 2.2em; height: 1.6em; padding: .2em .55em; box-sizing: content-box; border-radius: 999px; }
+.tabbar span.on { color: var(--fg); font-weight: 650; }
+.tabbar span.on .i { background: var(--raised); }
+.sheet-dim { position: absolute; inset: 0; background: var(--scrim); }
+.sheet { position: absolute; inset: auto 0 0 0; background: var(--surface); border-radius: 1.6em 1.6em 0 0; padding: .7em 1.4em 2em; display: grid; gap: 1em; border-top: 1px solid var(--line); }
+.sheet .grab { width: 2.6em; height: .3em; border-radius: 999px; background: var(--line); justify-self: center; }
+.sheet .dev { width: 3.6em; height: 3.6em; border-radius: 1em; background: var(--raised); display: grid; place-items: center; justify-self: center; }
+.sheet .dev .i { width: 2em; height: 2em; }
+.sheet h4 { font-size: 1.4em; font-weight: 650; text-align: center; line-height: 1.2; }
+.sheet p { font-size: .9em; color: var(--fg-2); text-align: center; }
+.sheet .facts { display: grid; border: 1px solid var(--line); border-radius: .8em; overflow: hidden; font-size: .88em; }
+.sheet .facts div { display: flex; justify-content: space-between; padding: .65em .9em; border-bottom: 1px solid var(--line); }
+.sheet .facts div:last-child { border-bottom: 0; }
+.sheet .facts span { color: var(--fg-3); }
+.sheet .facts b { font-weight: 600; }
+.sheet .facts .mono { letter-spacing: .1em; }
+.prof { display: grid; gap: .5em; }
+.prof .lab { font-size: .85em; font-weight: 600; }
+.prof .opt2 { display: grid; grid-template-columns: auto 1fr auto; gap: .7em; align-items: center; padding: .7em .85em; border: 1px solid var(--line); border-radius: .8em; font-size: .9em; }
+.prof .opt2.on { border-color: var(--fg); box-shadow: inset 0 0 0 1px var(--fg); }
+.prof .opt2 small { display: block; color: var(--fg-3); font-size: .88em; }
+.prof .radio { width: 1.2em; height: 1.2em; border-radius: 50%; box-shadow: inset 0 0 0 2px var(--border-strong); }
+.prof .on .radio { box-shadow: inset 0 0 0 .35em var(--fg); }
+.sheet .btn { justify-content: center; font-size: 1em; padding: 1em; }
+.sheet .acts { display: grid; gap: .4em; }
+.ph-bg { padding: 0 1.2em; display: grid; gap: .9em; }
+
+/* components & states */
+.comp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; }
+.stage { padding: 26px; border-radius: var(--r-m); display: flex; flex-wrap: wrap; gap: 14px; align-items: center; }
+.stage.tvstage { font-size: 18px; background: var(--bg); }
+.comp-note { font-size: 13.5px; color: var(--fg-2); }
+.msgs { display: grid; gap: 10px; }
+.msg { display: grid; grid-template-columns: 22px 1fr; gap: 12px; padding: 14px 16px; border-radius: var(--r-m); border: 1px solid var(--line); background: var(--bg); font-size: 14.5px; }
+.msg .i { width: 20px; height: 20px; margin-top: 1px; }
+.msg.warn .i { color: var(--warn-text); }
+.msg.err .i { color: var(--live-text); }
+.msg.info .i { color: var(--fg-2); }
+.msg b { display: block; font-weight: 600; }
+.msg span { color: var(--fg-2); }
+.msg .acts { display: flex; gap: 14px; margin-top: 8px; font-weight: 600; color: var(--brand-text); font-size: 14px; }
+
+/* review log */
+.review { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+.rv { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-m); padding: 20px; display: grid; gap: 10px; align-content: start; }
+.rv .who { font-family: var(--f-mono); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--fg-3); }
+.rv .sc { display: flex; align-items: baseline; gap: 8px; }
+.rv .sc b { font-family: var(--f-display); font-weight: 700; font-size: 44px; line-height: 1; font-variant-numeric: tabular-nums; }
+.rv .sc span { color: var(--fg-3); font-size: 14px; }
+.rv ul { margin: 0; padding-left: 18px; color: var(--fg-2); font-size: 14px; display: grid; gap: 4px; }
+
+footer { padding-block: 72px 64px; border-top: 1px solid var(--line); margin-top: 72px; }
+footer .wrap { display: grid; gap: 10px; }
+footer h3 { font-family: var(--f-display); font-weight: 700; text-transform: uppercase; font-size: 32px; }
+footer ol { margin: 6px 0 0; padding-left: 20px; color: var(--fg-2); display: grid; gap: 6px; max-width: 72ch; }
+
+@media (max-width: 640px) {
+  .hero-demo { grid-template-columns: 1fr; padding: 20px; }
+  .delta { font-size: 48px; }
+  .scale-row { grid-template-columns: 80px minmax(0, 1fr); }
+  .scale-row .v { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition-duration: 1ms !important; }
+  .is-focus { transform: none !important; }
+}
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="mark" viewBox="0 0 100 100"><path style="fill:var(--mark-a)" d="M55.21 14.65L40.4 14.65A23.75 23.75 0 0 0 16.65 38.4L16.65 48.4A23.75 23.75 0 0 0 40.4 72.15L42.99 72.15L45.86 58.65L40.4 58.65A10.25 10.25 0 0 1 30.15 48.4L30.15 38.4A10.25 10.25 0 0 1 40.4 28.15L52.34 28.15Z"/><path style="fill:var(--mark-b)" d="M44.79 85.35L59.6 85.35A23.75 23.75 0 0 0 83.35 61.6L83.35 51.6A23.75 23.75 0 0 0 59.6 27.85L57.01 27.85L54.14 41.35L59.6 41.35A10.25 10.25 0 0 1 69.85 51.6L69.85 61.6A10.25 10.25 0 0 1 59.6 71.85L47.66 71.85Z"/></symbol>
+  <symbol id="mark-ink" viewBox="0 0 100 100"><path fill="#111620" d="M55.21 14.65L40.4 14.65A23.75 23.75 0 0 0 16.65 38.4L16.65 48.4A23.75 23.75 0 0 0 40.4 72.15L42.99 72.15L45.86 58.65L40.4 58.65A10.25 10.25 0 0 1 30.15 48.4L30.15 38.4A10.25 10.25 0 0 1 40.4 28.15L52.34 28.15Z"/><path fill="#111620" d="M44.79 85.35L59.6 85.35A23.75 23.75 0 0 0 83.35 61.6L83.35 51.6A23.75 23.75 0 0 0 59.6 27.85L57.01 27.85L54.14 41.35L59.6 41.35A10.25 10.25 0 0 1 69.85 51.6L69.85 61.6A10.25 10.25 0 0 1 59.6 71.85L47.66 71.85Z"/></symbol>
+  <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 10.5 12 4l8 6.5V20h-5v-5.5H9V20H4z"/></symbol>
+  <symbol id="i-live" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.2"/><path d="M8.3 8.3a5.2 5.2 0 0 0 0 7.4M15.7 8.3a5.2 5.2 0 0 1 0 7.4M5.4 5.4a9.3 9.3 0 0 0 0 13.2M18.6 5.4a9.3 9.3 0 0 1 0 13.2"/></symbol>
+  <symbol id="i-guide" viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><path d="M3 9.5h18M3 14.5h18M9 9.5v10M15 14.5v5"/></symbol>
+  <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-recone" viewBox="0 0 24 24"><circle cx="12" cy="12" r="5" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-series" viewBox="0 0 24 24"><circle cx="9" cy="12" r="4.2" fill="currentColor" stroke="none"/><path d="M15 7.6a4.4 4.4 0 0 1 0 8.8M18.5 6a6.6 6.6 0 0 1 0 12"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></symbol>
+  <symbol id="i-settings" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-rules" viewBox="0 0 24 24"><path d="M5 6h14M5 12h9M5 18h5"/><path d="m14.5 17 2.2 2.2 4.3-4.4"/></symbol>
+  <symbol id="i-sources" viewBox="0 0 24 24"><ellipse cx="12" cy="6.5" rx="8" ry="2.8"/><path d="M4 6.5v11c0 1.5 3.6 2.8 8 2.8s8-1.3 8-2.8v-11M4 12c0 1.5 3.6 2.8 8 2.8s8-1.3 8-2.8"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 6v12M15.5 6v12" stroke-width="3.2"/></symbol>
+  <symbol id="i-start" viewBox="0 0 24 24"><path d="M6 5.5v13"/><path d="M18.5 5.5 9.5 12l9 6.5z" fill="currentColor"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M11 6.5 5 12l6 5.5M19 6.5 13 12l6 5.5"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M13 6.5 19 12l-6 5.5M5 6.5 11 12l-6 5.5"/></symbol>
+  <symbol id="i-speed" viewBox="0 0 24 24"><path d="M4.5 16a7.5 7.5 0 1 1 15 0"/><path d="m12 16 3.5-4.5"/></symbol>
+  <symbol id="i-audio" viewBox="0 0 24 24"><rect x="3.5" y="5.5" width="17" height="13" rx="2.5"/><path d="M7 11h3M7 14.5h6M13 11h4M15.5 14.5H17"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><path d="M12 4 2.8 19.5h18.4z"/><path d="M12 10v4.2M12 16.8v.2"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="m9 9 6 6M15 9l-6 6"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="18" cy="12" r="1.3" fill="currentColor"/></symbol>
+  <symbol id="i-tv" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8.5 20.5h7"/></symbol>
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.5"/><path d="M10 3.5V7M14 3.5V7M10 17v3.5M14 17v3.5M3.5 10H7M3.5 14H7M17 10h3.5M17 14h3.5"/></symbol>
+  <symbol id="i-signal" viewBox="0 0 24 24"><path d="M5 19v-3M10 19v-6M15 19v-9M20 19V7"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6.5 16.5V11a5.5 5.5 0 0 1 11 0v5.5l1.5 2h-14z"/><path d="M10 20.5a2 2 0 0 0 4 0"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-wifi" viewBox="0 0 24 24"><path d="M3.5 9.5a12 12 0 0 1 17 0M6.5 12.8a7.6 7.6 0 0 1 11 0M9.5 16a3.2 3.2 0 0 1 5 0"/><circle cx="12" cy="19" r=".6" fill="currentColor"/></symbol>
+</svg>
+
+<header class="masthead wrap">
+  <p class="eyebrow">Design language · v0.4 · 21 Nov 2026 · after review round 3</p>
+  <h1 class="wordmark">Slipstream</h1>
+  <p class="tagline">Live TV that waits for you.</p>
+  <p class="lede">Slipstream records and plays live TV on your own server. Every screen answers one question first: how far behind live are you, and how do you get where you want to be? This page sets the visual rules and shows the key screens for TV, web and phone.</p>
+  <div class="hero-demo" aria-label="Example: watching the race 31 minutes behind live">
+    <div class="delta num">−31:30<small>behind live</small></div>
+    <div class="tl-wrap">
+      <div class="tl" role="img" aria-label="Recording from 04:55, you are at 05:40, live is 06:12, scheduled until 08:00">
+        <span class="cap" style="--a:0;--b:41.6"></span><span class="played" style="--a:0;--b:24.6"></span><span class="gap" style="--a:30.8;--b:31.9"></span><span class="mark" style="--a:2.7;--b:2.7"></span><span class="mark" style="--a:67.6;--b:67.6"></span><span class="head" style="--a:24.6;--b:24.6"></span><span class="edge" style="--a:41.6;--b:41.6"></span>
+      </div>
+      <div class="tl-labels"><span class="start" style="--a:0">04:55</span><span class="here" style="--a:24.6">05:40</span><span class="now" style="--a:41.6">LIVE 06:12</span><span style="--a:67.6">07:00</span><span class="end" style="--a:100">08:00</span></div>
+    </div>
+  </div>
+</header>
+
+<nav class="toc" aria-label="Sections">
+  <div class="wrap">
+    <a href="#direction">Direction</a><a href="#mark">Mark</a><a href="#tokens">Tokens</a><a href="#timeline">Timeline</a><a href="#tv">TV</a><a href="#web">Web</a><a href="#grouping">Grouping</a><a href="#phone">Phone</a><a href="#components">Components</a><a href="#review">Review</a>
+  </div>
+</nav>
+
+<main>
+<section class="block wrap" id="direction">
+  <div class="block-head">
+    <p class="eyebrow">Direction</p>
+    <h2>Calm screens, one bright signal</h2>
+    <p>The look borrows from broadcast control rooms and timing screens: dark graphite surfaces, condensed numerals and very little colour. Colour carries meaning. When something is amber or red, it is the one thing you need to see.</p>
+  </div>
+  <div class="principles">
+    <div class="principle"><h3>Behind live, never lost</h3><p>Wherever you can play something, show where you are relative to live: the delta and the timeline. Starting from the beginning is always one press away, and catching up is a choice.</p><p class="eg">−31:30 behind live · Watch from start · Watch live</p></div>
+    <div class="principle"><h3>Colour has a job</h3><p>On TV, amber means focus, plus the playhead. On the web it marks the main action. Red means live or recording. Purple marks original quality. Artwork never uses those hues.</p><p class="eg">amber = you · red = now · purple = untouched</p></div>
+    <div class="principle"><h3>Ten feet first</h3><p>The TV sets the scale: 22 px minimum text at 1080p, a 64 px safe margin, and a focus state you can see from the sofa. Web and phone are denser versions of the same system.</p><p class="eg">focus = amber fill + 4 px ring</p></div>
+    <div class="principle"><h3>Say what happened</h3><p>No ffmpeg flags or jargon in normal views. Errors say what went wrong, when, what Slipstream already did, and what you can do. Technical detail sits behind Details.</p><p class="eg">"Missing 2 min (05:52–05:54). Source unreachable, reconnected."</p></div>
+  </div>
+</section>
+
+<section class="block wrap" id="mark">
+  <div class="block-head">
+    <p class="eyebrow">Mark · final</p>
+    <h2>Screen Ring</h2>
+    <p>A television screen, cut on the product's 12° slant, its halves slipped past each other by one stroke width. The light half is the broadcast, which has moved on; the amber half is you, one beat behind. On launchers the mark turns ink on an amber tile. Full set (variants, sizes, adaptive icons, TV banner, lockups, motion, don'ts): <code>docs/design/brand/brand-sheet.html</code>.</p>
+  </div>
+  <div class="marks">
+    <div class="markcard"><h4>On dark</h4><div class="stage2" style="background:#0B0E13;border-radius:10px;justify-content:center;padding:18px;--mark-a:#F3F5F8;--mark-b:#FFC233"><svg width="96" height="96"><use href="#mark"/></svg><span class="lockup" style="font-size:40px;color:#E9EDF4;align-self:center">Slipstream</span></div><p>Two-tone, light #F3F5F8 and amber #FFC233. Works without a tile from 24 px; a heavier variant covers 16-24 px.</p></div>
+    <div class="markcard"><h4>Launcher</h4><div class="stage2" style="justify-content:center;align-items:center"><span class="app-icon launcher" style="font-size:40px"><svg><use href="#mark-ink"/></svg></span><span class="app-icon launcher" style="font-size:20px"><svg><use href="#mark-ink"/></svg></span><span class="app-icon launcher" style="font-size:10px"><svg><use href="#mark-ink"/></svg></span></div><p>Ink on a full amber tile: the loudest thing on an Android TV row and the opposite of an amber shape on a dark tile. The TV banner uses the same colours.</p></div>
+    <div class="markcard"><h4>On light</h4><div class="stage2" style="background:#F3F5F8;border-radius:10px;justify-content:center;padding:18px;--mark-a:#111620;--mark-b:#E89B00"><svg width="96" height="96"><use href="#mark"/></svg><span class="lockup" style="font-size:40px;color:#111620;align-self:center">Slipstream</span></div><p>The light half becomes ink #111620 and amber deepens to #E89B00 so it holds against white.</p></div>
+  </div>
+</section>
+
+<section class="block wrap" id="tokens">
+  <div class="block-head">
+    <p class="eyebrow">Tokens</p>
+    <h2>Colour, type, space, motion</h2>
+    <p>These become <code>packages/design-tokens</code>: primitives, then semantic names, then component tokens. One JSON source generates Tailwind v4 CSS variables and a React Native theme. The package will precompute every tint per theme and surface, because React Native has no <code>color-mix</code>; this page still uses <code>color-mix</code> for brevity. Swatches follow this page's theme; the TV always uses the dark set.</p>
+  </div>
+  <p class="sub">Neutrals (blue-biased graphite)</p>
+  <div class="swatches">
+    <div class="sw"><div class="swc" style="background:var(--bg)"></div><div class="meta"><b>bg.canvas</b><span>#0B0E13 · #F3F5F8</span><em>Page, TV canvas</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--surface)"></div><div class="meta"><b>bg.surface</b><span>#121721 · #FFFFFF</span><em>Cards, sidebars</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--raised)"></div><div class="meta"><b>bg.raised</b><span>#1A2130 · #E9EDF3</span><em>Controls, airing cells</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--line)"></div><div class="meta"><b>border.subtle</b><span>#273145 · #D5DBE5</span><em>Dividers only</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--border-strong)"></div><div class="meta"><b>border.strong</b><span>#606B82 · #838992</span><em>Inputs, outlines (3:1)</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--fg)"></div><div class="meta"><b>fg · muted · subtle</b><span>subtle #7C889E · #626C7E</span><em>All three pass 4.5:1</em></div></div>
+  </div>
+  <p class="sub">Signals</p>
+  <div class="swatches">
+    <div class="sw"><div class="swc" style="background:var(--brand)"></div><div class="meta"><b>brand</b><span>#FFC233</span><em>TV focus, web primary, playhead</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--focus-ring)"></div><div class="meta"><b>focus.ring (web)</b><span>#E9EDF4 · #111620</span><em>Keyboard focus, neutral</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--live-solid)"></div><div class="meta"><b>status.live</b><span>solid #E12C46 · #D11E38</span><em>text #FF6B79 · #BA0026</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--orig)"></div><div class="meta"><b>status.orig</b><span>solid #B98CFF · #7440DB</span><em>text #B98CFF · #6C35D1</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--ok)"></div><div class="meta"><b>status.ok</b><span>solid #3DD68C · #13834C</span><em>text #3DD68C · #006D37</em></div></div>
+    <div class="sw"><div class="swc" style="background:var(--warn)"></div><div class="meta"><b>status.warn</b><span>solid #FF9B57 · #C2540F</span><em>text #FF9B57 · #A63A00</em></div></div>
+  </div>
+  <p class="sub">Type</p>
+  <div class="type-grid">
+    <div class="type-card"><span class="role">Display · Big Shoulders Display 700–800</span><div class="spec-d">Tatort · Schattenmann</div><p>Condensed, like a timing board. Uppercase, for titles on hero areas, the delta and section names. Only at 32 px and up at 1080p; below that, use Geist.</p></div>
+    <div class="type-card"><span class="role">UI · Geist 400–650</span><div class="spec-u">Keeps recording 60 min after the end</div><p>Everything you read or click: lists, forms, buttons, descriptions, channel names on artwork.</p></div>
+    <div class="type-card"><span class="role">Data · Geist Mono 500, tabular</span><div class="spec-m">05:52–05:54 · 6,1 GB</div><p>Times, durations, sizes, codes. Digits stay aligned while the timeline moves.</p></div>
+  </div>
+  <p class="sub">Type scale (web · TV at 1080p)</p>
+  <div class="scale">
+    <div class="scale-row"><span class="k">display-xl</span><span class="v">— · 110 px</span><span class="s" style="font-family:var(--f-display);font-weight:800;font-size:40px;line-height:1;text-transform:uppercase">Rennen</span></div>
+    <div class="scale-row"><span class="k">display-l</span><span class="v">40 · 80 px</span><span class="s" style="font-family:var(--f-display);font-weight:800;font-size:30px;line-height:1;text-transform:uppercase">GP Las Vegas</span></div>
+    <div class="scale-row"><span class="k">title</span><span class="v">28 · 42 px</span><span class="s" style="font-size:24px;font-weight:650">Recordings</span></div>
+    <div class="scale-row"><span class="k">heading</span><span class="v">18 · 30 px</span><span class="s" style="font-size:18px;font-weight:600">Continue watching</span></div>
+    <div class="scale-row"><span class="k">body</span><span class="v">15 · 26 px</span><span class="s" style="font-size:15px">Das Rennen in Las Vegas über 50 Runden.</span></div>
+    <div class="scale-row"><span class="k">meta</span><span class="v">13 · 22 px</span><span class="s" style="font-family:var(--f-mono);font-size:13px;color:var(--fg-3)">So 22. Nov · 05:00–07:00</span></div>
+  </div>
+  <p class="sub">Space, shape, motion, layers</p>
+  <div class="split">
+    <div class="panel"><h4>Spacing &amp; density</h4><p>4 px base: 4 · 8 · 12 · 16 · 24 · 32 · 48 · 64. Three densities share one scale: <b>tv</b> (min text 22 px, 64 px safe margin), <b>web</b> (min text 12 px, 24 px targets), <b>touch</b> (min text 12 sp, 48 dp targets).</p></div>
+    <div class="panel"><h4>Radius</h4><dl class="kv"><dt>6 px</dt><dd>chips, inputs</dd><dt>10 px</dt><dd>buttons, cards, guide cells</dd><dt>16 px</dt><dd>sheets, large panels</dd><dt>full</dt><dd>timeline, avatars, round controls</dd></dl></div>
+    <div class="panel"><h4>Motion</h4><dl class="kv"><dt>140 ms</dt><dd>focus move, hover (ease-out)</dd><dt>260 ms</dt><dd>panels, sheets, player overlay</dd><dt>1.8 s</dt><dd>live-edge pulse, the only looping animation</dd></dl><p>Reduced motion: no pulse, no focus scale, 1 ms transitions. The amber fill and ring stay.</p></div>
+    <div class="panel wide"><h4>Token layers</h4>
+<pre class="layers"><b>primitive</b>  gray.0–950 amber.* red.* …  space.0–16  radius.*
+<b>semantic</b>   bg.{canvas,surface,raised}  fg.{default,muted,subtle}
+           border.{subtle,strong}  focus.{ring,width:{web 2,tv 4}}
+           brand.{solid,onSolid,text,line}
+           status.{live,ok,warn,orig}.{solid,onSolid,text,subtleBg}
+           state.{hover,pressed,selected,disabled}  overlay.{scrim,video}
+           density.{tv,web,touch}  motion.{…}.{default,reduced}
+<b>component</b>  button.* chip.* timeline.* guideCell.*
+shadcn's <b>accent</b> maps to state.hover, not brand.</pre>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap" id="timeline">
+  <div class="block-head">
+    <p class="eyebrow">Signature component</p>
+    <h2>The timeline</h2>
+    <p>One bar shows everything about a recording or live channel: what's captured, what you've watched, where you are, where live is, and what's still to come. The playhead is the same slash as in the mark, the only amber on the bar.</p>
+  </div>
+  <div class="panel" style="padding:28px 28px 24px">
+    <div class="pins"><span style="--a:0.6">1</span><span style="--a:3.6">2</span><span style="--a:12">3</span><span style="--a:24.6">4</span><span style="--a:31.4">5</span><span style="--a:41.6">6</span><span style="--a:67.6">7</span><span style="--a:99">8</span></div>
+    <div class="tl" style="font-size:18px"><span class="cap" style="--a:0;--b:41.6"></span><span class="played" style="--a:0;--b:24.6"></span><span class="gap" style="--a:30.8;--b:31.9"></span><span class="mark" style="--a:2.7;--b:2.7"></span><span class="mark" style="--a:67.6;--b:67.6"></span><span class="head" style="--a:24.6;--b:24.6"></span><span class="edge" style="--a:41.6;--b:41.6"></span></div>
+    <div class="tl-labels" style="font-size:13px"><span class="start" style="--a:0">04:55</span><span class="here" style="--a:24.6">05:40</span><span class="now" style="--a:41.6">06:12</span><span style="--a:67.6">07:00</span><span class="end" style="--a:100">08:00</span></div>
+    <div class="legend">
+      <div><i>1</i><span><b>Started early</b>Recording starts 5 min before the programme, so the start is never missed.</span></div>
+      <div><i>2</i><span><b>Programme start</b>Tick marks come from the guide. "Watch from start" jumps here, not to the early part.</span></div>
+      <div><i>3</i><span><b>Watched</b>Light fill up to the playhead. Thumbnails use the same fill for resume positions.</span></div>
+      <div><i>4</i><span><b>You are here</b>The amber slash, the same one as in the mark. The delta (−31:30) is measured from here to live.</span></div>
+      <div><i>5</i><span><b>Gap</b>Orange dashes where the source dropped out. Focusing it explains what happened.</span></div>
+      <div><i>6</i><span><b>Live</b>Red pulsing dot, the only looping animation. Everything grey behind it can be rewound.</span></div>
+      <div><i>7</i><span><b>Programme end</b>The guide's end time. Recording continues after it in case the programme runs over.</span></div>
+      <div><i>8</i><span><b>Still to come</b>Hatched track for the part that hasn't aired yet, here until 08:00.</span></div>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap" id="tv">
+  <div class="block-head">
+    <p class="eyebrow">Android TV · Shield, Google TV, Fire TV</p>
+    <h2>Ten-foot screens</h2>
+    <p>Always dark, 1920×1080 grid (shown at 1280 scale), 64 px safe margin. The focused element is the only amber thing on screen. Everything works with arrows, OK, long-press OK and Back, which every remote has.</p>
+  </div>
+
+  <figure class="mock">
+    <div class="bezel"><div class="frame"><div class="screen-tv tv">
+      <nav class="rail"><svg class="brandmark" style="width:2.6em;height:2.6em"><use href="#mark"/></svg><ul><li class="on"><svg class="i"><use href="#i-home"/></svg></li><li><svg class="i"><use href="#i-live"/></svg></li><li><svg class="i"><use href="#i-guide"/></svg></li><li><svg class="i"><use href="#i-rec"/></svg></li><li><svg class="i"><use href="#i-search"/></svg></li><li><svg class="i"><use href="#i-settings"/></svg></li></ul></nav>
+      <div class="streaks" style="--h:200;position:absolute;inset:0 0 17em 0"></div>
+      <section class="home-hero">
+        <div class="hero-eyebrow"><span class="chip live">LIVE</span><span class="chip rec media">REC</span> Sky Sport F1 · started 1 h 12 min ago</div>
+        <h3 class="hero-title">Rennen<br><span>GP Las Vegas</span></h3>
+        <p class="hero-meta">So 22. Nov · 05:00–07:00 · Recording for your rule "Formel 1 live"</p>
+        <div class="hero-tl">
+          <div class="tl"><span class="cap" style="--a:0;--b:41.6"></span><span class="mark" style="--a:2.7;--b:2.7"></span><span class="mark" style="--a:67.6;--b:67.6"></span><span class="edge" style="--a:41.6;--b:41.6"></span></div>
+          <div class="cap-row"><span>You can rewind to <b>04:55</b></span><span>Recording until <b>08:00</b></span></div>
+        </div>
+        <div class="hero-actions"><span class="btn is-focus"><svg class="i"><use href="#i-start"/></svg>Watch from start</span><span class="btn"><svg class="i"><use href="#i-live"/></svg>Watch live</span><span class="btn">Details</span></div>
+      </section>
+      <section class="home-rows">
+        <h3>Continue watching</h3>
+        <div class="cards">
+          <div class="card"><div class="thumb streaks" style="--h:200"><span class="ch">Sky Sport F1</span><span class="dur">2:05</span><span class="big">Qualifying</span><span class="prog"><i style="--p:64%"></i></span></div><div class="card-t">Qualifying – GP Las Vegas</div><div class="card-m">45 min left · Sa 21. Nov</div></div>
+          <div class="card"><div class="thumb streaks" style="--h:236"><span class="ch">arte</span><span class="dur">2:50</span><span class="big">Der Pate</span><span class="prog"><i style="--p:22%"></i></span></div><div class="card-t">Der Pate</div><div class="card-m">2 h 13 min left · Fr 20. Nov</div></div>
+          <div class="card"><div class="thumb streaks" style="--h:150"><span class="ch">Eurosport 1</span><span class="dur">3:00</span><span class="big">Snooker</span><span class="prog"><i style="--p:80%"></i></span></div><div class="card-t">Snooker: UK Championship – Finale</div><div class="card-m">36 min left · Fr 20. Nov</div></div>
+          <div class="card"><div class="thumb streaks" style="--h:176"><span class="ch">ZDF</span><span class="dur">0:45</span><span class="big">Terra X</span><span class="prog"><i style="--p:40%"></i></span></div><div class="card-t">Terra X: Faszination Erde</div><div class="card-m">27 min left · Do 19. Nov</div></div>
+        </div>
+      </section>
+    </div></div></div>
+    <figcaption><b>TV · Home</b><span>The hero is whatever matters now: a running recording, otherwise the next one. "Watch from start" gets focus first, because joining late is the reason Slipstream exists. Focusing the rail expands it to labelled items (about 280 px). With nothing recording, the hero shows the next recording with its time, or the latest finished one.</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="bezel"><div class="frame"><div class="screen-tv tv">
+      <div class="guide-top">
+        <div>
+          <div class="g-meta"><span class="chip live">LIVE</span><span class="chip rec">Recording · Formel 1 live</span>Sky Sport F1 · 05:00–07:00</div>
+          <div class="g-title">Rennen – GP Las Vegas</div>
+          <p class="g-desc">Das Rennen in Las Vegas: 50 Runden auf dem 6,2 km langen Strip Circuit. Live mit Vorberichten und Analyse.</p>
+        </div>
+        <div class="g-day"><b>So 22. Nov</b><span>Now 06:12</span><div class="keys"><span><kbd>OK</kbd>Watch</span><span><kbd>Hold OK</kbd>Record &amp; more</span><span><kbd>CH ±</kbd>Page</span><span><kbd>⏪ ⏩</kbd>Day</span><span><kbd>0–9</kbd>Channel</span></div></div>
+      </div>
+      <div class="guide-body" id="tvGuide"></div>
+      <div class="guide-fade"></div>
+    </div></div></div>
+    <figcaption><b>TV · Guide</b><span>One focusable view with its own cursor: up and down keep your time position. Markers: a solid red dot is recording, a red ring is scheduled, an orange triangle is a conflict. Airing programmes show a progress line, past ones fade to outlines. The now-line runs behind the cells, so it never crosses a title. Short programmes drop the time line; a focused short cell widens to show its full title. Shortcuts where the remote has them: CH ± pages 7 rows, rewind/fast-forward change the day, digits jump to a channel number; Back returns to now, then to the rail.</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="bezel"><div class="frame"><div class="screen-tv tv">
+      <div class="rs-bg streaks" style="--h:200"></div><div class="rs-dim"></div>
+      <div class="rs-left"><b>Guide</b><span>So 22. Nov · 07:00–09:00</span><div class="rs-rows"><div><i style="flex:1">Live F1: Analyse</i><i class="f" style="flex:1">F1: Rennen Kompakt</i></div><div><i style="flex:2">Darts: Grand Slam – Finale</i></div><div><i style="flex:1">Sky Sport News</i><i style="flex:1">Sky Sport News</i></div><div><i style="flex:1.2">Ski Alpin: Slalom</i><i style="flex:.8">Skispringen</i></div></div></div>
+      <aside class="sheet-tv">
+        <span class="k">Sky Sport F1 · So 22. Nov · 08:00–09:00</span>
+        <h3>F1: Rennen Kompakt – GP Las Vegas</h3>
+        <p class="m">The race in 60 minutes.</p>
+        <div class="opts">
+          <div class="opt is-focus"><svg class="i"><use href="#i-recone"/></svg><span><b>Record this programme</b><small>Once, today at 08:00</small></span><span></span></div>
+          <div class="opt"><svg class="i"><use href="#i-series"/></svg><span><b>Record every "Rennen Kompakt"</b><small>Creates a rule you can change on the web</small></span><svg class="i" style="width:1.1em;height:1.1em;color:var(--fg-3)"><use href="#i-chev"/></svg></div>
+          <div class="opt"><svg class="i"><use href="#i-clock"/></svg><span><b>Start early, keep recording after</b><small>Applies to this recording</small></span><span class="val">◀ 2 min ▶ · ◀ 10 min ▶</span></div>
+          <div class="opt"><svg class="i"><use href="#i-bell"/></svg><span><b>Remind me instead</b><small>Shows a notice when it starts</small></span><span></span></div>
+        </div>
+        <div class="status-line"><svg class="i"><use href="#i-check"/></svg>A stream is free at 08:00 (1 of 2 in use)</div>
+      </aside>
+    </div></div></div>
+    <figcaption><b>TV · Record options</b><span>Opened with long-press OK on any programme. The most likely choice has focus. Conflicts appear on the status line before you confirm, in plain words: "Both streams are busy at 08:00 (Darts, NBA). Record anyway and stop Darts?"</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="bezel"><div class="frame"><div class="screen-tv tv">
+      <div class="player">
+        <div class="video streaks" style="--h:236"></div>
+        <div class="top"><div class="who"><span><span class="chip rec media">REC</span>arte · So 22. Nov · 20:15–23:05</span><b>Der Pate</b></div><div class="q"><span class="chip orig media">1080i · Original</span></div></div>
+        <div class="bottom">
+          <div class="scrub">
+            <div class="delta num">−32:00<small>behind live</small></div>
+            <div>
+              <div class="tl"><span class="cap" style="--a:0;--b:26.3"></span><span class="played" style="--a:0;--b:10.7"></span><span class="mark" style="--a:2.4;--b:2.4"></span><span class="mark" style="--a:85.4;--b:85.4"></span><span class="head" style="--a:10.7;--b:10.7"></span><span class="edge" style="--a:26.3;--b:26.3"></span></div>
+              <div class="tl-labels"><span class="start" style="--a:0">20:10</span><span class="here" style="--a:10.7">20:32</span><span class="now" style="--a:26.3">LIVE 21:04</span><span style="--a:85.4">23:05</span><span class="end" style="--a:100">23:35</span></div>
+            </div>
+          </div>
+          <div class="ctrls">
+            <span class="btn round"><svg class="i"><use href="#i-start"/></svg></span>
+            <span class="btn round"><span class="tx">−10s</span></span>
+            <span class="btn round big is-focus"><svg class="i"><use href="#i-pause"/></svg><span class="label">Pause</span></span>
+            <span class="btn round"><span class="tx">+30s</span></span>
+            <span class="sep"></span>
+            <span class="btn"><svg class="i" style="color:var(--live)"><use href="#i-live"/></svg>Watch live</span>
+            <span class="btn"><svg class="i"><use href="#i-speed"/></svg>Catch up 1.5× · live 22:08</span>
+            <span class="btn"><svg class="i"><use href="#i-audio"/></svg>Deutsch</span>
+            <span class="btn"><svg class="i" style="color:var(--live)"><use href="#i-recone"/></svg>Extend +30 min</span>
+          </div>
+          <p class="hint"><kbd>▲</kbd> to the timeline: scrub with ◀ ▶, hold to speed up (10 s → 30 s → 2 min → 5 min)</p>
+        </div>
+      </div>
+    </div></div></div>
+    <figcaption><b>TV · Player (controls shown)</b><span>Three states. Controls hidden: ◀ ▶ skip 10 s and a "−32:00" pill appears for 3 s. Timeline focused: the bar grows, gets the amber ring, and ◀ ▶ scrub with accelerating steps and preview thumbnails. Controls row (shown): ◀ ▶ move focus. "Catch up" shows when you'll reach live and offers 1.25× or 1.5×. Surround sound passed through to an amplifier can't be sped up, so catch-up switches to stereo and says so. "Extend +30 min" lengthens the running recording and only appears while it records.</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="bezel"><div class="frame"><div class="screen-tv tv">
+      <div class="signin-bg streaks" style="--h:212"></div>
+      <div class="signin">
+        <div>
+          <h3>Sign in to<br>Slipstream</h3>
+          <ol class="steps"><li><span><b>Scan the code</b> with your phone's camera.</span></li><li><span>Or open <b>slipstream.home/link</b> and enter</span></li></ol>
+          <div class="code">QK7·4RM</div>
+          <div class="server"><span class="okd"></span>Server "unraid" found on your network · 192.168.12.11</div>
+          <div class="alt"><span class="btn">Use username and password</span></div>
+        </div>
+        <div class="qr-card"><canvas id="qr" width="290" height="290" aria-label="QR code for signing in"></canvas><span>New code in 9:42</span></div>
+      </div>
+    </div></div></div>
+    <figcaption><b>TV · Sign-in</b><span>The server is found automatically. Scanning opens the approve sheet on the phone (below), SSO included. Codes skip 0/O and 1/I and refresh by themselves when they expire. If no server is found: "No Slipstream server found on this network. [Enter address] [Try again]".</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="bezel"><div class="frame"><div class="screen-tv tv">
+      <div class="streaks" style="--h:212;position:absolute;inset:0;opacity:.55"></div>
+      <div class="who-pick">
+        <h3>Who's watching?</h3>
+        <div class="profiles">
+          <div class="pf focus"><span class="avt" style="--h:200"><b>A</b></span>Alex<small>Admin</small></div>
+          <div class="pf"><span class="avt" style="--h:214"><b>H</b></span>Household<small>Everyone</small></div>
+          <div class="pf"><span class="avt" style="--h:176"><b>K</b></span>Kim<small><svg class="i"><use href="#i-lock"/></svg>PIN</small></div>
+          <div class="pf add"><span class="avt"><svg class="i"><use href="#i-plus"/></svg></span>Add profile<small>Admins only</small></div>
+        </div>
+      </div>
+    </div></div></div>
+    <figcaption><b>TV · Profile picker</b><span>Shown on shared TVs when more than one profile has signed in on this device. Picture-like items use the card focus: ring with a gap and a slight lift, no fill. A PIN appears as a number pad on the next screen. Focus starts on the profile used last on this TV. "Add profile" only appears for admins. The picker can be turned off per device.</span></figcaption>
+  </figure>
+</section>
+
+<section class="block wrap" id="web">
+  <div class="block-head">
+    <p class="eyebrow">Web</p>
+    <h2>The control room</h2>
+    <p>The same tokens at desktop density, light or dark. You can watch here too, but this is where rules, sources and settings live.</p>
+  </div>
+
+  <figure class="mock">
+    <div class="browser">
+      <div class="browser-bar"><i></i><i></i><i></i><span class="url">slipstream.home/recordings</span></div>
+      <div class="frame" style="border-radius:0"><div class="screen-web tall">
+        <div class="app">
+          <aside class="side">
+            <div class="brand"><svg class="brandmark"><use href="#mark"/></svg><span class="lockup">Slipstream</span></div>
+            <ul class="nav">
+              <li><svg class="i"><use href="#i-home"/></svg>Home</li><li><svg class="i"><use href="#i-live"/></svg>Live TV</li><li><svg class="i"><use href="#i-guide"/></svg>Guide</li>
+              <li class="on"><svg class="i"><use href="#i-rec"/></svg>Recordings<span class="count warn">1 issue</span></li>
+              <li><svg class="i"><use href="#i-rules"/></svg>Rules<span class="count">3</span></li>
+              <li class="sec">Admin</li>
+              <li><svg class="i"><use href="#i-sources"/></svg>Sources &amp; channels</li><li><svg class="i"><use href="#i-settings"/></svg>Settings</li>
+            </ul>
+            <div class="storage"><div class="row"><span>Recordings</span><span class="num">412 GB of 2 TB</span></div><div class="bar"><i style="width:20.6%;background:var(--fg-2)"></i><i style="width:3%;background:var(--border-strong)"></i></div><div class="row"><span>Pause &amp; rewind space</span><span class="num">58 GB</span></div></div>
+          </aside>
+          <div class="main">
+            <div class="main-head"><h3>Recordings</h3><div class="search"><svg class="i"><use href="#i-search"/></svg>Search recordings<kbd>/</kbd></div></div>
+            <div class="tabs"><span class="on">Library <span class="n">48</span></span><span>Upcoming <span class="n">7</span></span><span>Problems <span class="n warn">1</span></span></div>
+            <div class="filters"><div class="seg"><span class="on">Collections &amp; shows</span><span>By channel</span><span>By date</span></div><span class="fchip on">All</span><span class="fchip">Unwatched</span><span class="fchip">Mine</span></div>
+            <div class="now-card">
+              <div class="thumb streaks" style="--h:200"><span class="ch">Sky Sport F1</span><span class="big">Rennen</span></div>
+              <div class="info">
+                <div class="m"><span class="chip rec">Recording now</span>Sky Sport F1 · until 08:00 (60 min after the end)</div>
+                <h4>Rennen – GP Las Vegas</h4>
+                <div class="tl"><span class="cap" style="--a:0;--b:41.6"></span><span class="gap" style="--a:30.8;--b:31.9"></span><span class="mark" style="--a:2.7;--b:2.7"></span><span class="mark" style="--a:67.6;--b:67.6"></span><span class="edge" style="--a:41.6;--b:41.6"></span></div>
+                <div class="m warnline"><svg class="i" style="width:1.1em;height:1.1em"><use href="#i-warn"/></svg><span>Missing 2 min (05:52–05:54). Source unreachable, reconnected automatically.</span></div>
+              </div>
+              <div class="acts"><span class="btn primary"><svg class="i"><use href="#i-start"/></svg>Watch from start</span><span class="btn web-focus">Watch live</span></div>
+            </div>
+            <div class="group-h"><span class="crumb">Formel 1 › 2026 ›</span><b>GP Las Vegas</b><span class="meta">collection "Formel 1" · 6 recordings · 32,5 GB</span></div>
+            <div class="rows">
+              <div class="r"><span class="st done"><svg class="i"><use href="#i-check"/></svg></span><span class="tt">1. Freies Training<small>Fr 20. Nov · 01:30–03:00</small></span><span class="who"><span class="av">A</span>Formel 1 live</span><span class="w">2 h 35</span><span class="w">7,0 GB</span><span class="note">Watched</span><span class="more"><svg class="i"><use href="#i-more"/></svg></span></div>
+              <div class="r"><span class="st done"><svg class="i"><use href="#i-check"/></svg></span><span class="tt">2. Freies Training<small>Fr 20. Nov · 05:00–06:30</small></span><span class="who"><span class="av">A</span>Formel 1 live</span><span class="w">2 h 35</span><span class="w">7,0 GB</span><span class="note">Watched</span><span class="more"><svg class="i"><use href="#i-more"/></svg></span></div>
+              <div class="r"><span class="st part" style="--p:30%"></span><span class="tt">3. Freies Training<small>Sa 21. Nov · 01:15–02:25</small></span><span class="who"><span class="av">A</span>Formel 1 live</span><span class="w">2 h 15</span><span class="w">6,1 GB</span><span class="note">1 h 34 left</span><span class="more"><svg class="i"><use href="#i-more"/></svg></span></div>
+              <div class="r"><span class="st part" style="--p:64%"></span><span class="tt">Qualifying<small>Sa 21. Nov · 04:30–06:00</small></span><span class="who"><span class="av">A</span>Formel 1 live</span><span class="w">2 h 35</span><span class="w">7,0 GB</span><span class="note">56 min left</span><span class="more"><svg class="i"><use href="#i-more"/></svg></span></div>
+              <div class="r"><span class="st new"></span><span class="tt">Pressekonferenz Qualifying<small>Sa 21. Nov · 06:30–07:00</small></span><span class="who"><span class="av">A</span>By hand</span><span class="w">42 min</span><span class="w">1,9 GB</span><span class="note">New</span><span class="more"><svg class="i"><use href="#i-more"/></svg></span></div>
+              <div class="r hl"><span class="st rec"></span><span class="tt">Rennen<small>So 22. Nov · 05:00–07:00</small></span><span class="who"><span class="av">A</span>Formel 1 live</span><span class="w">1 h 17</span><span class="w">3,5 GB</span><span class="note warn"><svg class="i"><use href="#i-warn"/></svg>Recording · 2 min missing</span><span class="more"><svg class="i"><use href="#i-more"/></svg></span></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <figcaption><b>Web · Recordings</b><span>"Collections &amp; shows" puts collections first: the press conference was recorded by hand and still sits next to the sessions the rule recorded. Recordings without a collection group by series and season from the guide, or by title and date (see Grouping below). Scheduled recordings live under Upcoming, failures under Problems. Dates show the programme's time; lengths include the extra minutes before and after. Each row shows the owner's avatar and how it was recorded.</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="browser">
+      <div class="browser-bar"><i></i><i></i><i></i><span class="url">slipstream.home/recordings/upcoming</span></div>
+      <div class="frame" style="border-radius:0"><div class="screen-web">
+        <div class="app">
+          <aside class="side">
+            <div class="brand"><svg class="brandmark"><use href="#mark"/></svg><span class="lockup">Slipstream</span></div>
+            <ul class="nav">
+              <li><svg class="i"><use href="#i-home"/></svg>Home</li><li><svg class="i"><use href="#i-live"/></svg>Live TV</li><li><svg class="i"><use href="#i-guide"/></svg>Guide</li>
+              <li class="on"><svg class="i"><use href="#i-rec"/></svg>Recordings<span class="count warn">1 issue</span></li>
+              <li><svg class="i"><use href="#i-rules"/></svg>Rules<span class="count">3</span></li>
+              <li class="sec">Admin</li><li><svg class="i"><use href="#i-sources"/></svg>Sources &amp; channels</li><li><svg class="i"><use href="#i-settings"/></svg>Settings</li>
+            </ul>
+            <div></div>
+          </aside>
+          <div class="main">
+            <div class="main-head"><h3>Recordings</h3><div class="search"><svg class="i"><use href="#i-search"/></svg>Search recordings<kbd>/</kbd></div></div>
+            <div class="tabs"><span>Library <span class="n">48</span></span><span class="on">Upcoming <span class="n">7</span></span><span>Problems <span class="n warn">1</span></span></div>
+            <div class="group-h"><b>Today</b><span class="crumb">So 22. Nov</span><span class="meta">Sky allows 2 streams at once</span></div>
+            <div class="up">
+              <div class="u conflict"><span class="tm">07:00–09:30</span><span class="tt">Darts: Grand Slam – Finale<small>Sky Sport 1</small></span><span class="src"><svg class="i"><use href="#i-rules"/></svg>Rule "Darts"</span><span class="src"><span class="chip warn">Conflict</span></span>
+                <div class="why"><span class="txt"><svg class="i"><use href="#i-warn"/></svg>Won't record: both Sky streams are busy at 07:00 (Rennen until 08:00, NBA until 07:15, both including extra minutes).</span><span class="bts"><span class="btn">Start at 07:15 when NBA ends</span><span class="btn">End Rennen at 07:00</span><span class="btn ghost">Skip</span></span></div></div>
+              <div class="u"><span class="tm">08:00–09:00</span><span class="tt">F1: Rennen Kompakt – GP Las Vegas<small>Sky Sport F1</small></span><span class="src"><svg class="i"><use href="#i-recone"/></svg>By hand · Alex</span><span class="src"><span class="chip sched">Scheduled</span></span></div>
+              <div class="u"><span class="tm">20:15–21:45</span><span class="tt">Tatort: Schattenmann<small>Das Erste</small></span><span class="src"><svg class="i"><use href="#i-rules"/></svg>Rule "Tatort"</span><span class="src"><span class="chip sched">Scheduled</span></span></div>
+            </div>
+            <div class="group-h"><b>Fr 27. Nov</b><span class="meta">GP Katar · collection "Formel 1"</span></div>
+            <div class="up">
+              <div class="u"><span class="tm">14:25–17:30</span><span class="tt">Live F1: 1. Freies Training - GP Katar<small>Sky Sport F1</small></span><span class="src"><svg class="i"><use href="#i-rules"/></svg>Rule "Formel 1 live"</span><span class="src"><span class="chip sched">Scheduled</span></span></div>
+              <div class="u"><span class="tm">18:25–20:30</span><span class="tt">Live F1: Sprint Qualifying - GP Katar<small>Sky Sport F1</small></span><span class="src"><svg class="i"><use href="#i-rules"/></svg>Rule "Formel 1 live"</span><span class="src"><span class="chip sched">Scheduled</span></span></div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <figcaption><b>Web · Upcoming</b><span>Conflicts show up as soon as the guide makes them visible, with the options Slipstream can actually carry out. Times include the extra minutes before and after. The safest option comes first; nothing is stopped without a click.</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="browser">
+      <div class="browser-bar"><i></i><i></i><i></i><span class="url">slipstream.home/rules/formel-1-live</span></div>
+      <div class="frame" style="border-radius:0"><div class="screen-web">
+        <div class="app">
+          <aside class="side">
+            <div class="brand"><svg class="brandmark"><use href="#mark"/></svg><span class="lockup">Slipstream</span></div>
+            <ul class="nav">
+              <li><svg class="i"><use href="#i-home"/></svg>Home</li><li><svg class="i"><use href="#i-live"/></svg>Live TV</li><li><svg class="i"><use href="#i-guide"/></svg>Guide</li><li><svg class="i"><use href="#i-rec"/></svg>Recordings</li>
+              <li class="on"><svg class="i"><use href="#i-rules"/></svg>Rules<span class="count">3</span></li>
+              <li class="sec">Admin</li><li><svg class="i"><use href="#i-sources"/></svg>Sources &amp; channels</li><li><svg class="i"><use href="#i-settings"/></svg>Settings</li>
+            </ul>
+            <div></div>
+          </aside>
+          <div class="main">
+            <div class="main-head"><h3>Formel 1 live</h3><span class="btn ghost">Cancel</span><span class="btn primary">Save rule</span></div>
+            <div class="rule">
+              <div class="form">
+                <div class="two">
+                  <div class="field"><label for="r-name">Name</label><div class="input" id="r-name">Formel 1 live</div></div>
+                  <div class="field"><label for="r-ch">Channel</label><div class="input" id="r-ch">Sky Sport F1<svg class="i" style="margin-left:auto"><use href="#i-down"/></svg></div></div>
+                </div>
+                <div class="field"><span class="lab">Title</span><div class="title-row"><div class="input">starts with<svg class="i"><use href="#i-down"/></svg></div><div class="input active" id="r-start">Live F1:</div></div></div>
+                <div class="field">
+                  <span class="lab">…and contains one of</span>
+                  <div class="words"><span class="word">1. Freies Training <i>×</i></span><span class="word">2. Freies Training <i>×</i></span><span class="word">3. Freies Training <i>×</i></span><span class="word">Qualifying <i>×</i></span><span class="word">Sprint Qualifying <i>×</i></span><span class="word">Sprint <i>×</i></span><span class="word">Rennen <i>×</i></span><span class="word add">+ Add word</span></div>
+                  <div style="display:flex;justify-content:space-between;gap:1em"><span class="hint">Or pick a programme in the guide and choose "Record every…".</span><span class="adv">Edit as pattern<svg class="i"><use href="#i-chev"/></svg></span></div>
+                </div>
+                <div class="two">
+                  <div class="field"><span class="lab">Days</span><div class="days"><span class="off">Mo</span><span class="off">Di</span><span class="off">Mi</span><span class="off">Do</span><span>Fr</span><span>Sa</span><span>So</span></div></div>
+                  <div class="field"><label for="r-keep">Keep</label><div class="input" id="r-keep">Newest 3 events<svg class="i" style="margin-left:auto"><use href="#i-down"/></svg></div></div>
+                </div>
+                <div class="pad">
+                  <div class="lbl"><b>Start early and keep recording after</b><span>5 min early · 60 min after, in case it runs over</span></div>
+                  <div class="bar"><span class="p1"></span><span class="pr">Programme (example: 2 h)</span><span class="p2">+60 min</span></div>
+                </div>
+                <div class="org">
+                  <div class="two" style="align-items:end"><div class="field"><span class="lab">Recordings go to the collection</span><div class="input">Formel 1<svg class="i" style="margin-left:auto"><use href="#i-down"/></svg></div></div><span class="hint">The collection sets the layout for every matching recording: from this rule, recorded by hand, or imported.</span></div>
+                  <div class="tokens-path"><b>Formel 1</b>›<b>Year</b>›<b>Event</b>›<b>Programme</b><span class="add">Edit collection</span></div>
+                  <div class="check"><span class="box"><svg class="i"><use href="#i-check"/></svg></span>Also save files in the same folders for Plex or Jellyfin <code>/media/recordings/…/Rennen.mkv</code></div>
+                </div>
+              </div>
+              <div class="preview">
+                <div class="ph"><b>Will record 5 programmes</b><span>Next 14 days on Sky Sport F1 · updates as you type</span></div>
+                <ul>
+                  <li><span class="t">Live F1: <mark>1. Freies Training</mark> - GP Katar</span><span class="grp">Formel 1 › 2026 › GP Katar</span></li>
+                  <li><span class="t">Live F1: <mark>Sprint Qualifying</mark> - GP Katar</span><span class="grp">Formel 1 › 2026 › GP Katar</span></li>
+                  <li><span class="t">Live F1: <mark>Sprint</mark> - GP Katar</span><span class="grp">Formel 1 › 2026 › GP Katar</span></li>
+                  <li><span class="t">Live F1: <mark>Qualifying</mark> - GP Katar</span><span class="grp">Formel 1 › 2026 › GP Katar</span></li>
+                  <li><span class="t">Live F1: <mark>Rennen</mark> - GP Katar</span><span class="grp">Formel 1 › 2026 › GP Katar</span></li>
+                </ul>
+                <div class="sec">Similar, won't record</div>
+                <ul>
+                  <li class="no"><span class="t">F1: Pressekonferenz Qualifying - GP Katar</span><span class="why">Doesn't start with "Live F1:"</span></li>
+                  <li class="no"><span class="t">F1: Rennen Kompakt - GP Katar</span><span class="why">Doesn't start with "Live F1:"</span></li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <figcaption><b>Web · Rule editor</b><span>Plain building blocks first; a pattern editor is one level down. The rule only decides what gets recorded. Where recordings appear in the library is set by a collection, so a press conference recorded by hand ends up next to the race. The preview shows what will and won't be recorded, why, and where each recording will land.</span></figcaption>
+  </figure>
+
+  <figure class="mock">
+    <div class="browser">
+      <div class="browser-bar"><i></i><i></i><i></i><span class="url">slipstream.home/settings/playback</span></div>
+      <div class="frame" style="border-radius:0"><div class="screen-web tall">
+        <div class="app">
+          <aside class="side">
+            <div class="brand"><svg class="brandmark"><use href="#mark"/></svg><span class="lockup">Slipstream</span></div>
+            <ul class="nav"><li class="sec" style="padding-top:0">Settings</li><li>General</li><li>Users &amp; devices</li><li>Storage</li><li class="on">Playback &amp; conversion</li><li>Sign-in &amp; SSO</li><li>System</li></ul>
+            <div></div>
+          </aside>
+          <div class="main">
+            <div class="main-head"><h3>Playback &amp; conversion</h3></div>
+            <div class="settings">
+              <div class="scard">
+                <div class="scard-h"><span class="ic"><svg class="i"><use href="#i-chip"/></svg></span><div class="tx"><b>Hardware acceleration</b><p>Used when a device can't play the original or needs less data. Recordings are always stored untouched.</p></div><span class="select">Automatic<svg class="i" style="width:1em;height:1em"><use href="#i-down"/></svg></span></div>
+                <div class="works"><span class="okd"><svg class="i"><use href="#i-check"/></svg>Works on this server</span><span>Intel Quick Sync · tested 2 min ago, after the last update</span><span class="lnk">Details</span></div>
+                <div class="slider"><span>Best quality</span><div class="track"><i></i><b></b></div><span>Save power</span></div>
+                <div class="qrow"><span>Conversions at the same time<small>More need more CPU or GPU</small></span><div class="seg"><span>1</span><span class="on">2</span><span>4</span></div></div>
+              </div>
+              <div class="scard">
+                <div class="scard-h"><span class="ic"><svg class="i"><use href="#i-signal"/></svg></span><div class="tx"><b>Quality by situation</b><p>Defaults only. Anyone can change it in the player.</p></div></div>
+                <div class="qrow"><span>At home<small>Same network as the server</small></span><div class="seg"><span class="on">Original</span><span>High · 8 Mbit/s</span><span>Medium · 4</span></div></div>
+                <div class="qrow"><span>Away from home<small>Through your own domain</small></span><div class="seg"><span class="on">Automatic</span><span>High · 8</span><span>Medium · 4</span><span>Data saver · 2</span></div></div>
+                <div class="qrow"><span>Mobile data<small>Phone app on cellular</small></span><div class="seg"><span>Automatic</span><span class="on">Medium · 4 Mbit/s</span><span>Data saver · 2</span></div></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div></div>
+    </div>
+    <figcaption><b>Web · Conversion settings</b><span>Automatic by default. The hardware test result is one line; driver details (for example "constant-quality mode only") are behind Details. Bitrates carry names and units. Custom ffmpeg profiles for experts sit below this, validated before saving.</span></figcaption>
+  </figure>
+</section>
+
+<section class="block wrap" id="grouping">
+  <div class="block-head">
+    <p class="eyebrow">How it works</p>
+    <h2>Grouping that isn't F1-only</h2>
+    <p>Slipstream never knows what Formel 1 is, and grouping doesn't depend on how something was recorded. Rules decide what gets recorded; collections decide where it appears. Every recording gets a group path from the best structure available, in this order. The same path names exported files, so the library and the Plex folder always match.</p>
+  </div>
+  <div class="steps3">
+    <div class="step3"><span class="n">1 · strongest</span><b>Collections</b><p>A collection says which recordings belong together (channel and title words, e.g. titles starting with "F1:" or "Live F1:") and lays them out, e.g. <code>Formel 1 › Year › Event › Programme</code>. Parts come from text around separators (" - ", ": ", ",") or a selection in an example title. It applies to rule recordings, manual ones and imports alike.</p></div>
+    <div class="step3"><span class="n">2</span><b>Series data from the guide</b><p>When the guide has season and episode numbers or an episode sub-title, recordings group as <code>Show › Season › Episode</code>, like Plex and Jellyfin.</p></div>
+    <div class="step3"><span class="n">3 · fallback</span><b>Title and date</b><p>Everything else groups by its cleaned-up title (without "Live", "(Wh.)" and similar) and then by date. Films (guide category) go to <code>Films › Title (Year)</code>.</p></div>
+    <div class="step3"><span class="n">helpers</span><b>Suggestions and moving</b><p>When several recordings share a channel and title start, Slipstream suggests a collection. Moving a recording by hand asks "Also move similar ones in the future?" and extends the collection's match.</p></div>
+  </div>
+  <p class="sub">Examples</p>
+  <div class="tscroll">
+    <table class="gtable">
+      <thead><tr><th>Guide title</th><th>Structure from</th><th>Group path › item</th></tr></thead>
+      <tbody>
+        <tr><td>Live F1: Rennen - GP Las Vegas<br><span style="color:var(--fg-3);font-weight:400">recorded by the rule</span></td><td><span class="src">Collection "Formel 1"</span><br>Event = after the last " - ", Programme = the rest without "Live F1:" / "F1:"</td><td class="path">Formel 1<i>›</i>2026<i>›</i>GP Las Vegas<i>›</i><b>Rennen</b></td></tr>
+        <tr><td>F1: Pressekonferenz Qualifying - GP Las Vegas<br><span style="color:var(--fg-3);font-weight:400">recorded by hand</span></td><td><span class="src">Collection "Formel 1"</span><br>same collection, no rule involved</td><td class="path">Formel 1<i>›</i>2026<i>›</i>GP Las Vegas<i>›</i><b>Pressekonferenz Qualifying</b></td></tr>
+        <tr><td>Live: Bundesliga, 12. Spieltag: FC Bayern – Borussia Dortmund</td><td><span class="src">Collection "Bundesliga"</span><br>Season from the date (starts in August), Matchday = after the first ", ", Match = after the last ": "</td><td class="path">Bundesliga<i>›</i>2026/27<i>›</i>12. Spieltag<i>›</i><b>FC Bayern – Borussia Dortmund</b></td></tr>
+        <tr><td>Live F1: Saisonrückblick 2026</td><td><span class="src">Collection "Formel 1"</span><br>matches, but has no " - " to split on</td><td class="path">Formel 1<i>›</i><b>Other</b><i>›</i>Saisonrückblick 2026</td></tr>
+        <tr><td>Snooker: UK Championship – Finale</td><td><span class="src">Collection "Snooker"</span><br>Tournament = after ": ", Round = after " – "</td><td class="path">Snooker<i>›</i>UK Championship<i>›</i><b>Finale</b></td></tr>
+        <tr><td>The Big Bang Theory · S12E24 "Die Stockholm-Erkenntnis"</td><td><span class="src">Guide series data</span></td><td class="path">The Big Bang Theory<i>›</i>Staffel 12<i>›</i><b>Folge 24 · Die Stockholm-Erkenntnis</b></td></tr>
+        <tr><td>Tatort · sub-title "Schattenmann"</td><td><span class="src">Guide sub-title</span><br>no season numbers</td><td class="path">Tatort<i>›</i>2026<i>›</i><b>Schattenmann</b></td></tr>
+        <tr><td>Tagesschau (Wh.)</td><td><span class="src">Fallback</span><br>same title every day</td><td class="path">Tagesschau<i>›</i>November 2026<i>›</i><b>Sa 21. Nov, 20:00</b></td></tr>
+        <tr><td>Der Pate · category "Spielfilm", 1972</td><td><span class="src">Fallback</span><br>film</td><td class="path">Films<i>›</i><b>Der Pate (1972)</b></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="block wrap" id="phone">
+  <div class="block-head">
+    <p class="eyebrow">Android phone</p>
+    <h2>In your pocket</h2>
+    <p>The same app as the TV with a touch layout and 48 dp targets. Follows the system theme.</p>
+  </div>
+  <div class="phones">
+    <figure class="mock">
+      <div class="phone"><div class="frame"><div class="screen-phone">
+        <div class="ph-status"><span>21:04</span><span>5G</span></div>
+        <div class="ph-head"><span class="lockup">Slipstream</span><span class="av">A</span></div>
+        <div class="ph-body">
+          <div class="ph-live">
+            <div class="thumb streaks" style="--h:236"><span class="ch">arte</span><span class="big">Der Pate</span></div>
+            <div class="in">
+              <div class="m"><span class="chip rec">REC</span><span class="chip orig">Original</span>arte · 20:15–23:05</div>
+              <div class="tl"><span class="cap" style="--a:0;--b:26.3"></span><span class="mark" style="--a:2.4;--b:2.4"></span><span class="mark" style="--a:85.4;--b:85.4"></span><span class="edge" style="--a:26.3;--b:26.3"></span></div>
+              <div class="acts"><span class="btn primary"><svg class="i"><use href="#i-start"/></svg>From start</span><span class="btn">Watch live</span></div>
+            </div>
+          </div>
+          <div class="ph-sec">Continue watching<span>See all</span></div>
+          <div class="ph-list">
+            <div class="ph-item"><div class="thumb streaks" style="--h:200"><span class="ch">Sky Sport F1</span><span class="big">Rennen</span><span class="prog"><i style="--p:30%"></i></span></div><div><b>Rennen – GP Las Vegas</b><span>1 h 28 min left</span></div></div>
+            <div class="ph-item"><div class="thumb streaks" style="--h:150"><span class="ch">Eurosport 1</span><span class="big">Snooker</span><span class="prog"><i style="--p:80%"></i></span></div><div><b>Snooker: UK Championship – Finale</b><span>36 min left</span></div></div>
+            <div class="ph-item"><div class="thumb streaks" style="--h:176"><span class="ch">ZDF</span><span class="big">Terra X</span><span class="prog"><i style="--p:40%"></i></span></div><div><b>Terra X: Faszination Erde</b><span>27 min left</span></div></div>
+          </div>
+        </div>
+        <div class="tabbar"><span class="on"><svg class="i"><use href="#i-home"/></svg>Home</span><span><svg class="i"><use href="#i-guide"/></svg>Guide</span><span><svg class="i"><use href="#i-rec"/></svg>Recordings</span><span><svg class="i"><use href="#i-search"/></svg>Search</span></div>
+      </div></div></div>
+      <figcaption><b>Phone · Home</b><span>The running recording leads with both ways in. Thumbnails share the watched fill with the TV. Active tab: pill and weight, not colour alone.</span></figcaption>
+    </figure>
+    <figure class="mock">
+      <div class="phone"><div class="frame"><div class="screen-phone">
+        <div class="ph-status"><span>21:04</span><span>Wi-Fi</span></div>
+        <div class="ph-head"><span class="lockup">Slipstream</span><span class="av">A</span></div>
+        <div class="ph-bg"><div class="ph-live"><div class="thumb streaks" style="--h:236"><span class="ch">arte</span><span class="big">Der Pate</span></div></div></div>
+        <div class="sheet-dim"></div>
+        <div class="sheet">
+          <span class="grab"></span>
+          <span class="dev"><svg class="i"><use href="#i-tv"/></svg></span>
+          <h4>Sign in on "Living Room Shield"?</h4>
+          <p>Only continue if this code is on your TV right now.</p>
+          <div class="facts"><div><span>Code on the TV</span><b class="mono">QK7·4RM</b></div><div><span>Device</span><b>NVIDIA SHIELD Android TV</b></div></div>
+          <div class="prof">
+            <span class="lab">Sign this TV in as</span>
+            <div class="opt2 on"><span class="av b">H</span><span>Household<small>Watch and record. Can't change settings.</small></span><span class="radio"></span></div>
+            <div class="opt2"><span class="av">A</span><span>Alex (admin)<small>Full access on the TV</small></span><span class="radio"></span></div>
+          </div>
+          <div class="acts"><span class="btn primary">Sign in on TV</span><span class="btn ghost">This isn't my TV</span></div>
+        </div>
+      </div></div></div>
+      <figcaption><b>Phone · Approve TV sign-in</b><span>Opened by scanning the QR code. The code comes first so you can compare. Shared TVs default to the household profile, not the admin. "This isn't my TV" blocks the request and tells the admin.</span></figcaption>
+    </figure>
+  </div>
+</section>
+
+<section class="block wrap" id="components">
+  <div class="block-head">
+    <p class="eyebrow">Components</p>
+    <h2>Building blocks</h2>
+    <p>Buttons, status chips, focus and the message pattern for problems.</p>
+  </div>
+  <div class="comp-grid">
+    <div class="panel">
+      <h4>Buttons · TV focus</h4>
+      <div class="stage tvstage tv"><span class="btn is-focus"><svg class="i"><use href="#i-play"/></svg>Watch</span><span class="btn">Record</span><div class="card focus" style="width:9em;font-size:.9em"><div class="thumb streaks" style="--h:176"><span class="ch">ZDF</span><span class="big" style="font-size:1.6em">Terra X</span></div><div class="card-t">Terra X</div></div></div>
+      <p class="comp-note">Two focus styles on TV, both amber, no blur: controls get an amber fill plus a 4 px ring with a gap; picture cards keep their image and get the ring plus a 1.06 lift. Unfocused controls are neutral. Only transform and opacity animate.</p>
+    </div>
+    <div class="panel">
+      <h4>Buttons · web</h4>
+      <div class="stage" style="font-size:15px"><span class="btn primary">Save rule</span><span class="btn web-focus">Run test again</span><span class="btn ghost">Cancel</span><span class="btn danger">Delete recording</span></div>
+      <p class="comp-note">Amber fill marks the main action. Keyboard focus is a neutral 2 px ring in <code>focus.ring</code>, so a focused secondary button never looks like a second primary. Delete asks for confirmation in place.</p>
+    </div>
+    <div class="panel">
+      <h4>Status chips</h4>
+      <div class="stage" style="font-size:17px"><span class="chip live">LIVE</span><span class="chip rec">Recording</span><span class="chip sched">Scheduled · Fr 14:30</span><span class="chip warn">2 min missing</span><span class="chip ok">Watched</span><span class="chip orig">1080p50 · Original</span><span class="chip outline">Converted · 4 Mbit/s · for mobile data</span></div>
+      <p class="comp-note">Shape plus colour plus words, so state reads in grayscale: solid fill for live, a dot for recording, a ring for scheduled, outlines for converted.</p>
+    </div>
+    <div class="panel">
+      <h4>When something goes wrong</h4>
+      <div class="msgs">
+        <div class="msg warn"><svg class="i"><use href="#i-warn"/></svg><div><b>Won't record Darts: Grand Slam – Finale at 07:00</b><span>Sky allows 2 streams at once and both are busy then (Rennen, NBA).</span><div class="acts"><span>End Rennen at 07:00 (skips the extra hour)</span><span>Change priorities</span></div></div></div>
+        <div class="msg err"><svg class="i"><use href="#i-x"/></svg><div><b>Not recorded: Tagesschau, Sa 20:00</b><span>The source sent no picture for the whole slot. Slipstream retried 6 times.</span><div class="acts"><span>Show log</span><span>Test source</span></div></div></div>
+        <div class="msg warn"><svg class="i"><use href="#i-warn"/></svg><div><b>Disk almost full: 38 GB left</b><span>Recordings keep running. Older recordings past their keep limit go first. If space runs out, new recordings won't start.</span><div class="acts"><span>Review storage</span></div></div></div>
+        <div class="msg info"><svg class="i"><use href="#i-wifi"/></svg><div><b>Can't reach "unraid"</b><span>Check that the server is switched on and on the same network.</span><div class="acts"><span>Try again</span><span>Choose another server</span></div></div></div>
+      </div>
+      <p class="comp-note">What happened (or will happen), why, what Slipstream did, then the action. Future problems are warnings in future tense; red is only for things that already failed. No apologies, no codes in the headline.</p>
+    </div>
+  </div>
+</section>
+
+<section class="block wrap" id="review">
+  <div class="block-head">
+    <p class="eyebrow">Review log · v0.1 → v0.3, fixes and final mark in v0.4</p>
+    <h2>What the council said</h2>
+    <p>Four independent reviewers scored each version; the big number is the latest round (v0.3). The bullets list what changed in response. v0.4 adds the round-3 fixes and the new Slip Ring mark.</p>
+  </div>
+  <div class="review">
+    <div class="rv"><span class="who">10-foot UI specialist</span><div class="sc"><b>8.0</b><span>/ 10 · v0.3 (7.0 → 7.5)</span></div><ul><li>Amber only for focus and the playhead</li><li>Card focus style without fill, no blur anywhere</li><li>Catch-up shows when you reach live; stereo note</li><li>−10 / +30 skip buttons, profile picker</li></ul></div>
+    <div class="rv"><span class="who">Visual &amp; brand designer</span><div class="sc"><b>7.8</b><span>/ 10 · v0.3 (6.5 → 7.5)</span></div><ul><li>New mark (Delta) instead of the Plex-like slash</li><li>Plain wordmark; underline lockup for headers</li><li>Streaks at 12°, brighter and more varied hues</li><li>Player and type specimen no longer F1</li></ul></div>
+    <div class="rv"><span class="who">Product &amp; UX writing</span><div class="sc"><b>8.0</b><span>/ 10 · v0.3 (6.5 → 7.5)</span></div><ul><li>Lengths include the extra minutes</li><li>Future tense for upcoming problems</li><li>Owner and source split, "Keep" explained</li><li>Collection precedence rules in the plan</li></ul></div>
+    <div class="rv"><span class="who">Accessibility &amp; tokens</span><div class="sc"><b>8.0</b><span>/ 10 · v0.3 (6.0 → 7.5)</span></div><ul><li>Timeline captured/played tokens pass 3:1</li><li>Scrim behind thumb labels, solid chips on media</li><li>48 dp phone targets, TV minimums raised</li><li>Neutral web focus ring, nav indicator</li></ul></div>
+  </div>
+</section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="eyebrow">Next</p>
+    <h3>From mockup to code</h3>
+    <ol>
+      <li>Write <code>packages/design-tokens</code> as one JSON source with Tailwind v4 and React Native outputs, including precomputed tints.</li>
+      <li>Build the timeline first. Web and app both depend on it, and the Phase 0 player test uses it.</li>
+      <li>Test guide focus and the player on the Shield and on a Chromecast with Google TV.</li>
+      <li>Check the condensed display face at 3 m. If it's hard to read, raise its size before swapping it.</li>
+      <li>Mock next: recording detail with a failed recording, the upcoming schedule with conflicts, the import review list, the timeline-focused player state, and an app icon sheet.</li>
+    </ol>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var W0 = 330, W1 = 510, NOW = 372;
+  function m(t) { var p = t.split(":"); return +p[0] * 60 + +p[1]; }
+  function pct(v) { return Math.max(0, Math.min(100, (v - W0) / (W1 - W0) * 100)); }
+  // flags: f = focus, r = recording, s = scheduled, c = conflict
+  var chans = [
+    { no: "210", logo: "F1", name: "Sky Sport F1", p: [["05:00", "07:00", "Live F1: Rennen – GP Las Vegas", "fr"], ["07:00", "08:00", "Live F1: Analyse – GP Las Vegas"], ["08:00", "09:00", "F1: Rennen Kompakt – GP Las Vegas", "s"]] },
+    { no: "202", logo: "S1", name: "Sky Sport 1", p: [["04:30", "07:00", "Live NBA: Lakers – Nuggets"], ["07:00", "09:30", "Darts: Grand Slam – Finale", "c"]] },
+    { no: "201", logo: "SN", name: "Sky Sport News", p: [["06:00", "07:00", "Sky Sport News"], ["07:00", "08:00", "Sky Sport News"], ["08:00", "09:00", "Sky Sport News"]] },
+    { no: "130", logo: "E1", name: "Eurosport 1", p: [["05:30", "06:30", "Snooker: UK Championship – Highlights"], ["06:30", "08:00", "Ski Alpin: Slalom Gurgl – Vorschau"], ["08:00", "09:30", "Skispringen: Weltcup Lillehammer"]] },
+    { no: "1", logo: "ARD", name: "Das Erste", p: [["04:55", "06:20", "Polizeiruf 110 (Wh.)"], ["06:20", "06:30", "Tagesschau"], ["06:30", "08:00", "Tiere bis unters Dach"], ["08:00", "09:00", "Sportschau"]] },
+    { no: "2", logo: "ZDF", name: "ZDF", p: [["05:45", "06:30", "Terra X: Faszination Erde"], ["06:30", "07:00", "Löwenzahn"], ["07:00", "08:30", "Bibi Blocksberg"], ["08:30", "09:00", "heute"]] },
+    { no: "7", logo: "P7", name: "ProSieben", p: [["05:20", "06:40", "The Big Bang Theory"], ["06:40", "08:20", "How I Met Your Mother"], ["08:20", "09:30", "Galileo Spezial"]] }
+  ];
+  var g = document.getElementById("tvGuide");
+  if (g) {
+    var h = '<div class="g-ruler"><span></span><div class="ticks">';
+    for (var t = 330; t < 510; t += 30) {
+      if (Math.abs(t - NOW) < 14) continue;
+      var hh = String(Math.floor(t / 60)).padStart(2, "0"), mm = String(t % 60).padStart(2, "0");
+      h += '<span style="--a:' + pct(t) + '">' + hh + ":" + mm + "</span>";
+    }
+    h += '<span class="nowpill" style="--a:' + pct(NOW) + '">06:12</span></div></div>';
+    chans.forEach(function (c) {
+      h += '<div class="g-row"><div class="g-ch"><span class="no">' + c.no + '</span><span class="logo">' + c.logo + '</span><span class="nm">' + c.name + '</span></div><div class="g-track">';
+      c.p.forEach(function (p) {
+        var s = m(p[0]), e = m(p[1]), f = p[3] || "";
+        if (e <= W0 || s >= W1) return;
+        var cls = "cell";
+        if (e <= NOW) cls += " past"; else if (s <= NOW) cls += " airing";
+        if (s < W0) cls += " clip-l";
+        if (f.indexOf("f") > -1) cls += " is-focus";
+        var mark = f.indexOf("r") > -1 ? '<i class="dot"></i>' : f.indexOf("s") > -1 ? '<i class="ring"></i>' : f.indexOf("c") > -1 ? '<svg class="i"><use href="#i-warn"/></svg>' : "";
+        var showTime = (e - s) >= 20;
+        var prog = (s <= NOW && e > NOW) ? '<span class="pg" style="--p:' + ((NOW - Math.max(s, W0)) / (Math.min(e, W1) - Math.max(s, W0)) * 100) + '%"></span>' : "";
+        h += '<div class="' + cls + '" style="--a:' + pct(s) + ";--b:" + pct(e) + '"><span class="t">' + mark + p[2] + "</span>" + (showTime ? '<span class="s">' + p[0] + "–" + p[1] + "</span>" : "") + prog + "</div>";
+      });
+      h += "</div></div>";
+    });
+    h += '<div class="now-line" style="--n:' + pct(NOW) + '"></div>';
+    g.innerHTML = h;
+  }
+  var cv = document.getElementById("qr");
+  if (cv && cv.getContext) {
+    var N = 29, ctx = cv.getContext("2d"), s = cv.width / N, seed = 4711;
+    function rnd() { seed = (seed * 16807) % 2147483647; return seed / 2147483647; }
+    ctx.fillStyle = "#fff"; ctx.fillRect(0, 0, cv.width, cv.height);
+    ctx.fillStyle = "#0B0E13";
+    function inFinder(x, y) { return (x < 8 && y < 8) || (x > N - 9 && y < 8) || (x < 8 && y > N - 9); }
+    for (var y = 0; y < N; y++) for (var x = 0; x < N; x++) { if (!inFinder(x, y) && rnd() > 0.52) ctx.fillRect(x * s, y * s, s, s); }
+    [[0, 0], [N - 7, 0], [0, N - 7]].forEach(function (p) {
+      ctx.fillStyle = "#0B0E13"; ctx.fillRect(p[0] * s, p[1] * s, 7 * s, 7 * s);
+      ctx.fillStyle = "#fff"; ctx.fillRect((p[0] + 1) * s, (p[1] + 1) * s, 5 * s, 5 * s);
+      ctx.fillStyle = "#0B0E13"; ctx.fillRect((p[0] + 2) * s, (p[1] + 2) * s, 3 * s, 3 * s);
+    });
+    var c0 = Math.floor(N / 2) - 2.5;
+    ctx.fillStyle = "#fff"; ctx.fillRect((c0 - .5) * s, (c0 - .5) * s, 6 * s, 6 * s);
+    ctx.fillStyle = "#FFC233"; ctx.beginPath();
+    if (ctx.roundRect) ctx.roundRect(c0 * s, c0 * s, 5 * s, 5 * s, s * 1.2); else ctx.rect(c0 * s, c0 * s, 5 * s, 5 * s);
+    ctx.fill();
+    ctx.save(); ctx.translate((c0 + .55) * s, (c0 + .55) * s); ctx.scale(3.9 * s / 100, 3.9 * s / 100);
+    ctx.fillStyle = "#111620";
+    ctx.fill(new Path2D("M55.21 14.65L40.4 14.65A23.75 23.75 0 0 0 16.65 38.4L16.65 48.4A23.75 23.75 0 0 0 40.4 72.15L42.99 72.15L45.86 58.65L40.4 58.65A10.25 10.25 0 0 1 30.15 48.4L30.15 38.4A10.25 10.25 0 0 1 40.4 28.15L52.34 28.15Z")); ctx.fill(new Path2D("M44.79 85.35L59.6 85.35A23.75 23.75 0 0 0 83.35 61.6L83.35 51.6A23.75 23.75 0 0 0 59.6 27.85L57.01 27.85L54.14 41.35L59.6 41.35A10.25 10.25 0 0 1 69.85 51.6L69.85 61.6A10.25 10.25 0 0 1 59.6 71.85L47.66 71.85Z"));
+    ctx.restore();
+  }
+})();
+</script>

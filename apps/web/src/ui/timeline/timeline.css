@@ -1,0 +1,277 @@
+/*
+ * The timeline (SPEC §5). Geometry never changes: every row is reserved, hover only thickens
+ * the fills (transform) and shows the absolutely positioned marker and tooltip. Drawn bottom to
+ * top: the track (aired), not aired yet, captured, played, the behind-live band, gaps,
+ * programme ticks, the live edge, your knob.
+ */
+.tl {
+  --h: 6px;
+  /* The row above the track (top labels, bands) and the row under it (bottom labels). */
+  --tl-top: 26px;
+  --tl-bottom: 22px;
+  position: relative;
+  padding-block: var(--tl-top) var(--tl-bottom);
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+.tl[data-bands] {
+  --tl-top: 48px;
+}
+.tl[data-variant="compact"] {
+  --tl-top: 10px;
+  --tl-bottom: 18px;
+}
+/* With a caption the bottom labels keep their row under the track and the caption follows. */
+.tl:has(> .tl-caption) {
+  padding-bottom: 0;
+}
+.tl-track {
+  position: relative;
+  height: var(--h);
+}
+.tl-fill {
+  position: absolute;
+  inset: 0;
+  border-radius: 99px;
+  transform-origin: center;
+  transition: transform var(--t-fast) var(--ease);
+}
+.tl[data-interactive] {
+  cursor: pointer;
+}
+.tl[data-interactive] .tl-track::before {
+  content: "";
+  position: absolute;
+  inset: -16px 0;
+}
+@media (pointer: coarse) {
+  .tl[data-interactive] .tl-track::before {
+    inset: -22px 0;
+  }
+}
+@media (hover: hover) {
+  .tl[data-interactive]:hover .tl-fill {
+    transform: scaleY(1.6);
+  }
+  .tl[data-interactive]:hover .tl-knob {
+    transform: scale(1.15);
+  }
+  .tl[data-interactive]:hover .tl-hover {
+    opacity: 0.6;
+  }
+  .tl[data-interactive]:hover .tl-tip {
+    opacity: 1;
+  }
+}
+.tl[data-dragging] .tl-fill {
+  transform: scaleY(1.6);
+}
+.tl[data-dragging] .tl-knob {
+  transform: scale(1.15);
+}
+.tl[data-dragging] .tl-tip {
+  opacity: 1;
+}
+.tl:focus-visible {
+  outline: none;
+}
+.tl:focus-visible .tl-track {
+  box-shadow:
+    0 0 0 2px var(--bg),
+    0 0 0 4px var(--focus);
+}
+.tl-aired,
+.tl-upcoming,
+.tl-captured,
+.tl-played,
+.tl-behind {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-radius: 99px;
+}
+.tl-aired {
+  background: var(--tl-track);
+}
+.tl-upcoming {
+  background: var(--tl-track);
+  opacity: 0.5;
+}
+.tl-captured {
+  background: var(--tl-cap);
+}
+.tl-played {
+  border-radius: 99px 0 0 99px;
+  background: var(--tl-played);
+}
+.tl-behind {
+  border-radius: 0;
+  background: color-mix(in oklab, var(--brand) 35%, transparent);
+}
+/* A gap reads as what it is, nothing captured there: the bare track over whatever was drawn. */
+.tl-hole {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  background: var(--tl-track);
+}
+.tl-tick {
+  position: absolute;
+  bottom: calc(100% + 3px);
+  width: 1px;
+  height: 6px;
+  background: var(--fg-4);
+}
+.tl-hover {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--fg);
+  opacity: 0;
+  pointer-events: none;
+}
+.tl-knob {
+  position: absolute;
+  top: 50%;
+  z-index: 3;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--brand);
+  box-shadow: 0 1px 4px color-mix(in oklab, var(--art-base) 35%, transparent);
+  pointer-events: none;
+  transition: transform var(--t-fast) var(--ease);
+}
+.tl-edge {
+  position: absolute;
+  top: 50%;
+  z-index: 2;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--live);
+}
+.tl-label {
+  position: absolute;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  transform: translateX(-50%);
+}
+.tl-label[data-align="start"] {
+  transform: none;
+}
+.tl-label[data-align="end"] {
+  transform: translateX(-100%);
+}
+.tl-label[data-hidden] {
+  visibility: hidden;
+}
+.tl-label-top {
+  top: 2px;
+}
+.tl-label-bottom {
+  top: calc(var(--tl-top) + var(--h) + var(--tl-bottom) - 16px);
+}
+.tl[data-variant="compact"] .tl-label-top {
+  display: none;
+}
+.tl-label-live {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--live-fg);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+}
+.tl-label-live::before {
+  content: "";
+  width: 0.5em;
+  height: 0.5em;
+  border-radius: 50%;
+  background: currentColor;
+}
+.tl-label-now {
+  color: var(--live-fg);
+  font-weight: 700;
+}
+.tl-label-here {
+  color: var(--brand-fg);
+  font-weight: 700;
+}
+.tl-bands {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 24px;
+  height: 16px;
+  pointer-events: none;
+}
+.tl-band {
+  position: absolute;
+  top: 0;
+  height: 16px;
+  padding-left: 6px;
+  overflow: hidden;
+  container-type: inline-size;
+  border-left: 1px solid var(--fg-4);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 16px;
+  color: var(--fg-3);
+  white-space: nowrap;
+}
+.tl-band-label {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* A band narrower than about 48 px shows only its divider; the tooltip still names it. */
+@container (max-width: 42px) {
+  .tl-band-label {
+    display: none;
+  }
+}
+.tl-band[data-current] {
+  color: var(--fg);
+  border-left-color: var(--fg-2);
+}
+.tl-tip {
+  position: absolute;
+  top: 0;
+  z-index: 5;
+  padding: 5px 8px;
+  border-radius: 7px;
+  background: var(--fg);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  opacity: 0;
+  transform: translate(-50%, -100%);
+  transition: opacity var(--t-fast) var(--ease);
+}
+.tl[data-bands] .tl-tip {
+  top: 22px;
+}
+.tl-tip[data-future] {
+  background: color-mix(in oklab, var(--fg) 62%, var(--bg));
+}
+.tl-caption {
+  margin-top: calc(var(--tl-bottom) + 8px);
+  font-size: 13px;
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+}
