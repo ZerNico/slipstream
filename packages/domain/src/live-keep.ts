@@ -32,6 +32,20 @@ export const keepRunningChoices: readonly KeepRunning[] = [1, 5, 10, 15, 30, 60,
 /** The choices the settings offer for {@link LiveKeep.keepBufferMinutes}, 0 meaning off. */
 export const keepBufferChoices: readonly number[] = [0, 15, 30, 60, 120, 240, 480, 720, 1440];
 
+/** A keep-running choice back from its picker value (`String(choice)`). */
+export const keepRunningFromValue = (value: string): KeepRunning =>
+  value === "programmeEnd" ? "programmeEnd" : Number(value);
+
+/** The keep-running choices to offer: a value saved outside the steps still shows as itself, last. */
+export const keepRunningChoicesWith = (saved: KeepRunning): readonly KeepRunning[] =>
+  keepRunningChoices.includes(saved) ? keepRunningChoices : [...keepRunningChoices, saved];
+
+/** The kept-buffer choices to offer: a value saved outside the steps shows in its place. */
+export const keepBufferChoicesWith = (saved: number): readonly number[] =>
+  keepBufferChoices.includes(saved)
+    ? keepBufferChoices
+    : [...keepBufferChoices, saved].toSorted((a, b) => a - b);
+
 /** "Until the programme ends" never keeps a channel running longer than this. */
 export const PROGRAMME_LINGER_MAX_MS = 4 * HOUR;
 /** "Until the programme ends" keeps a channel running at least this long, for a reload. */

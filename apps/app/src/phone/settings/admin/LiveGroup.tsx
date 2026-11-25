@@ -1,7 +1,7 @@
 import {
-  keepBufferChoices,
-  type KeepRunning,
-  keepRunningChoices,
+  keepBufferChoicesWith,
+  keepRunningChoicesWith,
+  keepRunningFromValue,
   type LiveKeep,
 } from "@slipstream/domain";
 import { keepBufferLabel, keepRunningLabel, m } from "@slipstream/i18n";
@@ -10,10 +10,6 @@ import { useTheme } from "../../../theme/theme.ts";
 import { Icon } from "../../../ui/Icon.tsx";
 import { PickerSheet } from "../../../ui/PickerSheet.tsx";
 import { Group, Row } from "./parts.tsx";
-
-/** A keep-running choice back from its picker value. */
-const runningOf = (value: string): KeepRunning =>
-  value === "programmeEnd" ? "programmeEnd" : Number(value);
 
 /** The chevron that says a row opens its choices. */
 const Chevron = () => {
@@ -36,12 +32,8 @@ export const LiveGroup = ({
   const running = keepRunningLabel(value.keepRunning);
   const buffer = keepBufferLabel(value.keepBufferMinutes);
   // A value saved outside the offered steps still shows as itself.
-  const runningChoices = keepRunningChoices.includes(value.keepRunning)
-    ? keepRunningChoices
-    : [...keepRunningChoices, value.keepRunning];
-  const bufferChoices = keepBufferChoices.includes(value.keepBufferMinutes)
-    ? keepBufferChoices
-    : [...keepBufferChoices, value.keepBufferMinutes].toSorted((a, b) => a - b);
+  const runningChoices = keepRunningChoicesWith(value.keepRunning);
+  const bufferChoices = keepBufferChoicesWith(value.keepBufferMinutes);
   return (
     <>
       <Group title={m.rec_live_title()} footer={m.rec_live_note()}>
@@ -70,7 +62,7 @@ export const LiveGroup = ({
             label: keepRunningLabel(keep),
           }))}
           selected={String(value.keepRunning)}
-          onPick={(next) => onChange({ ...value, keepRunning: runningOf(next) })}
+          onPick={(next) => onChange({ ...value, keepRunning: keepRunningFromValue(next) })}
           onClose={() => setPicking(undefined)}
         />
       ) : null}

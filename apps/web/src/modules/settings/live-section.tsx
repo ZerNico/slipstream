@@ -1,9 +1,9 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   initialLiveKeep,
-  keepBufferChoices,
-  type KeepRunning,
-  keepRunningChoices,
+  keepBufferChoicesWith,
+  keepRunningChoicesWith,
+  keepRunningFromValue,
 } from "@slipstream/domain";
 import { keepBufferLabel, keepRunningLabel, m } from "@slipstream/i18n";
 import { useQueries } from "~/api/hooks.ts";
@@ -13,10 +13,6 @@ import { ListPanel, ListRow, SettingsSection } from "./parts.tsx";
 import { useSaveLiveSettings } from "./queries.ts";
 import { SectionProblem } from "./section-problem.tsx";
 import { useAutosave } from "./use-autosave.ts";
-
-/** A keep-running choice back from its picker value. */
-const runningOf = (value: string): KeepRunning =>
-  value === "programmeEnd" ? "programmeEnd" : Number(value);
 
 /**
  * Settings › Recording › Live TV: how long a channel keeps running after its last viewer left
@@ -33,12 +29,8 @@ export function LiveSection() {
   const loading = settings.isPending;
   const value = draft.value ?? settings.data ?? initialLiveKeep;
   // A value saved outside the offered steps still shows as itself.
-  const running = keepRunningChoices.includes(value.keepRunning)
-    ? keepRunningChoices
-    : [...keepRunningChoices, value.keepRunning];
-  const buffers = keepBufferChoices.includes(value.keepBufferMinutes)
-    ? keepBufferChoices
-    : [...keepBufferChoices, value.keepBufferMinutes].toSorted((a, b) => a - b);
+  const running = keepRunningChoicesWith(value.keepRunning);
+  const buffers = keepBufferChoicesWith(value.keepBufferMinutes);
 
   return (
     <LoadingScope loading={loading}>
@@ -57,7 +49,9 @@ export function LiveSection() {
                   value: String(keep),
                   label: keepRunningLabel(keep),
                 }))}
-                onChange={(next) => draft.change({ ...value, keepRunning: runningOf(next) })}
+                onChange={(next) =>
+                  draft.change({ ...value, keepRunning: keepRunningFromValue(next) })
+                }
               />
             }
           />

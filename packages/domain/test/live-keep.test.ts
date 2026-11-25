@@ -3,7 +3,10 @@ import { describe, expect, it } from "vitest";
 import {
   initialLiveKeep,
   keepBufferChoices,
+  keepBufferChoicesWith,
   keepRunningChoices,
+  keepRunningChoicesWith,
+  keepRunningFromValue,
   keepRunningUntil,
   LiveKeep,
 } from "../src/live-keep.ts";
@@ -54,5 +57,19 @@ describe("LiveKeep", () => {
     expect(valid({ keepRunning: "forever", keepBufferMinutes: 60 })).toBe(false);
     expect(valid({ keepRunning: 10, keepBufferMinutes: -1 })).toBe(false);
     expect(valid({ keepRunning: 10, keepBufferMinutes: 24 * 60 + 1 })).toBe(false);
+  });
+});
+
+describe("the settings' keep choices", () => {
+  it("reads a picker value back", () => {
+    expect(keepRunningFromValue("programmeEnd")).toBe("programmeEnd");
+    expect(keepRunningFromValue(String(15))).toBe(15);
+  });
+
+  it("offers a value saved outside the steps as itself", () => {
+    expect(keepRunningChoicesWith(10)).toBe(keepRunningChoices);
+    expect(keepRunningChoicesWith(7)).toEqual([...keepRunningChoices, 7]);
+    expect(keepBufferChoicesWith(60)).toBe(keepBufferChoices);
+    expect(keepBufferChoicesWith(90)).toEqual([0, 15, 30, 60, 90, 120, 240, 480, 720, 1440]);
   });
 });
