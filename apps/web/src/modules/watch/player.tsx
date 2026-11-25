@@ -595,7 +595,9 @@ export function Player(props: PlayerProps) {
             <PhoneControls
               model={model}
               onDetails={() => overlay.open({ kind: "sheet", name: "info" })}
-              record={<RecordChip control={recordControl} />}
+              {...(props.recordNow === undefined
+                ? {}
+                : { record: <RecordChip control={recordControl} /> })}
             />
           }
           next={props.next}

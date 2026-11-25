@@ -133,10 +133,19 @@ export function RecordButton({ control }: { control: RecordControl | undefined }
   );
 }
 
-/** Phone portrait: Record as one of the option chips under the transport. */
+/**
+ * Phone portrait: Record as one of the option chips under the transport. `undefined` keeps its
+ * place (an invisible chip as wide as Record), so the chips beside it never move.
+ */
 export function RecordChip({ control }: { control: RecordControl | undefined }) {
   const longPress = useLongPress(control?.kind === "record" ? control.onOptions : undefined);
-  if (control === undefined) return null;
+  if (control === undefined) {
+    return (
+      <PhoneChip icon={RecordIcon} aria-hidden="true" tabIndex={-1} disabled className="invisible">
+        {m.record_now_action()}
+      </PhoneChip>
+    );
+  }
   if (control.kind === "recording") {
     return (
       <RecordingMenu
