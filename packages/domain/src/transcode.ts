@@ -333,8 +333,21 @@ export const normaliseCodec = (codec: string): string => {
   return codecAliases[family] ?? family;
 };
 
-const sameText = (a: string, b: string): boolean =>
-  a.replace(/[\s_-]/gu, "").toLowerCase() === b.replace(/[\s_-]/gu, "").toLowerCase();
+/**
+ * A profile name in one spelling ("Main 10" and "main10" are the same). H.264's constrained and
+ * progressive profiles are subsets of the profile they are named after, so a decoder of that
+ * profile plays them: ffprobe's "Constrained Baseline" is "baseline" here.
+ */
+export const normaliseProfile = (profile: string): string => {
+  const plain = profile.replace(/[\s_-]/gu, "").toLowerCase();
+  return plain === "constrainedbaseline"
+    ? "baseline"
+    : plain === "constrainedhigh" || plain === "progressivehigh"
+      ? "high"
+      : plain;
+};
+
+const sameProfile = (a: string, b: string): boolean => normaliseProfile(a) === normaliseProfile(b);
 
 /** Containers HLS delivery carries without repackaging (MPEG-TS segments). */
 export const hlsContainers: ReadonlyArray<string> = ["mpegts"];
@@ -352,7 +365,7 @@ const decodersFor = (video: VideoTrack, capabilities: MediaCapabilities): Array<
       normaliseCodec(decoder.codec) === normaliseCodec(video.codec) &&
       (decoder.profiles.length === 0 ||
         video.profile === undefined ||
-        decoder.profiles.some((profile) => sameText(profile, video.profile ?? ""))),
+        decoder.profiles.some((profile) => sameProfile(profile, video.profile ?? ""))),
   );
 
 const fits = (video: VideoTrack, decoder: VideoDecoder): boolean =>
@@ -379,8 +392,8 @@ const chooseAudio = (
   return track === undefined ? undefined : { track, index };
 };
 
-/** Bitrate of stereo AAC when audio is converted. */
-export const stereoAacKbps = 160;
+/** Bitrate of stereo AAC when audio is converted (AAC-LC, 48 kHz, surround downmixed). */
+export const stereoAacKbps = 192;
 
 const assumedCopiedAudioKbps = 192;
 
@@ -535,5 +548,44 @@ export const decideTranscode = (context: TranscodeContext): TranscodePlan => {
     quality,
     video,
     audio,
+  };
+};
+
+/** Reasons the video converts only to fit a bitrate cap: the original would play as it is. */
+const capReasons: ReadonlySet<TranscodeReason> = new Set([
+  "bandwidth",
+  "requestedQuality",
+  "mobileData",
+]);
+
+/** Reasons the device cannot show the original picture at all. */
+const pictureReasons: ReadonlySet<TranscodeReason> = new Set([
+  "videoCodecUnsupported",
+  "resolutionTooHigh",
+  "interlaced",
+]);
+
+/**
+ * The plan with the original picture instead of a converted one, when the video converts only
+ * to fit a bitrate cap (the device plays the original): what a session gets while the server
+ * already converts as many pictures as it can. `undefined` when the device cannot play the
+ * original picture (codec, resolution, interlacing), which has to wait for the converter
+ * instead. The cap reasons go; the audio stays as planned.
+ */
+export const withOriginalVideo = (plan: TranscodePlan): TranscodePlan | undefined => {
+  if (plan.video._tag !== "Encode") return plan;
+  if (plan.reasons.some((reason) => pictureReasons.has(reason))) return undefined;
+  const reasons = plan.reasons.filter((reason) => !capReasons.has(reason));
+  return {
+    ...plan,
+    decision:
+      plan.audio._tag === "Encode"
+        ? "audio"
+        : reasons.includes("containerUnsupported")
+          ? "remux"
+          : "direct",
+    reasons,
+    quality: "original",
+    video: { _tag: "Copy" },
   };
 };

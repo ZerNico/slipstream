@@ -14,7 +14,7 @@
  * (`LIVE_GRANT_TARGETS`), so access to a channel is checked again at least that often.
  */
 import { isAbsolute, relative, resolve } from "node:path";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { Clock, Context, Effect, Layer } from "effect";
 import { isAnchor } from "@slipstream/domain";
 import { recordingPlaylist, type Segment } from "@slipstream/recorder";
@@ -75,10 +75,13 @@ const makeHls = Effect.gen(function* () {
   /**
    * Segment URIs carrying a capture token limited to `window` that expires with the playlist
    * token and dies with its sign-in, plus the live session id when there is one (so segment
-   * fetches count as the viewer still watching).
+   * fetches count as the viewer still watching). A converting playlist's tokens carry its
+   * variant and playback session too, and the playlist sits one directory deeper
+   * (`<kind>/<id>/<variant>.m3u8`).
    */
   const segmentUri = (grant: typeof HlsGrant.Type, window: Window, sessionId?: string) => {
     const session = sessionId === undefined ? "" : `session=${encodeURIComponent(sessionId)}&`;
+    const up = grant.x === undefined ? "../" : "../../";
     const tokens = new Map<string, string>();
     return (segment: Segment) => {
       let token = tokens.get(segment.captureId);
@@ -88,12 +91,14 @@ const makeHls = Effect.gen(function* () {
           s: scopes.capture(segment.captureId),
           exp: grant.exp,
           ...(grant.sid === undefined ? {} : { sid: grant.sid }),
+          ...(grant.x === undefined ? {} : { x: grant.x }),
+          ...(grant.c === undefined ? {} : { c: grant.c }),
           from: window.fromMs,
           to: window.toMs,
         });
         tokens.set(segment.captureId, token);
       }
-      return `../seg/${encodeURIComponent(segment.captureId)}/${segment.sequence}.ts?${session}token=${token}`;
+      return `${up}seg/${encodeURIComponent(segment.captureId)}/${segment.sequence}.ts?${session}token=${token}`;
     };
   };
 
@@ -172,7 +177,10 @@ const makeHls = Effect.gen(function* () {
       });
     });
 
-  /** One indexed segment: its file (if inside its capture directory) and when it plays. */
+  /**
+   * One indexed segment: its file (if inside its capture directory), when it plays and the
+   * capture run that wrote it.
+   */
   const segmentFile = (captureId: string, sequence: number) =>
     Effect.gen(function* () {
       const [row] = yield* read
@@ -180,6 +188,7 @@ const makeHls = Effect.gen(function* () {
           path: segments.path,
           startMs: segments.startMs,
           durationMs: segments.durationMs,
+          runId: segments.runId,
           directory: captures.directory,
         })
         .from(segments)
@@ -190,10 +199,35 @@ const makeHls = Effect.gen(function* () {
       const file = resolve(row.directory, row.path);
       const inside = relative(resolve(row.directory), file);
       if (inside.startsWith("..") || isAbsolute(inside)) return undefined;
-      return { file, startMs: row.startMs, durationMs: row.durationMs };
+      return { file, startMs: row.startMs, durationMs: row.durationMs, runId: row.runId };
     });
 
-  return { live, recording, range, segmentFile };
+  /**
+   * The file of the segment at `sequence` when the same run wrote it (its timestamps continue
+   * the neighbour's): the previous one warms up a conversion, the next one is converted ahead.
+   */
+  const sameRunFile = (captureId: string, sequence: number, runId: string) =>
+    sequence < 0
+      ? Effect.succeed(undefined)
+      : Effect.map(segmentFile(captureId, sequence), (segment) =>
+          segment?.runId === runId ? segment.file : undefined,
+        );
+
+  /** The newest indexed segment of a channel, for converting the live edge ahead. */
+  const newestSegment = (channelId: string) =>
+    read
+      .select({ captureId: segments.captureId, sequence: segments.sequence })
+      .from(segments)
+      .innerJoin(captures, eq(captures.id, segments.captureId))
+      .where(eq(captures.channelId, channelId))
+      .orderBy(desc(segments.startMs))
+      .limit(1)
+      .pipe(
+        Effect.map((rows) => rows[0]),
+        Effect.orDie,
+      );
+
+  return { live, recording, range, segmentFile, sameRunFile, newestSegment };
 });
 
 /** HLS playlists and segment lookup. */

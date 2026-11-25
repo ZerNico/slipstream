@@ -125,6 +125,7 @@ const standardGroups: Readonly<Record<string, string>> = {
   "doku-plus": "DE | Dokumentation",
   regional: "DE | Regional",
   "testbild-kurz": "DE | Vollprogramm",
+  filmhaus: "DE | Film & Serie",
 };
 
 /** A small, stable hash, so the same index always gets the same copies and coverage. */

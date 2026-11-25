@@ -45,6 +45,8 @@ export class EventBus extends Context.Service<
     readonly nextSegment: (
       channelId: string,
     ) => Effect.Effect<Effect.Effect<void>, never, Scope.Scope>;
+    /** The channels of segments indexed after subscribing, one per segment, until interrupted. */
+    readonly segmentsIndexed: Stream.Stream<string>;
   }
 >()("@slipstream/server/EventBus") {
   static readonly layer = Layer.effect(
@@ -60,7 +62,8 @@ export class EventBus extends Context.Service<
         PubSub.sliding<HouseholdChanged>(1),
         PubSub.shutdown,
       );
-      // Only waiting live playlists listen, and only for their channel's next segment.
+      // Waiting live playlists listen for their channel's next segment, and live conversions
+      // for every new segment of a channel someone watches converted.
       const segments = yield* Effect.acquireRelease(PubSub.sliding<string>(64), PubSub.shutdown);
       return EventBus.of({
         publish: (event) => PubSub.publish(pubsub, event).pipe(Effect.asVoid),
@@ -88,6 +91,7 @@ export class EventBus extends Context.Service<
               }
             }),
           ),
+        segmentsIndexed: Stream.fromPubSub(segments),
       });
     }),
   );

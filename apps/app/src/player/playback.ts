@@ -14,6 +14,7 @@ import {
 import { DateTime, Effect } from "effect";
 import type { Api } from "../api/client.ts";
 import { apiActions } from "../api/queries.ts";
+import { assumedCapabilities } from "./capabilities.ts";
 import type { PlayerProgress } from "./seek.ts";
 
 /** Where playback starts: the oldest captured data, the live edge, or the server's resume point. */
@@ -238,20 +239,13 @@ export const isAuthRefusal = (error: {
   /Response code: 40[13]\b/u.test(`${error.errorException ?? ""}\n${error.errorStackTrace ?? ""}`);
 
 /**
- * What a Media3 player on Android TV can be assumed to decode until the app probes
- * MediaCodecList natively: H.264 up to 1080p, HEVC, AAC and MP3. AC-3 is left out on purpose so
- * the server converts it to AAC rather than risk a silent picture.
+ * Whether two playlist URLs name the same playlist: only their query (the signed token)
+ * differs. A converting session's playlist is named by its conversion, so another conversion is
+ * another playlist, which the player has to load.
  */
-export const defaultCapabilities: MediaCapabilities = {
-  video: [
-    { codec: "h264", profiles: ["baseline", "main", "high"], maxWidth: 1920, maxHeight: 1080 },
-    { codec: "hevc", profiles: ["main"], maxWidth: 1920, maxHeight: 1080 },
-  ],
-  audio: ["aac", "mp3"],
-  audioPassthrough: [],
-  hdr: false,
-  canDeinterlace: true,
-};
+export const samePlaylist = (a: string, b: string): boolean => withoutQuery(a) === withoutQuery(b);
+
+const withoutQuery = (url: string): string => url.split("?")[0] ?? url;
 
 /**
  * How this device is connected, for the server's "Auto" quality, from expo-network's connection
@@ -260,11 +254,15 @@ export const defaultCapabilities: MediaCapabilities = {
 export const networkKindFor = (connectionType: string | undefined): NetworkKind =>
   connectionType === "CELLULAR" ? "mobile" : "lan";
 
-/** The playback session request for a target over `network`. */
+/**
+ * The playback session request for a target over `network`, with what the device can play
+ * (`deviceCapabilities` probes it natively; assumed without the probe).
+ */
 export const sessionRequest = (
   target: PlayTarget,
   network: NetworkKind = "lan",
   quality: QualityRequest = { _tag: "Auto" },
+  capabilities: MediaCapabilities = assumedCapabilities,
 ): PlaybackSessionRequest => ({
   source:
     target._tag === "Live"
@@ -279,7 +277,7 @@ export const sessionRequest = (
               end: DateTime.makeUnsafe(target.end),
             },
           },
-  capabilities: defaultCapabilities,
+  capabilities,
   quality,
   network,
 });

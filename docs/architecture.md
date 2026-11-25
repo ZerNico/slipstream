@@ -145,7 +145,34 @@ that works:
 The decision is pure logic in `packages/domain` (`decideTranscode`), shared by server and
 clients. Hardware encoders (NVENC, Quick Sync, VAAPI) are detected at startup with a short test
 encode per codec and rate-control mode, because `ffmpeg -encoders` only says what was compiled
-in. **Today every session is delivered direct**; the conversion pipeline is not built yet.
+in.
+
+What each track gets, per session (the quality cap is the device's choice or the household's
+default for home, away or mobile data):
+
+| Video                                                                                                 | Audio                                                      | Delivery                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Codec, profile and size decodable, not interlaced (or the device deinterlaces), under the cap         | Codec decodable or passed through (passthrough only at 1x) | Direct: the stored segments                                                                                                                                                                           |
+| as above                                                                                              | Not playable, or passthrough while catching up             | Audio: video copied, the chosen track to AAC-LC stereo 48 kHz 192 kbit/s (surround downmixed)                                                                                                         |
+| Unsupported codec/profile, too large, interlaced on a device that cannot deinterlace, or over the cap | Playable: copied (all tracks)                              | Video: H.264 on the detected hardware encoder in a rate-control mode that worked, else x264 `veryfast`; deinterlaced (one frame per field up to High, per frame below) and scaled to the cap's height |
+| as above                                                                                              | Not playable                                               | Video and audio                                                                                                                                                                                       |
+
+**The conversion pipeline** (`apps/server/src/transcode/`) works on the segment store like
+everything else: a converting session gets a playlist named by its variant
+(`/hls/live/<channel>/<variant>.m3u8`, e.g. `copy_aac-0-2-192`), with the variant in its signed
+segment tokens, and each segment is converted on request with `-copyts`, so it lines up with the
+original's times. Live, timeshift, ranges and recordings, seeking and many viewers all work as
+for the original. Converted segments are keyed by source segment and variant, cached for ten
+minutes (bounded in size, gone when their source is purged), and converted once however many
+viewers ask (single flight); a job nobody waits for any more is stopped. Live conversions in use
+convert each new segment as it is indexed, and a picture conversion converts the next segment
+ahead. Audio is encoded on one 1024-sample frame grid across segments, warmed up by the previous
+segment, so the AAC frames of neighbouring segments hand over without a gap, an overlap or a
+click. At most four picture conversions (one per four cores in software) are in use at once;
+over that, a session whose device plays the original picture gets it (logged), one that cannot
+waits for the converter. A converted audio track is the only audio track of its stream (hls.js
+plays only the first track of a muxed stream anyway); picking another language is a session
+update, and another variant.
 
 Playback sessions hand out short-lived signed playlist URLs, bound to the sign-in and to a time
 window, and renewed while the session lasts.
@@ -210,8 +237,7 @@ Slipstream is meant to be exposed through a reverse proxy, so authentication is 
 
 ## Ideas not built yet
 
-Designed or wanted, but not in the code today: on-the-fly transcoding (the decision exists, the
-pipeline does not), Xtream Codes, HDHomeRun and single-URL sources (the schema knows them, refresh
+Designed or wanted, but not in the code today: Xtream Codes, HDHomeRun and single-URL sources (the schema knows them, refresh
 does not), exporting recordings to `.mkv`/`.mp4` with a path template, importing existing
 recording folders, a rolling buffer per channel, M3U/HDHomeRun output so Plex or Jellyfin can use
 Slipstream as a tuner, OIDC sign-in, notifications, offline downloads on the phone, trickplay

@@ -52,6 +52,7 @@ import { Streams } from "./streams/service.ts";
 import { AdvertiseLive } from "./system/advertise.ts";
 import { Hardware } from "./system/hardware.ts";
 import { SystemInfoService } from "./system/service.ts";
+import { Transcoder } from "./transcode/service.ts";
 
 /** Every service, the recorder included, given a `ServerConfig`. */
 export const ServicesLive = Layer.mergeAll(Streams.layer, Programmes.layer, Recordings.layer).pipe(
@@ -71,7 +72,7 @@ export const ServicesLive = Layer.mergeAll(Streams.layer, Programmes.layer, Reco
     ),
   ),
   Layer.provideMerge(Recorder.layer),
-  Layer.provideMerge(Layer.mergeAll(Settings.layer, Planning.layer)),
+  Layer.provideMerge(Layer.mergeAll(Settings.layer, Planning.layer, Transcoder.layer)),
   Layer.provideMerge(Layer.mergeAll(Sources.layer, Guide.layer, Auth.layer, Hardware.layer)),
   Layer.provideMerge(
     Layer.mergeAll(

@@ -10,11 +10,12 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
-import { Clock, Context, Duration, Effect, Exit, Layer, References, Scope } from "effect";
+import { Clock, Context, DateTime, Duration, Effect, Exit, Layer, References, Scope } from "effect";
 import { HttpServer } from "effect/http";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { ServerConfig } from "../src/config.ts";
 import { Db, type DbShape } from "../src/db/client.ts";
+import { storeStreamInfo } from "../src/db/codec.ts";
 import { captures, segments } from "../src/db/schema.ts";
 import { HLS_TOKEN_MILLIS, LIVE_GRANT_TARGETS } from "../src/hls/service.ts";
 import { makeServer } from "../src/server.ts";
@@ -28,6 +29,16 @@ let recordingId: string;
 const segmentBytes = 1000;
 const segmentCount = 5;
 let seededFrom: number;
+
+/**
+ * What the seeded captures carry, stored as if probed: the segments are filler bytes, which
+ * ffprobe would misread (or not read), and the sessions should play them as they are.
+ */
+const playableInfo = storeStreamInfo({
+  container: "mpegts",
+  audio: [{ codec: "aac", channels: 2 }],
+  probedAt: DateTime.makeUnsafe(0),
+});
 
 const capabilities = {
   video: [],
@@ -75,6 +86,7 @@ beforeAll(async () => {
         id: "capture-1",
         channelId,
         sourceStreamId: "stream-1",
+        streamInfo: playableInfo,
         startedAt: seededFrom,
         state: "running",
         stats: { bytes: segmentBytes * segmentCount, segments: segmentCount, reconnects: 0 },
@@ -277,6 +289,7 @@ describe("live and range playlists", () => {
         id: "capture-2",
         channelId: newsId,
         sourceStreamId: "stream-2",
+        streamInfo: playableInfo,
         startedAt: Date.now(),
         state: "running",
         stats: { bytes: 0, segments: 0, reconnects: 0 },
@@ -515,6 +528,7 @@ describe("live and range playlists", () => {
             id,
             channelId: restartedId,
             sourceStreamId: "stream-3",
+            streamInfo: playableInfo,
             startedAt,
             state: "running",
             stats: { bytes: 0, segments: count, reconnects: 0 },
@@ -686,6 +700,7 @@ describe("renewing a session past half its token life", () => {
           id: "aging",
           channelId: shiftedChannel,
           sourceStreamId: "stream-aging",
+          streamInfo: playableInfo,
           startedAt: start,
           endedAt: start + segmentCount * 6000,
           state: "stopped",

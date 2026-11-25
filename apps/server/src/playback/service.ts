@@ -12,13 +12,20 @@
  * session going by updating it before `expiresAt`. Every playlist request checks again that the
  * sign-in still holds and its user still sees what plays (`admits`).
  *
- * TODO(transcoder): only direct delivery exists so far. When the decision asks for a
- * conversion, the session still serves the original without a plan, so it reads `direct` (and logs
- * what conversion would have been needed), so no client shows a conversion that is not
- * happening.
+ * A session whose plan converts the audio or the picture gets a playlist for its conversion
+ * variant (`transcode/variant.ts`): its segments are converted one by one as players fetch them
+ * (`Transcoder`). Another plan on an update is another variant and so another playlist URL,
+ * which players load afresh where they were. While as many sessions convert their picture as
+ * the server allows, a new one whose device plays the original picture gets it
+ * (`withOriginalVideo`, logged); one that cannot waits for the converter's picture jobs. A
+ * remux-only plan never happens for the stored MPEG-TS segments and plays the original.
+ *
+ * The decision needs to know what the stream carries; a live session on a channel that was
+ * never captured before waits for its first segment, so it does not start on the original
+ * and stay there.
  */
 import { and, asc, desc, eq, gt, sql } from "drizzle-orm";
-import { Clock, Context, DateTime, Effect, Layer, Ref } from "effect";
+import { Clock, Context, DateTime, Effect, Layer, Option, Ref, Schedule } from "effect";
 import {
   Forbidden,
   InvalidInput,
@@ -52,7 +59,11 @@ import {
   type TranscodePlan,
   type User,
   UserId,
+  withOriginalVideo,
 } from "@slipstream/domain";
+import { EventBus } from "../events.ts";
+import { conversionKey, Transcoder } from "../transcode/service.ts";
+import { variantName } from "../transcode/variant.ts";
 import { Auth, type RequestOrigin } from "../auth/service.ts";
 import { type HlsGrant, Signing } from "../auth/signing.ts";
 import { ServerConfig } from "../config.ts";
@@ -117,7 +128,20 @@ interface OpenSession {
   readonly deviceName: string | undefined;
   /** Where the client last asked from: home or away picks the household's default quality. */
   readonly origin: RequestOrigin;
+  /** How it is delivered, as last decided. */
+  readonly decision: Decision;
 }
+
+/** A session's delivery: the plan the client sees, and the variant that converts it. */
+interface Decision {
+  readonly plan?: TranscodePlan;
+  readonly variant?: string;
+}
+
+/** How long a new live session waits for the first segment of a channel never captured before. */
+const FIRST_SEGMENT_WAIT = "20 seconds";
+/** How often it looks for that segment in the index meanwhile. */
+const FIRST_SEGMENT_POLL = "500 millis";
 
 /** A live session as the streams overview lists it. */
 export interface LiveSession {
@@ -231,6 +255,8 @@ const makePlayback = Effect.gen(function* () {
   const hardware = yield* Hardware;
   const settings = yield* Settings;
   const config = yield* ServerConfig;
+  const transcoder = yield* Transcoder;
+  const bus = yield* EventBus;
   const sessions = yield* Ref.make(new Map<string, OpenSession>());
 
   /** Absolute when a public URL is configured; otherwise a path the client resolves. */
@@ -290,8 +316,29 @@ const makePlayback = Effect.gen(function* () {
       );
 
   /**
+   * What the newest capture of a channel that knows it says its stream carries: the recorder
+   * stores what ffmpeg reports about its input as a capture starts, before the first segment.
+   */
+  const latestCaptureInfo = (channelId: string) =>
+    read
+      .select({ streamInfo: captures.streamInfo })
+      .from(captures)
+      .where(and(eq(captures.channelId, channelId), sql`${captures.streamInfo} IS NOT NULL`))
+      .orderBy(desc(captures.startedAt))
+      .limit(1)
+      .pipe(
+        Effect.map(([row]) =>
+          row?.streamInfo === null || row === undefined
+            ? undefined
+            : readStreamInfo(row.streamInfo),
+        ),
+        Effect.orDie,
+      );
+
+  /**
    * What the stream carries, from the capture's stored probe or by probing one of its segments
-   * (stored for next time). `undefined` before anything was captured.
+   * (stored for next time); for live without a segment yet, what its starting capture reported.
+   * `undefined` before anything was captured.
    */
   const streamInfoFor = (source: PlaybackSessionRequest["source"]) =>
     Effect.gen(function* () {
@@ -299,6 +346,7 @@ const makePlayback = Effect.gen(function* () {
       switch (source._tag) {
         case "Live":
           sample = yield* sampleSegment(source.channelId, 0, Number.MAX_SAFE_INTEGER);
+          if (sample === undefined) return yield* latestCaptureInfo(source.channelId);
           break;
         case "Recording": {
           const row = yield* recordingRow(source.recordingId);
@@ -349,12 +397,46 @@ const makePlayback = Effect.gen(function* () {
       return { quality, network };
     });
 
-  /** The decision for a session as the client should see it (direct delivery only, for now). */
-  const decide = (request: PlaybackSessionRequest, origin: RequestOrigin) =>
+  /**
+   * What the stream of a new session carries. A live channel never captured before has nothing
+   * to tell yet: its capture was just started, so this waits until the capture reports its input
+   * or writes its first segment (announced, or found in the index, whichever comes first).
+   */
+  const firstStreamInfo = (source: PlaybackSessionRequest["source"]) =>
+    source._tag !== "Live"
+      ? streamInfoFor(source)
+      : Effect.scoped(
+          Effect.gen(function* () {
+            const next = yield* bus.nextSegment(source.channelId);
+            const known = yield* streamInfoFor(source);
+            if (known !== undefined) return known;
+            const indexed = streamInfoFor(source).pipe(
+              Effect.repeat({
+                until: (info) => info !== undefined,
+                schedule: Schedule.spaced(FIRST_SEGMENT_POLL),
+              }),
+            );
+            const found = yield* Effect.timeoutOption(
+              Effect.raceFirst(Effect.andThen(next, streamInfoFor(source)), indexed),
+              FIRST_SEGMENT_WAIT,
+            );
+            return Option.getOrUndefined(found);
+          }),
+        );
+
+  /**
+   * How a session on `channelId` is delivered: the plan (absent while nothing is known about
+   * the stream), and the variant that converts it, if anything converts.
+   */
+  const decide = (
+    channelId: string | undefined,
+    request: PlaybackSessionRequest,
+    origin: RequestOrigin,
+    stream: Effect.Success<ReturnType<typeof streamInfoFor>>,
+  ) =>
     Effect.gen(function* () {
-      const stream = yield* streamInfoFor(request.source);
-      if (stream === undefined) return {};
-      const plan: TranscodePlan = decideTranscode({
+      if (stream === undefined) return {} satisfies Decision;
+      const planned: TranscodePlan = decideTranscode({
         stream,
         capabilities: request.capabilities,
         ...(yield* qualityFor(request, origin)),
@@ -363,25 +445,45 @@ const makePlayback = Effect.gen(function* () {
         audioLanguage: request.audioLanguage,
         hardware: (yield* hardware.caps) ?? softwareOnly,
       });
-      if (plan.decision === "direct") return { plan };
-      yield* Effect.logInfo("Serving the original; transcoding is not available yet").pipe(
-        Effect.annotateLogs({ wanted: plan.decision, reasons: plan.reasons.join(",") }),
-      );
-      return {};
+      let plan = planned;
+      // A picture conversion is shared by everyone converting the channel the same way.
+      const key = conversionKey(channelId ?? "", variantName(planned) ?? "");
+      if (planned.video._tag === "Encode") {
+        const onHardware = planned.video.encoder !== "software";
+        if (yield* transcoder.videoBusy(key, onHardware)) {
+          const original = withOriginalVideo(planned);
+          yield* Effect.logWarning(
+            original === undefined
+              ? "Every picture conversion is in use; this one waits its turn"
+              : "Every picture conversion is in use; serving the original picture",
+          ).pipe(Effect.annotateLogs({ reasons: planned.reasons.join(",") }));
+          plan = original ?? planned;
+        }
+      }
+      const variant = variantName(plan);
+      if (variant === undefined && plan.decision !== "direct") {
+        // Only repackaging: the stored segments are MPEG-TS already.
+        yield* Effect.logInfo("Serving the original segments").pipe(
+          Effect.annotateLogs({ wanted: plan.decision, reasons: plan.reasons.join(",") }),
+        );
+        return {} satisfies Decision;
+      }
+      if (plan.video._tag === "Encode") yield* transcoder.touchVideo(key);
+      if (variant !== undefined) {
+        yield* Effect.logInfo("Converting playback").pipe(
+          Effect.annotateLogs({ channelId, variant, reasons: plan.reasons.join(",") }),
+        );
+      }
+      return (variant === undefined ? { plan } : { plan, variant }) satisfies Decision;
     });
 
-  const respond = (id: string, session: OpenSession) =>
-    Effect.map(
-      decide(session.request, session.origin),
-      (decision) =>
-        ({
-          id: PlaybackSessionId.make(id),
-          playlistUrl: session.playlistUrl,
-          ...decision,
-          ...(session.startAt === undefined ? {} : { startAt: session.startAt }),
-          expiresAt: session.expiresAt,
-        }) satisfies PlaybackSession,
-    );
+  const respond = (id: string, session: OpenSession): PlaybackSession => ({
+    id: PlaybackSessionId.make(id),
+    playlistUrl: session.playlistUrl,
+    ...(session.decision.plan === undefined ? {} : { plan: session.decision.plan }),
+    ...(session.startAt === undefined ? {} : { startAt: session.startAt }),
+    expiresAt: session.expiresAt,
+  });
 
   /** Joins or starts the channel's capture for a live session; a refusal only gets logged. */
   const holdLive = (channelId: string, sessionId: string) =>
@@ -529,10 +631,18 @@ const makePlayback = Effect.gen(function* () {
       return now - (yield* recorder.dvrWindowMs);
     });
 
+  /** The channel a source plays: its own, or the recording's. */
+  const channelOf = (
+    source: PlaybackSessionRequest["source"],
+    stored: Effect.Success<ReturnType<typeof requireSource>>,
+  ): string | undefined =>
+    source._tag === "Recording" ? stored?.recording.channelId : source.channelId;
+
   /**
    * A signed playlist path for `source`: a live window, a recording's retained range, or the
    * requested range from no earlier than `floor` (see `rangeFloor`). `sessionId` is the
-   * playback session (live hold), `client` the sign-in the token dies with.
+   * playback session (live hold), `client` the sign-in the token dies with. A converting
+   * session's playlist is named by its `variant`, which its tokens carry.
    */
   const playlistPath = (
     actor: User,
@@ -541,9 +651,18 @@ const makePlayback = Effect.gen(function* () {
     sessionId: string,
     client: PlaybackClient,
     floor: number | undefined,
+    variant: string | undefined,
   ) =>
     Effect.gen(function* () {
-      const base = { u: actor.id, sid: client.sessionId };
+      const channelId = channelOf(source, stored);
+      const base = {
+        u: actor.id,
+        sid: client.sessionId,
+        ...(variant === undefined ? {} : { x: variant }),
+        ...(variant === undefined || channelId === undefined ? {} : { c: channelId }),
+      };
+      const file = (id: string) =>
+        `${encodeURIComponent(id)}${variant === undefined ? "" : `/${variant}`}.m3u8`;
       switch (source._tag) {
         case "Live": {
           const { token, exp } = yield* signing.signHls(
@@ -551,7 +670,7 @@ const makePlayback = Effect.gen(function* () {
             HLS_TOKEN_MILLIS,
           );
           // The session id lets the HLS routes tell the recorder this viewer is still watching.
-          const path = `/hls/live/${encodeURIComponent(source.channelId)}.m3u8?session=${sessionId}&token=${token}`;
+          const path = `/hls/live/${file(source.channelId)}?session=${sessionId}&token=${token}`;
           return { path, exp };
         }
         case "Recording": {
@@ -564,7 +683,7 @@ const makePlayback = Effect.gen(function* () {
             },
             HLS_TOKEN_MILLIS,
           );
-          const path = `/hls/recordings/${encodeURIComponent(source.recordingId)}.m3u8?token=${token}`;
+          const path = `/hls/recordings/${file(source.recordingId)}?token=${token}`;
           return { path, exp };
         }
         case "Range": {
@@ -577,7 +696,7 @@ const makePlayback = Effect.gen(function* () {
             { ...base, s: scopes.range(source.channelId, from, to), from: opens, to },
             HLS_TOKEN_MILLIS,
           );
-          const path = `/hls/range/${encodeURIComponent(source.channelId)}.m3u8?from=${from}&to=${to}&token=${token}`;
+          const path = `/hls/range/${file(source.channelId)}?from=${from}&to=${to}&token=${token}`;
           return { path, exp };
         }
       }
@@ -638,7 +757,21 @@ const makePlayback = Effect.gen(function* () {
         startAt = DateTime.toEpochMillis(source.range.start);
         break;
     }
-    const { path, exp } = yield* playlistPath(actor, source, stored, id, client, floor);
+    const decision = yield* decide(
+      channelOf(source, stored),
+      request,
+      client.origin,
+      yield* firstStreamInfo(source),
+    );
+    const { path, exp } = yield* playlistPath(
+      actor,
+      source,
+      stored,
+      id,
+      client,
+      floor,
+      decision.variant,
+    );
     const session: OpenSession = {
       userId: actor.id,
       request,
@@ -648,9 +781,10 @@ const makePlayback = Effect.gen(function* () {
       createdAt: now,
       deviceName: client.deviceName,
       origin: client.origin,
+      decision,
     };
     yield* Ref.update(sessions, (map) => new Map(map).set(id, session));
-    return yield* respond(id, session);
+    return respond(id, session);
   });
 
   const ownSession = (actor: User, sessionId: string) =>
@@ -694,20 +828,36 @@ const makePlayback = Effect.gen(function* () {
       const { source } = session.request;
       const stored = yield* requireSource(viewer, source);
       const floor = yield* rangeFloor(viewer);
-      const { path, exp } = yield* playlistPath(actor, source, stored, sessionId, client, floor);
+      const request = { ...session.request, ...update };
+      const decision = yield* decide(
+        channelOf(source, stored),
+        request,
+        client.origin,
+        yield* streamInfoFor(source),
+      );
+      const { path, exp } = yield* playlistPath(
+        actor,
+        source,
+        stored,
+        sessionId,
+        client,
+        floor,
+        decision.variant,
+      );
       const next: OpenSession = {
         ...session,
-        request: { ...session.request, ...update },
+        request,
         origin: client.origin,
         playlistUrl: link(path),
         expiresAt: toInstant(exp),
+        decision,
       };
       yield* Ref.update(sessions, (map) => new Map(map).set(sessionId, next));
       yield* touch(sessionId, actor.id);
-      return yield* respond(sessionId, next);
+      return respond(sessionId, next);
     });
 
-  /** Forgets a session and lets go of its capture. */
+  /** Forgets a session and lets go of its capture (a conversion stops when nobody fetches). */
   const close = (sessionId: string, session: OpenSession) =>
     Effect.gen(function* () {
       yield* Ref.update(sessions, (map) => {

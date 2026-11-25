@@ -18,6 +18,7 @@ import {
   playerParams,
   positionForInstant,
   programmePlayTarget,
+  samePlaylist,
   sessionFailure,
   sessionRequest,
   type PickedProgramme,
@@ -44,6 +45,16 @@ describe("player params", () => {
       parsePlayerParams({ kind: "range", channelId: "c", start: "5", end: "1" }),
     ).toBeUndefined();
     expect(parsePlayerParams({})).toBeUndefined();
+  });
+});
+
+describe("samePlaylist", () => {
+  it("tells a renewed token from another conversion of the stream", () => {
+    const live = "https://tv.example/hls/live/ch1.m3u8?session=s&token=a";
+    expect(samePlaylist(live, "https://tv.example/hls/live/ch1.m3u8?session=s&token=b")).toBe(true);
+    expect(
+      samePlaylist(live, "https://tv.example/hls/live/ch1/copy_aac-0-2-192.m3u8?session=s&token=b"),
+    ).toBe(false);
   });
 });
 

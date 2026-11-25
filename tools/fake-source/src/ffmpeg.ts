@@ -138,7 +138,7 @@ export const ffmpegArgs = (channel: FakeChannel, overlay: OverlayFiles | null): 
     "-c:a",
     audio.codec,
     "-b:a",
-    audio.codec === "mp2" ? "192k" : "128k",
+    audio.codec === "aac" ? "128k" : "192k",
     "-metadata",
     `service_name=${channel.name}`,
     "-metadata",
