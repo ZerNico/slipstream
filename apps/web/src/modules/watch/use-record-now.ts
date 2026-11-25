@@ -1,6 +1,7 @@
 import type { RecordingEntry } from "@slipstream/api";
 import {
   type ChannelId,
+  extendedEnd,
   extendPadding,
   type GuideEntry,
   recordNowNote,
@@ -62,11 +63,9 @@ export function useRecordingActions() {
   return {
     busy: update.isPending || stop.isPending,
     extend: (entry: RecordingEntry) => {
-      const extended = extendPadding(entry.padding);
-      const end =
-        recordedSpan(entry).end + (extended.afterMinutes - entry.padding.afterMinutes) * 60_000;
+      const end = extendedEnd(entry, entry.padding);
       update.mutate(
-        { id: entry.id, update: { padding: extended } },
+        { id: entry.id, update: { padding: extendPadding(entry.padding) } },
         {
           onSuccess: () => toast({ title: m.player_recording_extended({ end: new Date(end) }) }),
           onError: failed,

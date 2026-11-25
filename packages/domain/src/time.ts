@@ -45,6 +45,13 @@ export const extendPadding = (padding: Padding): Padding => ({
   afterMinutes: clampPaddingMinutes(padding.afterMinutes + extendStepMinutes),
 });
 
+/**
+ * When a recording of `range` with `padding` ends once extended (`extendPadding`), in epoch
+ * milliseconds: what "Extend" tells the viewer it now records until.
+ */
+export const extendedEnd = (range: TimeRange, padding: Padding): number =>
+  epochMs(padRange(range, extendPadding(padding)).end);
+
 /** The values a D-pad stepper walks through, fine near zero and coarse towards four hours. */
 export const paddingStepMinutes: ReadonlyArray<number> = [
   0, 1, 2, 3, 5, 10, 15, 20, 30, 45, 60, 90, 120, 180, 240,

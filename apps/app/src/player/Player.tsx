@@ -1,5 +1,6 @@
 import {
   epochMs,
+  extendedEnd,
   extendPadding,
   holdSpeed,
   liveEta,
@@ -740,12 +741,9 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
           })}
           onExtend={() => {
             const { id, padding } = record.recording;
-            const extended = extendPadding(padding);
-            const extendedEnd =
-              epochMs(padRange(record.recording, record.recording.padding).end) +
-              (extended.afterMinutes - padding.afterMinutes) * 60_000;
-            recordWrite(apiActions.updateRecording(id, { padding: extended }), () =>
-              m.player_recording_extended({ end: new Date(extendedEnd) }),
+            const until = extendedEnd(record.recording, padding);
+            recordWrite(apiActions.updateRecording(id, { padding: extendPadding(padding) }), () =>
+              m.player_recording_extended({ end: new Date(until) }),
             );
           }}
           onStop={() =>

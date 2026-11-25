@@ -1,3 +1,4 @@
+import { DateTime } from "effect";
 import { describe, expect, it } from "vitest";
 import { ProgrammeId, RecordingId, UserId } from "../src/ids.ts";
 import { canEditRule, isPin, pinLength } from "../src/household.ts";
@@ -7,7 +8,13 @@ import {
   type RecordingState,
 } from "../src/recording.ts";
 import { recordingsOfAiring } from "../src/airing.ts";
-import { extendPadding, extendStepMinutes, noPadding, paddingLimits } from "../src/time.ts";
+import {
+  extendedEnd,
+  extendPadding,
+  extendStepMinutes,
+  noPadding,
+  paddingLimits,
+} from "../src/time.ts";
 import { arte, at, daserste, programme } from "./test-support.ts";
 
 const tatort = programme({
@@ -161,6 +168,20 @@ describe("extendPadding", () => {
       afterMinutes: 10 + extendStepMinutes,
     });
     expect(extendPadding(noPadding).afterMinutes).toBe(30);
+  });
+
+  it("tells when an extended recording ends: its padded end plus what Extend added", () => {
+    const slot = {
+      start: DateTime.makeUnsafe("2026-11-25T20:15:00Z"),
+      end: DateTime.makeUnsafe("2026-11-25T21:45:00Z"),
+    };
+    expect(extendedEnd(slot, { beforeMinutes: 5, afterMinutes: 10 })).toBe(
+      Date.parse("2026-11-25T22:25:00Z"),
+    );
+    // At the maximum, Extend adds nothing.
+    expect(extendedEnd(slot, { beforeMinutes: 0, afterMinutes: paddingLimits.max })).toBe(
+      Date.parse("2026-11-25T21:45:00Z") + paddingLimits.max * 60_000,
+    );
   });
 
   it("holds at the stepper maximum", () => {
