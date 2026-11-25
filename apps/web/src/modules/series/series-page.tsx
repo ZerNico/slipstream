@@ -148,7 +148,9 @@ function SeriesCard({
           key={timeZone === undefined ? "zone" : "next"}
           className="mt-1 grid gap-0.5 text-[12.5px] text-fg-3 sm:flex sm:items-center sm:gap-1.5"
         >
-          <span className="min-w-0 truncate">
+          {/* The next airing changes with the clock; it takes the free width, so the count after
+              it stays put at the right edge instead of sliding along. */}
+          <span className="min-w-0 truncate sm:flex-1">
             <Sk chars={30}>
               {/* Without the zone there is no "today" yet: the placeholder holds the line. */}
               {timeZone === undefined ? null : activity.next !== undefined ? (
@@ -167,9 +169,6 @@ function SeriesCard({
             </Sk>
           </span>
           <span className="flex min-w-0 shrink-0 items-center gap-1 truncate">
-            <span aria-hidden="true" className="max-sm:hidden">
-              ·
-            </span>
             <Sk chars={12}>{m.series_card_recorded({ count: activity.recorded })}</Sk>
             {editable ? null : (
               <>
