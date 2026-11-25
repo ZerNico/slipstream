@@ -428,6 +428,10 @@ export const recordLayoutShifts = async (page: Page): Promise<void> => {
       for (const entry of list.getEntries()) {
         if (!("value" in entry) || typeof entry.value !== "number") continue;
         if ("hadRecentInput" in entry && entry.hadRecentInput === true) continue;
+        // Sub-pixel rounding (a live clock re-rendering while the page loads) scores around
+        // 0.000004; nobody can see that. Anything a person could notice is far above this floor
+        // (a "good" page stays under 0.1 in total), so every real shift still counts.
+        if (entry.value < 0.0001) continue;
         const sources =
           "sources" in entry && Array.isArray(entry.sources)
             ? entry.sources.map((source: { node: Node | null }) => describe(source.node))
