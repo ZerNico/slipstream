@@ -1,6 +1,7 @@
 import type { RecordingSettings } from "@slipstream/api";
 import {
   type Channel,
+  type LiveKeep,
   type ExtraTimeDefaults,
   type ExtraTimeOverride,
   type Padding,
@@ -22,6 +23,7 @@ import { useTheme } from "../../../theme/theme.ts";
 import { Icon } from "../../../ui/Icon.tsx";
 import { AddExceptionSheet } from "./AddExceptionSheet.tsx";
 import { adminSettingsActions } from "./api.ts";
+import { LiveGroup } from "./LiveGroup.tsx";
 import { Group, Row, SettingsPage, SettingsSkeleton } from "./parts.tsx";
 import { PicturesGroup } from "./PicturesGroup.tsx";
 import { recordingShape } from "./shapes.ts";
@@ -101,13 +103,18 @@ const RecordingBody = ({
   value,
   channels,
   tmdb,
+  live,
   onChange,
+  onLiveChange,
 }: {
   readonly value: RecordingSettings;
   readonly channels: readonly Channel[];
   /** Whether TMDB is connected; undefined when that could not be read. */
   readonly tmdb: boolean | undefined;
+  /** Live TV after its viewers leave; undefined when that could not be read. */
+  readonly live: LiveKeep | undefined;
   readonly onChange: (next: RecordingSettings) => void;
+  readonly onLiveChange: (next: LiveKeep) => void;
 }) => {
   const [adding, setAdding] = useState(false);
   const defaults = value.extraTime;
@@ -163,6 +170,7 @@ const RecordingBody = ({
           onPress={() => setAdding(true)}
         />
       </Group>
+      {live === undefined ? null : <LiveGroup value={live} onChange={onLiveChange} />}
       {tmdb === undefined ? null : <PicturesGroup connected={tmdb} />}
       {adding ? (
         <AddExceptionSheet
@@ -178,8 +186,8 @@ const RecordingBody = ({
 
 /**
  * Settings › Recording on a phone: how early to start and how late to end, exceptions per
- * channel or guide category (each with its own steppers, removed after a confirm), and the
- * pictures from TMDB. Changes save themselves and never rewrite existing series recordings.
+ * channel or guide category (each with its own steppers, removed after a confirm), how long
+ * live TV keeps running and its rewind buffer after viewers leave, and the pictures from TMDB. Changes save themselves and never rewrite existing series recordings.
  */
 const RecordingPage = () => {
   const title = m.settings_section_recording();
@@ -189,8 +197,12 @@ const RecordingPage = () => {
   const settings = useQuery(queries.recordingSettings());
   const artwork = useQuery(queries.artworkSettings());
   const channels = useQuery(app.channels());
+  const live = useQuery(queries.liveSettings());
   const draft = useAutosave(settings.data, queryKeys.recordingSettings, (value) =>
     runAction(adminSettingsActions.saveRecording(value)),
+  );
+  const liveDraft = useAutosave(live.data, queryKeys.liveSettings, (value) =>
+    runAction(adminSettingsActions.saveLive(value)),
   );
 
   if (settings.isError) {
@@ -205,14 +217,16 @@ const RecordingPage = () => {
   const value = draft.value;
   return (
     <SettingsPage title={title}>
-      {value === undefined || channels.isPending || artwork.isPending ? (
+      {value === undefined || channels.isPending || artwork.isPending || live.isPending ? (
         <SettingsSkeleton groups={recordingShape} />
       ) : (
         <RecordingBody
           value={value}
           channels={channels.data ?? []}
           tmdb={artwork.data?.tmdb}
+          live={liveDraft.value}
           onChange={draft.change}
+          onLiveChange={liveDraft.change}
         />
       )}
     </SettingsPage>

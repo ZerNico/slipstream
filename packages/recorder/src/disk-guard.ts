@@ -1,6 +1,7 @@
 /**
- * The disk-space guard (PLAN 6.3): keeps free space above a floor. Live DVR windows shrink first,
- * then retention runs; running recordings are never cut. While space stays low it warns once,
+ * The disk-space guard (PLAN 6.3): keeps free space above a floor. The rewind buffers kept after
+ * captures stopped go first, then live DVR windows shrink, then retention runs; running
+ * recordings are never cut. While space stays low it warns once,
  * and again after it recovered and dropped again.
  */
 import { Context, Effect, Layer, Ref, Schedule } from "effect";
@@ -51,6 +52,9 @@ export class DiskGuard extends Context.Service<
         });
 
         const makeRoom = Effect.gen(function* () {
+          // The rewind buffers of channels nobody watches any more go first.
+          yield* manager.dropBuffers;
+          yield* sweeper.sweep;
           let free = yield* storage.freeBytes;
           let window = yield* manager.dvrWindowMs;
           while (free < floor && window > minWindow) {

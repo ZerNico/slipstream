@@ -111,6 +111,34 @@ test.describe("settings groups at 1440 × 900", () => {
   });
 });
 
+test.describe("live TV settings at 1440 × 900", () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test("Recording keeps how long a channel runs on and its rewind buffer", async ({ page }) => {
+    await signIn(page);
+    await page.goto("/settings/recording");
+    const running = page.getByRole("combobox", {
+      name: "Keep a channel running after the last viewer leaves",
+    });
+    const buffer = page.getByRole("combobox", { name: "Keep the rewind buffer after it stops" });
+    await expect(running).toHaveText(/10\smin/u);
+    await expect(buffer).toHaveText(/1\sh/u);
+    const live = async () => (await page.request.get("/api/settings/live")).json();
+
+    await running.click();
+    await page.getByRole("option", { name: "Until the programme ends" }).click();
+    await expect(running).toHaveText("Until the programme ends");
+    await expect.poll(live).toEqual({ keepRunning: "programmeEnd", keepBufferMinutes: 60 });
+    await page.reload();
+    await expect(running).toHaveText("Until the programme ends");
+
+    // Back to the default, for the specs after this one.
+    await running.click();
+    await page.getByRole("option", { name: /^10\smin$/u }).click();
+    await expect.poll(live).toEqual({ keepRunning: 10, keepBufferMinutes: 60 });
+  });
+});
+
 test("sign-in says a wrong password under the field", async ({ page }) => {
   await signIn(page);
   await page.request.post("/api/auth/logout");

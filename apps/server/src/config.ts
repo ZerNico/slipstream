@@ -97,6 +97,11 @@ export interface RecorderTuning {
    * app in the background). Default 60 s.
    */
   readonly liveIdleMs?: number;
+  /**
+   * How long a channel keeps running after its last live viewer left, in place of the
+   * household's Live TV setting (tests). Default: the setting.
+   */
+  readonly keepRunningMs?: number;
 }
 
 /** Default free-space floor: 20 GiB. */

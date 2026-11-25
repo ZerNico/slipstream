@@ -463,6 +463,9 @@ const SettingsHandlers = HttpApiBuilder.group(SlipstreamApi, "settings", (handle
       playback: () => settings.playback,
       savePlayback: ({ payload }) =>
         Effect.flatMap(CurrentUser, (user) => settings.savePlayback(user, payload)),
+      live: () => settings.live,
+      saveLive: ({ payload }) =>
+        Effect.flatMap(CurrentUser, (user) => settings.saveLive(user, payload)),
     });
   }),
 );

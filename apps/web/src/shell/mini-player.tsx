@@ -6,7 +6,7 @@ import { CloseIcon, FullscreenIcon, PauseIcon, PlayIcon } from "~/ui/icons.ts";
 import { IconButton } from "~/ui/primitives/button.tsx";
 import type { PlaybackSource } from "@slipstream/api";
 import { ChannelId, qualityRequest, RecordingId } from "@slipstream/domain";
-import type { PlaybackSnapshot } from "~/modules/watch/live-position.ts";
+import { type PlaybackSnapshot, wallAt } from "~/modules/watch/live-position.ts";
 import { type StartAt, useHlsPlayback } from "~/modules/watch/use-hls-playback.ts";
 import { usePlaybackSession } from "~/modules/watch/use-playback-session.ts";
 import {
@@ -50,7 +50,7 @@ const resumeOf = (
   snapshot === null
     ? item.resumeT
     : item.live
-      ? Math.round(snapshot.epochOffset + snapshot.currentTime * 1000)
+      ? Math.round(wallAt(snapshot, snapshot.currentTime))
       : Math.round(Math.max(0, snapshot.currentTime - snapshot.seekableStart) * 1000);
 
 /** What the mini player plays and where it starts. */

@@ -52,6 +52,27 @@ describe("playerPosition, running", () => {
     expect(position.timeline.playhead).toBe(live - (31 * 60 + 30) * 1000);
   });
 
+  it("shows a buffer kept from before a gap at its own times, with the gap", () => {
+    // 10 minutes captured until 17:15, nothing until 17:55, then up to live.
+    const gapped: PlaybackSnapshot = {
+      ...running(0),
+      seekableEnd: 57 * 60,
+      liveSync: 57 * 60,
+      currentTime: 5 * 60,
+      epochOffset: live - 57 * MIN,
+      clock: [
+        { media: 0, wall: live - 97 * MIN },
+        { media: 10 * 60, wall: live - 47 * MIN },
+      ],
+    };
+    const position = playerPosition(gapped, subject);
+    expect(position.timeline.captured).toEqual({ start: live - 97 * MIN, end: live });
+    expect(position.timeline.gaps).toEqual([{ start: live - 87 * MIN, end: live - 47 * MIN }]);
+    expect(position.position).toBe(live - 92 * MIN);
+    expect(position.mediaTimeAt(live - 60 * MIN)).toBe(10 * 60);
+    expect(position.mediaTimeAt(live - 30 * MIN)).toBe(27 * 60);
+  });
+
   it("counts a few seconds behind as live", () => {
     expect(playerPosition(running(2), subject).atLive).toBe(true);
     expect(playerPosition(running(10), subject).atLive).toBe(false);

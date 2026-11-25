@@ -163,7 +163,8 @@ const leavesHistory = (recording: Recording, rules: ReadonlyArray<Rule>) =>
   !needsRepeat(recording) &&
   rules.some((rule) => rule.id === recording.ruleId && rule.skipRepeats);
 /**
- * Segments no remaining recording range and no live DVR window covers. Cancelled recordings and
+ * Segments no remaining recording range and no live DVR window covers (a running one, or the
+ * kept buffer of a watched capture that stopped). Cancelled recordings and
  * anchors (deleted by a person, the row only holding their chain's search) retain nothing; a
  * copy a repeat replaced keeps its segments while its row lasts, for "Keep the original".
  */
@@ -180,7 +181,10 @@ export const unretainedSegments = (
       keep(recording.channelId, paddedMs(recording));
   }
   for (const window of windows) {
-    keep(window.channelId, { startMs: window.fromMs, endMs: Number.POSITIVE_INFINITY });
+    keep(window.channelId, {
+      startMs: window.fromMs,
+      endMs: window.toMs ?? Number.POSITIVE_INFINITY,
+    });
   }
   return segments.filter((segment) => {
     const endMs = segment.startMs + segment.durationMs;

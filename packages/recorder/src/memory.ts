@@ -15,6 +15,8 @@ import { RecorderEvents, type RecorderEvent } from "./events.ts";
 import {
   GuideRepo,
   HistoryRepo,
+  LiveKeepPolicy,
+  type LiveKeepRules,
   type PlanningAccess,
   PlanningContextRepo,
   RecordingRepo,
@@ -268,9 +270,12 @@ export const memoryLayer = (
     readonly recordings?: ReadonlyArray<Recording>;
     readonly freeBytes?: number;
     readonly planning?: MemoryPlanningOptions;
+    /** What live TV keeps after its viewers leave; nothing by default. */
+    readonly liveKeep?: LiveKeepRules;
   } = {},
 ) =>
   Layer.mergeAll(
+    options.liveKeep === undefined ? LiveKeepPolicy.none : LiveKeepPolicy.fixed(options.liveKeep),
     Layer.effect(RecordingRepo, makeMemoryRecordingRepo(options.recordings)),
     Layer.effect(HistoryRepo, makeMemoryHistoryRepo()),
     Layer.succeed(PlanningContextRepo, makeMemoryPlanningContextRepo(options.planning)),

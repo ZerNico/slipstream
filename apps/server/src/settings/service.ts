@@ -20,10 +20,12 @@ import {
   defaultArtworkOrder,
   extraTimeDefaultsProblems,
   initialExtraTimeDefaults,
+  initialLiveKeep,
+  LiveKeep,
   type User,
 } from "@slipstream/domain";
 import { requireAdmin } from "../auth/service.ts";
-import { Db } from "../db/client.ts";
+import { type Database, Db } from "../db/client.ts";
 import { toInstant } from "../db/codec.ts";
 import { channels, settings } from "../db/schema.ts";
 import { Hardware } from "../system/hardware.ts";
@@ -31,6 +33,7 @@ import { liveChannel } from "../channels/lineup.ts";
 
 const RECORDING_KEY = "recording";
 const PLAYBACK_KEY = "playback";
+const LIVE_KEY = "live";
 
 /** What Settings › Recording ships with: 2 minutes early, 10 after, guide image then frame. */
 export const initialRecordingSettings: RecordingSettings = {
@@ -49,6 +52,29 @@ export const initialPlaybackSettings: StoredPlayback = {
   maxConversions: 2,
   quality: { home: "auto", away: "auto", mobile: "auto" },
 };
+
+const LiveJson = Schema.fromJsonString(Schema.toCodecJson(LiveKeep));
+
+/**
+ * The saved Live TV settings, or the defaults (also for a value that no longer decodes). The
+ * recorder reads them each time a viewer leaves (`LiveKeepPolicyLive`).
+ */
+export const loadLiveKeep = (db: Database): Effect.Effect<LiveKeep> =>
+  db
+    .select({ value: settings.value })
+    .from(settings)
+    .where(eq(settings.key, LIVE_KEY))
+    .pipe(
+      Effect.map((rows) => {
+        const value = rows[0]?.value;
+        return (
+          Option.getOrUndefined(
+            value === undefined ? Option.none() : Schema.decodeUnknownOption(LiveJson)(value),
+          ) ?? initialLiveKeep
+        );
+      }),
+      Effect.orDie,
+    );
 
 const RecordingJson = Schema.fromJsonString(Schema.toCodecJson(RecordingSettings));
 const StoredPlaybackJson = Schema.fromJsonString(Schema.toCodecJson(StoredPlayback));
@@ -162,11 +188,20 @@ const makeSettings = Effect.gen(function* () {
     return yield* playback;
   });
 
+  const saveLive = Effect.fn("Settings.saveLive")(function* (actor: User, input: LiveKeep) {
+    yield* requireAdmin(actor);
+    yield* store(LIVE_KEY, Schema.encodeSync(LiveJson)(input));
+    return input;
+  });
+
   return {
     recording,
     saveRecording,
     playback,
     savePlayback,
+    /** Live TV after its viewers leave; the defaults until an admin saves. */
+    live: loadLiveKeep(read),
+    saveLive,
     /** The raw value stored under `key`, for services that keep a setting of their own. */
     stored,
     /** Stores a raw value under `key`. */
