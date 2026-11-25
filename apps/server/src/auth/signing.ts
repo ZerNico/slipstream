@@ -33,6 +33,16 @@ export const HlsGrant = Schema.Struct({
    * live edge); every segment token has one, a live one a few target durations ahead.
    */
   to: Schema.optionalKey(Schema.Number),
+  /**
+   * The conversion variant (`transcode/variant.ts`) of a converting session's playlist and
+   * segments; absent for the original.
+   */
+  x: Schema.optionalKey(Schema.String),
+  /**
+   * The channel a converting playlist plays, so its conversion counts as in use (shared by
+   * everyone converting the channel the same way).
+   */
+  c: Schema.optionalKey(Schema.String),
 });
 export type HlsGrant = typeof HlsGrant.Type;
 

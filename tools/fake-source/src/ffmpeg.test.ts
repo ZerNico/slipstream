@@ -41,6 +41,12 @@ describe("ffmpegArgs", () => {
     expect(flag(args, "-b:a")).toBe("192k");
   });
 
+  it("uses AC-3 stereo at 192 kbit/s on the Filmhaus channel, as private HD channels send it", () => {
+    const args = ffmpegArgs(channel("filmhaus"), null);
+    expect(flag(args, "-c:a")).toBe("ac3");
+    expect(flag(args, "-b:a")).toBe("192k");
+  });
+
   it("burns in clock, channel and programme with escaped drawtext options", () => {
     const args = ffmpegArgs(channel("serienwelt"), {
       channelFile: "/tmp/a:b/channel.txt",

@@ -150,8 +150,8 @@ describe("sources", () => {
       programmes: number;
       unmappedStreams: number;
     };
-    expect(check.streams).toBe(8);
-    expect(check.guideChannels).toBe(8);
+    expect(check.streams).toBe(9);
+    expect(check.guideChannels).toBe(9);
     expect(check.programmes).toBeGreaterThan(100);
     expect(check.unmappedStreams).toBe(0);
 
@@ -171,17 +171,17 @@ describe("sources", () => {
     expect(streams[0]?.url).toBeUndefined();
 
     const channels = (await admin.request("GET", "/api/channels")).json as Array<Channel>;
-    expect(channels).toHaveLength(8);
+    expect(channels).toHaveLength(9);
     news = channels.find((channel) => channel.name === "Nachrichten 24")!;
     expect(news.guideChannelId).toBe("Nachrichten24.fake.de");
 
     // A second refresh updates in place and does not duplicate channels.
     await admin.request("POST", `/api/sources/${sourceId}/refresh`);
-    expect((await admin.request("GET", "/api/channels")).json).toHaveLength(8);
+    expect((await admin.request("GET", "/api/channels")).json).toHaveLength(9);
 
     // Stream URLs are sealed at rest like the source's own secrets.
     const rows = await server.run(server.db.read.select().from(sourceStreams));
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(9);
     for (const row of rows) {
       expect(row.url).toMatch(/^v1:/);
       expect(row.url).not.toContain(new URL(fake.url).host);
@@ -378,7 +378,7 @@ describe("guide", () => {
       now?: Programme;
       next?: Programme;
     }>;
-    expect(rows).toHaveLength(8);
+    expect(rows).toHaveLength(9);
     const row = rows.find((candidate) => candidate.channelId === news.id);
     expect(Date.parse(row!.now!.start)).toBeLessThanOrEqual(Date.now());
     expect(Date.parse(row!.next!.start)).toBeGreaterThan(Date.now());

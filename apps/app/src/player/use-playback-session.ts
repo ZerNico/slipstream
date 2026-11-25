@@ -7,6 +7,7 @@ import { resolveServerUrl } from "../api/client.ts";
 import { apiActions } from "../api/queries.ts";
 import { useSession } from "../session/session-context.ts";
 import {
+  samePlaylist,
   networkKindFor,
   sessionRequest,
   startSession,
@@ -140,13 +141,24 @@ export const usePlaybackSession = (
   const update = useCallback(
     (patch: PlaybackSessionUpdate) => {
       const id = current.current;
-      if (id === undefined) return;
-      // Not fatal: the stream keeps playing as it was. The answer carries a newly signed
-      // playlist URL for the same stream; swapping it in would only interrupt playback, and
-      // the renewal timer swaps one in before the current token expires.
-      runAction(apiActions.updatePlayback(id, patch)).catch(() => undefined);
+      if (id === undefined || baseUrl === undefined) return;
+      // Not fatal: the stream keeps playing as it was. A fresh token for the same playlist waits
+      // for the renewal timer (swapping would only interrupt playback); another playlist is
+      // another conversion (passthrough turns stereo while catching up) and swaps in now.
+      runAction(apiActions.updatePlayback(id, patch))
+        .then((session) => {
+          const uri = resolveServerUrl(baseUrl, session.playlistUrl);
+          setState((previous) =>
+            previous._tag === "Ready" &&
+            previous.session.id === id &&
+            !samePlaylist(previous.session.uri, uri)
+              ? { _tag: "Ready", session: { ...previous.session, uri } }
+              : previous,
+          );
+        })
+        .catch(() => undefined);
     },
-    [runAction],
+    [runAction, baseUrl],
   );
 
   const changeQuality = useCallback(

@@ -1,0 +1,362 @@
+/**
+ * Playback conversion (PLAN 6.11): converts stored segments for a variant on request (`args.ts`
+ * says how, per segment), shares the work between viewers, caches it briefly and bounds how
+ * much converting runs at once.
+ *
+ * - **Shared.** A converted segment is keyed by its source segment (capture and sequence) and
+ *   the variant (the output profile: video copy or codec, size, bitrate, deinterlacing; audio
+ *   copy or AAC with its track, channels and bitrate). Everyone who needs the same key gets the
+ *   same file: from the cache, or by waiting for the one ffmpeg already converting it
+ *   (single flight). Two viewers of one channel in the same variant therefore cost one
+ *   conversion; another variant is another conversion.
+ * - **Stops when nobody waits.** A job runs in the service's scope and counts the requests
+ *   waiting for it; when the last one goes away (the player moved on, closed, seeked), the job
+ *   is interrupted and its ffmpeg killed. Only the one-segment look-ahead (`warm`) runs to the
+ *   end without a waiter. Shutdown kills every ffmpeg.
+ * - **Cache.** `<data>/transcode/<variant>/<capture>/<sequence>.ts`, written under a temporary
+ *   name and renamed when complete. A sweep deletes converted segments older than
+ *   {@link CACHE_TTL_MILLIS}, those whose source segment is gone (retention or the disk guard
+ *   purged it), and the oldest beyond {@link CACHE_MAX_BYTES}; startup deletes all of it.
+ * - **Ahead.** A picture segment is slow to convert, so serving one starts the next one. Live
+ *   conversions in use (someone fetched one within {@link LIVE_AHEAD_IDLE_MILLIS}) are also
+ *   converted as each new segment is indexed (`liveInUse`, driven by the segment routes), so the
+ *   converted live edge keeps up with the original's.
+ * - **Bounded.** Audio jobs (cheap) run up to one per core. Picture jobs run up to
+ *   {@link videoSessionLimit} at a time per encoder kind, and as many distinct picture
+ *   conversions (channel and variant, however many watch each) may be in use at once
+ *   (`videoBusy`). A new one over the limit whose device plays the original picture gets the
+ *   original (`withOriginalVideo` in the domain); one that cannot waits for a picture job.
+ */
+import { randomUUID } from "node:crypto";
+import { mkdir, readdir, rename, rm, rmdir, stat, unlink } from "node:fs/promises";
+import { availableParallelism } from "node:os";
+import { dirname, join } from "node:path";
+import {
+  Clock,
+  Context,
+  Deferred,
+  Duration,
+  Effect,
+  Exit,
+  Fiber,
+  Layer,
+  Ref,
+  Schedule,
+  Semaphore,
+} from "effect";
+import { FfmpegRunner } from "@slipstream/recorder";
+import { ServerConfig } from "../config.ts";
+import { parseSegmentProbe, probeArgs, segmentArgs } from "./args.ts";
+import type { Variant } from "./variant.ts";
+
+/** How long a converted segment stays cached after it was written. */
+export const CACHE_TTL_MILLIS = 10 * 60_000;
+/** The most converted segments may take on disk; the oldest go first. */
+export const CACHE_MAX_BYTES = 4 * 1024 ** 3;
+/** How often the cache is swept. */
+const SWEEP_EVERY = Duration.minutes(1);
+/** A picture conversion counts as in use this long after its last segment was asked for. */
+export const VIDEO_IDLE_MILLIS = 45_000;
+/** A live conversion is converted ahead while someone fetched from it this recently. */
+export const LIVE_AHEAD_IDLE_MILLIS = 30_000;
+/** A segment job that takes longer than this is killed. */
+const JOB_TIMEOUT = Duration.minutes(2);
+
+/**
+ * How many distinct picture conversions may be in use at once, and how many picture jobs run
+ * at a time: four on a hardware encoder (consumer GPUs allow a handful of encode sessions),
+ * else one per four cores (x264 spreads one job over several).
+ */
+export const videoSessionLimit = (hardware: boolean, cores: number): number =>
+  hardware ? 4 : Math.max(1, Math.floor(cores / 4));
+
+/** One segment to convert, as the segment route found it in the index. */
+export interface SegmentRequest {
+  /** The variant's name (`variantName`), and what it stands for. */
+  readonly name: string;
+  readonly variant: Variant;
+  readonly captureId: string;
+  readonly sequence: number;
+  /** The stored segment file. */
+  readonly file: string;
+  /** The previous segment of the same run, for warm-up and open GOPs. */
+  readonly lookback?: string | undefined;
+}
+
+/** A conversion running for one key, and how many requests wait for it. */
+interface Job {
+  readonly done: Deferred.Deferred<string | undefined>;
+  fiber: Fiber.Fiber<unknown> | undefined;
+  waiters: number;
+  /** A look-ahead runs to the end even when nobody waits. */
+  pinned: boolean;
+}
+
+/** Whether a variant converts the picture. */
+const convertsVideo = (variant: Variant): boolean => variant.video._tag === "Encode";
+
+/** The key of a picture conversion in use: what it converts (a channel) and how. */
+export const conversionKey = (channelId: string, variant: string): string =>
+  `${channelId}/${variant}`;
+
+/** Who asks for a converted segment: the channel it belongs to, and whether it plays live. */
+export interface Requester {
+  readonly channelId: string;
+  readonly live: boolean;
+}
+
+/** A live conversion in use, for converting new segments ahead. */
+interface LiveConversion {
+  readonly name: string;
+  readonly variant: Variant;
+  readonly seen: number;
+}
+
+const exists = (path: string) =>
+  Effect.promise(() =>
+    stat(path).then(
+      (info) => info.isFile(),
+      () => false,
+    ),
+  );
+
+const makeTranscoder = Effect.gen(function* () {
+  const config = yield* ServerConfig;
+  const runner = yield* FfmpegRunner;
+  const scope = yield* Effect.scope;
+  const root = join(config.dataDir, "transcode");
+  const cores = availableParallelism();
+
+  // Nothing cached survives a restart: the variants or the segments may have changed.
+  yield* Effect.promise(() => rm(root, { recursive: true, force: true }));
+  yield* Effect.promise(() => mkdir(root, { recursive: true }));
+
+  const audioJobs = yield* Semaphore.make(Math.max(2, cores));
+  const hardwareJobs = yield* Semaphore.make(videoSessionLimit(true, cores));
+  const softwareJobs = yield* Semaphore.make(videoSessionLimit(false, cores));
+  const jobs = new Map<string, Job>();
+  /** The source segment of each converted file, so the sweep sees when it was purged. */
+  const sources = new Map<string, string>();
+  /** Picture conversions in use (`conversionKey`), by when a segment was last asked for. */
+  const inUse = yield* Ref.make(new Map<string, number>());
+  /** Live conversions in use per channel, by variant name. */
+  const live = yield* Ref.make(new Map<string, ReadonlyMap<string, LiveConversion>>());
+
+  const permits = (variant: Variant) =>
+    variant.video._tag !== "Encode"
+      ? audioJobs
+      : variant.video.encoder === "software"
+        ? softwareJobs
+        : hardwareJobs;
+
+  /** Probes and converts one segment into `output`; `undefined` when ffmpeg failed. */
+  const convert = (request: SegmentRequest, output: string) =>
+    Effect.gen(function* () {
+      const started = yield* Clock.currentTimeMillis;
+      const audioTrack =
+        request.variant.audio._tag === "Encode" ? request.variant.audio.trackIndex : 0;
+      const probed = yield* runner.run(probeArgs(request.file), {
+        binary: "ffprobe",
+        timeout: Duration.seconds(20),
+      });
+      const partial = `${output}.${randomUUID()}.part`;
+      yield* Effect.promise(() => mkdir(dirname(output), { recursive: true }));
+      yield* (
+        runner
+          .run(
+            segmentArgs({
+              segment: request.file,
+              lookback: request.lookback,
+              variant: request.variant,
+              probe: parseSegmentProbe(probed.stdout, audioTrack),
+              output: partial,
+            }),
+            { timeout: JOB_TIMEOUT },
+          )
+          // Failed or interrupted: no half-written file stays behind.
+          .pipe(Effect.onError(() => Effect.promise(() => rm(partial, { force: true }))))
+      );
+      yield* Effect.promise(() => rename(partial, output).catch(() => undefined));
+      sources.set(output, request.file);
+      const took = (yield* Clock.currentTimeMillis) - started;
+      yield* Effect.logDebug("Converted a segment").pipe(
+        Effect.annotateLogs({ variant: request.name, sequence: request.sequence, millis: took }),
+      );
+      return (yield* exists(output)) ? output : undefined;
+    }).pipe(
+      Effect.catchCause((cause) =>
+        Effect.logWarning("Could not convert a segment", cause).pipe(
+          Effect.annotateLogs({
+            variant: request.name,
+            captureId: request.captureId,
+            sequence: request.sequence,
+          }),
+          Effect.as(undefined),
+        ),
+      ),
+    );
+
+  /** Waits for a job as one of its waiters; the last waiter to leave stops it. */
+  const waitFor = (job: Job) =>
+    Effect.suspend(() => {
+      job.waiters += 1;
+      return Deferred.await(job.done);
+    }).pipe(
+      Effect.onExit(() =>
+        Effect.suspend(() => {
+          job.waiters -= 1;
+          const fiber = job.fiber;
+          return job.waiters === 0 && !job.pinned && fiber !== undefined
+            ? Effect.asVoid(Effect.forkIn(Fiber.interrupt(fiber), scope))
+            : Effect.void;
+        }),
+      ),
+    );
+
+  /**
+   * The converted file, converting it once however many ask at the same time (`pinned`: a
+   * look-ahead nobody waits for yet).
+   */
+  const ensure = (request: SegmentRequest, pinned: boolean) =>
+    Effect.gen(function* () {
+      const output = join(root, request.name, request.captureId, `${request.sequence}.ts`);
+      if (yield* exists(output)) return output;
+      const running = jobs.get(output);
+      if (running !== undefined) {
+        running.pinned ||= pinned;
+        return yield* waitFor(running);
+      }
+      // Made and registered in one step, so a second request cannot slip in between.
+      const job: Job = { done: Deferred.makeUnsafe(), fiber: undefined, waiters: 0, pinned };
+      jobs.set(output, job);
+      job.fiber = yield* convert(request, output).pipe(
+        permits(request.variant).withPermits(1),
+        Effect.onExit((exit) =>
+          Effect.suspend(() => {
+            jobs.delete(output);
+            return Deferred.done(job.done, Exit.isSuccess(exit) ? exit : Exit.succeed(undefined));
+          }),
+        ),
+        Effect.forkIn(scope),
+      );
+      return yield* waitFor(job);
+    });
+
+  /** Deletes old converted segments, those whose source is gone, and the oldest over the cap. */
+  const sweep = Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis;
+    const files: Array<{ path: string; mtimeMs: number; size: number }> = [];
+    yield* Effect.promise(async () => {
+      const walk = async (directory: string): Promise<void> => {
+        const entries = await readdir(directory, { withFileTypes: true }).catch(() => []);
+        for (const entry of entries) {
+          const path = join(directory, entry.name);
+          if (entry.isDirectory()) {
+            await walk(path);
+            await rmdir(path).catch(() => undefined);
+            continue;
+          }
+          if (!entry.name.endsWith(".ts")) continue;
+          const info = await stat(path).catch(() => undefined);
+          if (info === undefined) continue;
+          const source = sources.get(path);
+          const purged =
+            source === undefined ||
+            (await stat(source).then(
+              () => false,
+              () => true,
+            ));
+          if (now - info.mtimeMs > CACHE_TTL_MILLIS || purged) {
+            await unlink(path).catch(() => undefined);
+            sources.delete(path);
+          } else {
+            files.push({ path, mtimeMs: info.mtimeMs, size: info.size });
+          }
+        }
+      };
+      await walk(root);
+      let total = files.reduce((sum, file) => sum + file.size, 0);
+      for (const file of files.toSorted((a, b) => a.mtimeMs - b.mtimeMs)) {
+        if (total <= CACHE_MAX_BYTES) break;
+        await unlink(file.path).catch(() => undefined);
+        sources.delete(file.path);
+        total -= file.size;
+      }
+    });
+  });
+  yield* sweep.pipe(Effect.repeat(Schedule.spaced(SWEEP_EVERY)), Effect.forkScoped);
+
+  /** Marks a picture conversion (`conversionKey`) as in use now. */
+  const touchVideo = (key: string) =>
+    Effect.flatMap(Clock.currentTimeMillis, (now) =>
+      Ref.update(inUse, (map) => new Map(map).set(key, now)),
+    );
+
+  return {
+    /**
+     * The converted segment's file, converting it first unless it is cached or already
+     * converting; `undefined` when conversion failed (the route answers 503 and the player
+     * retries). `key` (`conversionKey`) keeps a picture conversion counted as in use.
+     */
+    segment: (request: SegmentRequest, requester: Requester | undefined) =>
+      Effect.gen(function* () {
+        if (requester !== undefined) {
+          if (convertsVideo(request.variant)) {
+            yield* touchVideo(conversionKey(requester.channelId, request.name));
+          }
+          if (requester.live) {
+            const now = yield* Clock.currentTimeMillis;
+            yield* Ref.update(live, (map) => {
+              const next = new Map(map);
+              const variants = new Map(map.get(requester.channelId));
+              variants.set(request.name, {
+                name: request.name,
+                variant: request.variant,
+                seen: now,
+              });
+              next.set(requester.channelId, variants);
+              return next;
+            });
+          }
+        }
+        return yield* ensure(request, false);
+      }),
+    /** The live conversions of a channel someone fetched from recently, to convert ahead. */
+    liveInUse: (channelId: string) =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        const variants = (yield* Ref.get(live)).get(channelId);
+        return [...(variants?.values() ?? [])].filter(
+          (conversion) => now - conversion.seen < LIVE_AHEAD_IDLE_MILLIS,
+        );
+      }),
+    /** Starts converting a segment in the background (the one after a picture segment). */
+    warm: (request: SegmentRequest) =>
+      ensure(request, true).pipe(Effect.forkIn(scope), Effect.asVoid),
+    /** Counts a picture conversion as in use from now on. */
+    touchVideo,
+    /**
+     * Whether as many other picture conversions as allowed are in use, so `key` should not
+     * start another (`videoSessionLimit`). A conversion already in use is never busy: its
+     * viewers share it.
+     */
+    videoBusy: (key: string, hardware: boolean) =>
+      Effect.gen(function* () {
+        const now = yield* Clock.currentTimeMillis;
+        const active = [...(yield* Ref.get(inUse))].filter(
+          ([other, seen]) => now - seen < VIDEO_IDLE_MILLIS && other !== key,
+        );
+        const mine = (yield* Ref.get(inUse)).get(key);
+        if (mine !== undefined && now - mine < VIDEO_IDLE_MILLIS) return false;
+        return active.length >= videoSessionLimit(hardware, cores);
+      }),
+  };
+});
+
+/** Converts segments for sessions that cannot play the original. */
+export class Transcoder extends Context.Service<
+  Transcoder,
+  Effect.Success<typeof makeTranscoder>
+>()("@slipstream/server/Transcoder") {
+  static readonly layer = Layer.effect(Transcoder, makeTranscoder);
+}

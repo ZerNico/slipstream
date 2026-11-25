@@ -9,14 +9,20 @@
  * past the live edge and moves on with every playlist reload. Live playlists and their segments also
  * carry the playback `session`, and every such request keeps that viewer's hold on the capture
  * alive (a viewer that stops fetching is released after the idle timeout).
+ *
+ * A session that converts (`transcode/`) gets its playlists one directory deeper, named by its
+ * variant (`/hls/live/<channel>/<variant>.m3u8`), and the variant travels in its signed tokens:
+ * its segment links then serve the converted segment instead of the stored one.
  */
 import { stat } from "node:fs/promises";
-import { Effect, Layer, Schedule } from "effect";
+import { Effect, Layer, Schedule, Stream } from "effect";
 import { HttpPlatform, HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
-import { Signing } from "../auth/signing.ts";
+import { type HlsGrant, Signing } from "../auth/signing.ts";
 import { EventBus } from "../events.ts";
 import { Hls, insideWindow, parseByteRange, scopes } from "../hls/service.ts";
 import { type HlsTarget, Playback } from "../playback/service.ts";
+import { Transcoder } from "../transcode/service.ts";
+import { parseVariant } from "../transcode/variant.ts";
 
 const playlistHeaders = {
   "content-type": "application/vnd.apple.mpegurl",
@@ -26,6 +32,10 @@ const playlistHeaders = {
 
 const notFound = HttpServerResponse.text("Not found", { status: 404 });
 const forbidden = HttpServerResponse.text("Forbidden", { status: 403 });
+const unavailable = HttpServerResponse.text("Could not convert this segment", {
+  status: 503,
+  headers: { "retry-after": "1" },
+});
 
 const queryParam = (name: string) =>
   HttpServerRequest.HttpServerRequest.use((request) =>
@@ -43,6 +53,9 @@ const FIRST_SEGMENT_WAIT = "20 seconds";
 const KEEP_WATCHING_EVERY = "1 second";
 
 const routeParam = (name: string) => Effect.map(HttpRouter.params, (params) => params[name] ?? "");
+
+/** The variant a playlist route names; `undefined` on the original's routes. */
+const routeVariant = Effect.map(HttpRouter.params, (params) => params["variant"]);
 
 const playlist = (body: string | undefined) =>
   body === undefined ? notFound : HttpServerResponse.text(body, { headers: playlistHeaders });
@@ -93,6 +106,7 @@ export const HlsRoutes = Layer.effectDiscard(
     const hls = yield* Hls;
     const signing = yield* Signing;
     const playback = yield* Playback;
+    const transcoder = yield* Transcoder;
     const bus = yield* EventBus;
 
     /**
@@ -115,82 +129,152 @@ export const HlsRoutes = Layer.effectDiscard(
         ),
       );
 
-    /** A playlist's grant: valid for `scope`, and its sign-in may still see `target`. */
+    /**
+     * A playlist's grant: valid for `scope` and for the route's variant (the original's routes
+     * only open grants without one), and its sign-in may still see `target`.
+     */
     const authorise = (scope: string, target: HlsTarget) =>
       Effect.gen(function* () {
         const grant = yield* verify(scope);
-        if (grant === undefined) return undefined;
+        if (grant === undefined || grant.x !== (yield* routeVariant)) return undefined;
         return (yield* playback.admits(grant, target)) ? grant : undefined;
       });
 
+    /**
+     * The converted segment for a grant's variant; `undefined` when it cannot be had. `live`:
+     * the request comes from a live playlist (its session rides along).
+     */
+    const converted = (
+      grant: typeof HlsGrant.Type,
+      captureId: string,
+      sequence: number,
+      segment: { readonly file: string; readonly runId: string },
+      live: boolean,
+    ) =>
+      Effect.gen(function* () {
+        const name = grant.x ?? "";
+        const variant = parseVariant(name);
+        if (variant === undefined) return undefined;
+        const request = {
+          name,
+          variant,
+          captureId,
+          sequence,
+          file: segment.file,
+          lookback: yield* hls.sameRunFile(captureId, sequence - 1, segment.runId),
+        };
+        const file = yield* transcoder.segment(
+          request,
+          grant.c === undefined ? undefined : { channelId: grant.c, live },
+        );
+        // A picture is slow to convert: the next segment starts while this one is sent.
+        const next =
+          variant.video._tag === "Encode"
+            ? yield* hls.sameRunFile(captureId, sequence + 1, segment.runId)
+            : undefined;
+        if (next !== undefined) {
+          yield* transcoder.warm({
+            ...request,
+            sequence: sequence + 1,
+            file: next,
+            lookback: segment.file,
+          });
+        }
+        return file;
+      });
+
+    /**
+     * Converts a channel's newest segment for every live conversion in use as soon as it is
+     * indexed, so converted live playback keeps up with the live edge.
+     */
+    const convertAhead = (channelId: string) =>
+      Effect.gen(function* () {
+        const conversions = yield* transcoder.liveInUse(channelId);
+        if (conversions.length === 0) return;
+        const newest = yield* hls.newestSegment(channelId);
+        if (newest === undefined) return;
+        const segment = yield* hls.segmentFile(newest.captureId, newest.sequence);
+        if (segment === undefined) return;
+        const lookback = yield* hls.sameRunFile(
+          newest.captureId,
+          newest.sequence - 1,
+          segment.runId,
+        );
+        for (const conversion of conversions) {
+          yield* transcoder.warm({
+            name: conversion.name,
+            variant: conversion.variant,
+            captureId: newest.captureId,
+            sequence: newest.sequence,
+            file: segment.file,
+            lookback,
+          });
+        }
+      });
+    yield* bus.segmentsIndexed.pipe(Stream.runForEach(convertAhead), Effect.forkScoped);
+
+    const live = Effect.gen(function* () {
+      const channelId = yield* routeParam("channelId");
+      const grant = yield* authorise(scopes.live(channelId), { _tag: "Channel", channelId });
+      if (grant === undefined) return forbidden;
+      const attempt = Effect.flatMap(stillWatching(grant.u), (sessionId) =>
+        hls.live(channelId, grant, sessionId),
+      );
+      // A player waiting for the first segment is watching, so its hold on the capture
+      // stays fresh (in memory) while it waits.
+      const keepWatching = stillWatching(grant.u).pipe(
+        Effect.repeat(Schedule.spaced(KEEP_WATCHING_EVERY)),
+      );
+      const body = yield* Effect.scoped(
+        Effect.gen(function* () {
+          const nextSegment = yield* bus.nextSegment(channelId);
+          const first = yield* attempt;
+          if (first !== undefined) return first;
+          yield* Effect.timeoutOption(
+            Effect.raceFirst(nextSegment, keepWatching),
+            FIRST_SEGMENT_WAIT,
+          );
+          return yield* attempt;
+        }),
+      );
+      return playlist(body);
+    });
+
+    const recording = Effect.gen(function* () {
+      const recordingId = yield* routeParam("recordingId");
+      const grant = yield* authorise(scopes.recording(recordingId), {
+        _tag: "Recording",
+        recordingId,
+      });
+      if (grant === undefined) return forbidden;
+      return playlist(yield* hls.recording(recordingId, grant));
+    });
+
+    const range = Effect.gen(function* () {
+      const channelId = yield* routeParam("channelId");
+      const from = Number(yield* queryParam("from"));
+      const to = Number(yield* queryParam("to"));
+      if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
+        return HttpServerResponse.text("from and to must be epoch milliseconds, from before to", {
+          status: 400,
+        });
+      }
+      // The token names its range: another from or to is another (unsigned) scope.
+      const grant = yield* authorise(scopes.range(channelId, from, to), {
+        _tag: "Channel",
+        channelId,
+      });
+      if (grant === undefined) return forbidden;
+      return playlist(yield* hls.range(channelId, from, to, grant));
+    });
+
     yield* router.addAll([
-      HttpRouter.route(
-        "GET",
-        "/hls/live/:channelId.m3u8",
-        Effect.gen(function* () {
-          const channelId = yield* routeParam("channelId");
-          const grant = yield* authorise(scopes.live(channelId), { _tag: "Channel", channelId });
-          if (grant === undefined) return forbidden;
-          const attempt = Effect.flatMap(stillWatching(grant.u), (sessionId) =>
-            hls.live(channelId, grant, sessionId),
-          );
-          // A player waiting for the first segment is watching, so its hold on the capture
-          // stays fresh (in memory) while it waits.
-          const keepWatching = stillWatching(grant.u).pipe(
-            Effect.repeat(Schedule.spaced(KEEP_WATCHING_EVERY)),
-          );
-          const body = yield* Effect.scoped(
-            Effect.gen(function* () {
-              const nextSegment = yield* bus.nextSegment(channelId);
-              const first = yield* attempt;
-              if (first !== undefined) return first;
-              yield* Effect.timeoutOption(
-                Effect.raceFirst(nextSegment, keepWatching),
-                FIRST_SEGMENT_WAIT,
-              );
-              return yield* attempt;
-            }),
-          );
-          return playlist(body);
-        }),
-      ),
-      HttpRouter.route(
-        "GET",
-        "/hls/recordings/:recordingId.m3u8",
-        Effect.gen(function* () {
-          const recordingId = yield* routeParam("recordingId");
-          const grant = yield* authorise(scopes.recording(recordingId), {
-            _tag: "Recording",
-            recordingId,
-          });
-          if (grant === undefined) return forbidden;
-          return playlist(yield* hls.recording(recordingId, grant));
-        }),
-      ),
-      HttpRouter.route(
-        "GET",
-        "/hls/range/:channelId.m3u8",
-        Effect.gen(function* () {
-          const channelId = yield* routeParam("channelId");
-          const from = Number(yield* queryParam("from"));
-          const to = Number(yield* queryParam("to"));
-          if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
-            return HttpServerResponse.text(
-              "from and to must be epoch milliseconds, from before to",
-              {
-                status: 400,
-              },
-            );
-          }
-          // The token names its range: another from or to is another (unsigned) scope.
-          const grant = yield* authorise(scopes.range(channelId, from, to), {
-            _tag: "Channel",
-            channelId,
-          });
-          if (grant === undefined) return forbidden;
-          return playlist(yield* hls.range(channelId, from, to, grant));
-        }),
-      ),
+      HttpRouter.route("GET", "/hls/live/:channelId.m3u8", live),
+      HttpRouter.route("GET", "/hls/live/:channelId/:variant.m3u8", live),
+      HttpRouter.route("GET", "/hls/recordings/:recordingId.m3u8", recording),
+      HttpRouter.route("GET", "/hls/recordings/:recordingId/:variant.m3u8", recording),
+      HttpRouter.route("GET", "/hls/range/:channelId.m3u8", range),
+      HttpRouter.route("GET", "/hls/range/:channelId/:variant.m3u8", range),
       HttpRouter.route(
         "GET",
         "/hls/seg/:captureId/:sequence.ts",
@@ -204,8 +288,17 @@ export const HlsRoutes = Layer.effectDiscard(
           if (segment === undefined) return notFound;
           // A segment token opens only the window of the playlist that linked it.
           if (!insideWindow(grant, segment)) return forbidden;
-          yield* stillWatching(grant.u);
-          return yield* serveFile(segment.file);
+          const liveSession = yield* stillWatching(grant.u);
+          if (grant.x === undefined) return yield* serveFile(segment.file);
+          const file = yield* converted(
+            grant,
+            captureId,
+            sequence,
+            segment,
+            liveSession !== undefined,
+          );
+          // The player retries a segment that could not be converted this time.
+          return file === undefined ? unavailable : yield* serveFile(file);
         }),
       ),
     ]);

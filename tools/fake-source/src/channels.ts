@@ -10,7 +10,7 @@ export interface VideoProfile {
 
 /** The audio track of a channel's stream. */
 export interface AudioProfile {
-  readonly codec: "aac" | "mp2";
+  readonly codec: "aac" | "mp2" | "ac3";
   /** Tone frequency in Hz, different per channel so tests can tell them apart by ear. */
   readonly tone: number;
 }
@@ -53,8 +53,9 @@ const hd = (frameRate: number, pattern: VideoProfile["pattern"] = "testsrc2"): V
 /**
  * The channel line-up. Names are made up but shaped like a German cable line-up: one 1080p50 sports
  * channel, 720p for most, one 576i channel (interlaced, for deinterlacing tests), one channel with
- * MP2 audio (as German public broadcasters use on DVB), and a channel of two-minute programmes so
- * end-to-end tests can record a whole programme quickly.
+ * MP2 audio (as German public broadcasters use on DVB), a channel of two-minute programmes so
+ * end-to-end tests can record a whole programme quickly, and one HD channel with AC-3 audio (as
+ * private German HD channels send it), which browsers cannot play and the server converts.
  */
 export const channels: ReadonlyArray<FakeChannel> = [
   {
@@ -144,6 +145,17 @@ export const channels: ReadonlyArray<FakeChannel> = [
     schedule: "short",
     video: hd(25, "smptehdbars"),
     audio: { codec: "aac", tone: 1000 },
+  },
+  {
+    id: "filmhaus",
+    tvgId: "FilmhausHD.fake.de",
+    name: "Filmhaus HD",
+    number: 9,
+    group: "Filme",
+    colour: "#8c1c13",
+    schedule: "films",
+    video: hd(25),
+    audio: { codec: "ac3", tone: 932 },
   },
 ];
 

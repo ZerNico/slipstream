@@ -4,13 +4,14 @@
  * encoder runs a one-second test encode per rate-control mode; only what succeeds counts.
  * Detection runs once in the background on startup; `SystemInfo.hardware` is absent until done.
  *
- * Transcoding sessions are still direct-only (see playback/service.ts); the result feeds the
- * transcode decision and the system page.
+ * The result feeds the transcode decision (which encoder a converted picture uses, in a
+ * rate-control mode that worked) and the system page.
  */
 import { Clock, Context, Duration, Effect, Layer, Ref } from "effect";
 import type { Encoder, HardwareCaps, HardwareEncoder, RateControl } from "@slipstream/domain";
 import { FfmpegRunner } from "@slipstream/recorder";
 import { ServerConfig } from "../config.ts";
+import { hardwareDeviceArgs, rateControlArgs, uploadFilter } from "../transcode/args.ts";
 
 /** One hardware encoder ffmpeg may offer, with how to drive it. */
 interface Candidate {
@@ -32,9 +33,6 @@ const candidates: ReadonlyArray<Candidate> = [
 
 const rateControls: ReadonlyArray<RateControl> = ["vbr", "cbr", "cqp"];
 
-/** The render node VAAPI uses. */
-const vaapiDevice = "/dev/dri/renderD128";
-
 /** Encoder names in `ffmpeg -encoders` output (lines like ` V....D h264_nvenc  NVIDIA ...`). */
 export const parseEncoderList = (output: string): Set<string> =>
   new Set(
@@ -44,49 +42,26 @@ export const parseEncoderList = (output: string): Set<string> =>
     }),
   );
 
-/** Rate-control arguments for an encoder family. */
-const rateArgs = (encoder: Candidate["encoder"], mode: RateControl): Array<string> => {
-  switch (encoder) {
-    case "nvenc":
-      return mode === "cqp"
-        ? ["-rc", "constqp", "-qp", "23"]
-        : ["-rc", mode, "-b:v", "4M", "-maxrate", mode === "cbr" ? "4M" : "6M"];
-    case "vaapi":
-      return mode === "cqp"
-        ? ["-rc_mode", "CQP", "-qp", "23"]
-        : ["-rc_mode", mode.toUpperCase(), "-b:v", "4M", "-maxrate", mode === "cbr" ? "4M" : "6M"];
-    case "qsv":
-      return mode === "cqp"
-        ? ["-q:v", "23"]
-        : ["-b:v", "4M", "-maxrate", mode === "cbr" ? "4M" : "6M", "-bufsize", "8M"];
-  }
-};
-
-/** The ffmpeg arguments for a one-second test encode of a generated 720p picture. */
+/**
+ * The ffmpeg arguments for a one-second test encode of a generated 720p picture at 4 Mbit/s,
+ * set up the way playback conversion drives the encoder (`transcode/args.ts`).
+ */
 export const testEncodeArgs = (candidate: Candidate, mode: RateControl): Array<string> => {
   const source = ["-f", "lavfi", "-i", "testsrc2=size=1280x720:rate=25", "-t", "1"];
-  const device =
-    candidate.encoder === "vaapi"
-      ? ["-vaapi_device", vaapiDevice]
-      : candidate.encoder === "qsv"
-        ? ["-init_hw_device", "qsv=hw", "-filter_hw_device", "hw"]
-        : [];
   const upload =
-    candidate.encoder === "vaapi"
-      ? ["-vf", "format=nv12,hwupload"]
-      : candidate.encoder === "qsv"
-        ? ["-vf", "format=nv12,hwupload=extra_hw_frames=16"]
-        : [];
+    candidate.encoder === "vaapi" || candidate.encoder === "qsv"
+      ? ["-vf", uploadFilter(candidate.encoder)]
+      : [];
   return [
     "-hide_banner",
     "-loglevel",
     "error",
-    ...device,
+    ...hardwareDeviceArgs(candidate.encoder),
     ...source,
     ...upload,
     "-c:v",
     candidate.name,
-    ...rateArgs(candidate.encoder, mode),
+    ...rateControlArgs(candidate.encoder, mode, 4000),
     "-f",
     "null",
     "-",

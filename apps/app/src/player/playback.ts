@@ -254,6 +254,15 @@ export const defaultCapabilities: MediaCapabilities = {
 };
 
 /**
+ * Whether two playlist URLs name the same playlist: only their query (the signed token)
+ * differs. A converting session's playlist is named by its conversion, so another conversion is
+ * another playlist, which the player has to load.
+ */
+export const samePlaylist = (a: string, b: string): boolean => withoutQuery(a) === withoutQuery(b);
+
+const withoutQuery = (url: string): string => url.split("?")[0] ?? url;
+
+/**
  * How this device is connected, for the server's "Auto" quality, from expo-network's connection
  * type: mobile data where it says so, else the home network (as on the web).
  */

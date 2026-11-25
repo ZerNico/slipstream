@@ -10,10 +10,12 @@ import {
   sessionQuality,
   isHlsContainer,
   normaliseCodec,
+  normaliseProfile,
   resolveQuality,
   softwareOnly,
   type TranscodeContext,
   TranscodePlan,
+  withOriginalVideo,
 } from "../src/transcode.ts";
 import { at } from "./test-support.ts";
 
@@ -113,7 +115,7 @@ describe("decideTranscode: the cases from the design doc", () => {
       reasons: ["audioCodecUnsupported"],
       quality: "original",
       video: { _tag: "Copy" },
-      audio: { _tag: "Encode", trackIndex: 0, codec: "aac", channels: 2, bitrateKbps: 160 },
+      audio: { _tag: "Encode", trackIndex: 0, codec: "aac", channels: 2, bitrateKbps: 192 },
     });
   });
 
@@ -338,8 +340,56 @@ describe("codec names", () => {
     expect(normaliseCodec("mpeg2video")).toBe("mpeg2video");
   });
 
+  it("reads H.264's constrained profiles as the profile they are a subset of", () => {
+    expect(normaliseProfile("Constrained Baseline")).toBe("baseline");
+    expect(normaliseProfile("Progressive High")).toBe("high");
+    expect(normaliseProfile("Main 10")).toBe("main10");
+    const baseline: StreamInfo = {
+      ...dvbHd,
+      video: { ...dvbHd.video!, profile: "Constrained Baseline" },
+      audio: [{ codec: "aac", channels: 2 }],
+    };
+    const browser: MediaCapabilities = {
+      ...chrome,
+      video: [
+        { codec: "h264", profiles: ["high", "main", "baseline"], maxWidth: 1920, maxHeight: 1080 },
+      ],
+    };
+    expect(decide({ stream: baseline, capabilities: browser }).decision).toBe("direct");
+  });
+
   it("knows which containers HLS carries", () => {
     expect(isHlsContainer("mpegts")).toBe(true);
     expect(isHlsContainer("mov,mp4,m4a,3gp,3g2,mj2")).toBe(false);
+  });
+});
+
+describe("withOriginalVideo: the converter is busy", () => {
+  it("plays the original picture when the video converts only for a bitrate cap", () => {
+    const plan = decide({ stream: dvbHd, network: "mobile" });
+    expect(plan.video._tag).toBe("Encode");
+    expect(withOriginalVideo(plan)).toEqual({
+      decision: "audio",
+      reasons: ["audioCodecUnsupported"],
+      quality: "original",
+      video: { _tag: "Copy" },
+      audio: plan.audio,
+    });
+  });
+
+  it("plays it directly when nothing else converts", () => {
+    const plan = decide({ stream: interlacedHd, capabilities: phone, network: "mobile" });
+    expect(plan.reasons).toEqual(["mobileData"]);
+    expect(withOriginalVideo(plan)).toMatchObject({ decision: "direct", reasons: [] });
+  });
+
+  it("has no fallback when the device cannot show the original picture", () => {
+    expect(withOriginalVideo(decide({ stream: hevcUhd, capabilities: firefox }))).toBeUndefined();
+    expect(withOriginalVideo(decide({ stream: interlacedHd }))).toBeUndefined();
+  });
+
+  it("leaves a plan that copies the video alone", () => {
+    const plan = decide({ stream: dvbHd });
+    expect(withOriginalVideo(plan)).toBe(plan);
   });
 });
