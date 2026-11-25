@@ -66,7 +66,13 @@ import {
 import { RecordSheet } from "../record/RecordSheet.tsx";
 import { OptionsSheet } from "./OptionsSheet.tsx";
 import { RecordNowSheet } from "./RecordNowSheet.tsx";
-import { playerRecord, playheadAt, recordedText, recordingShown } from "./record-now.ts";
+import {
+  guideWindowAt,
+  playerRecord,
+  playheadAt,
+  recordedText,
+  recordingShown,
+} from "./record-now.ts";
 import { PictureGestures } from "./PictureGestures.tsx";
 import { ControlsRow, TopBar } from "./PlayerControls.tsx";
 import { savePrefs, usePlayerPrefs } from "./player-prefs.ts";
@@ -189,14 +195,16 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const profile = useQuery(queries.myProfile());
   const mayRecord = profile.data?.access.mayRecord === true && target?._tag !== "Range";
   const library = useQuery({ ...queries.recordings(), enabled: mayRecord });
-  const [guideFrom] = useState(() => Math.floor(Date.now() / 300_000) * 300_000 - 4 * 3_600_000);
+  const [now, setNow] = useState(() => Date.now());
+  // The window moves on with the clock, so a session hours long still finds what airs now;
+  // the last answer stays while the next window loads (never another channel's).
+  const guideWindow = guideWindowAt(now);
+  const guideChannel = target?._tag === "Live" ? target.channelId : recording.data?.channelId;
   const channelGuide = useQuery({
-    ...queries.channelGuide(
-      target?._tag === "Live" ? target.channelId : recording.data?.channelId,
-      guideFrom,
-      guideFrom + 12 * 3_600_000,
-    ),
+    ...queries.channelGuide(guideChannel, guideWindow.from, guideWindow.to),
     enabled: mayRecord,
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[2] === guideChannel ? previous : undefined,
   });
 
   const video = useRef<VideoRef>(null);
@@ -219,7 +227,6 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const [controls, setControls] = useState<ControlsState>(() =>
     isTV ? initialControls : shownControls(Date.now()),
   );
-  const [now, setNow] = useState(() => Date.now());
   const initialSeekDone = useRef(false);
   const progressRef = useRef(progress);
   useEffect(() => {

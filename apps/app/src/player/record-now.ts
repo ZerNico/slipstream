@@ -10,6 +10,22 @@ import { behindLive, type PlayerProgress } from "./seek.ts";
  * decides (`recordNowState`, `recordNowNote`); this reads the app's player into it.
  */
 
+/** How far back the player's guide reaches: as far as the pause buffer does. */
+const GUIDE_BEHIND_MS = 4 * 3_600_000;
+/** How far ahead the player's guide reaches. */
+const GUIDE_AHEAD_MS = 8 * 3_600_000;
+/** The guide window moves on in steps this long, so its query key holds still between them. */
+const GUIDE_STEP_MS = 300_000;
+
+/**
+ * The stretch of the channel's guide the player's Record reads at `now`: back as far as the
+ * pause buffer reaches and some hours ahead, moving on with the clock in five-minute steps.
+ */
+export const guideWindowAt = (now: number): { readonly from: number; readonly to: number } => {
+  const step = Math.floor(now / GUIDE_STEP_MS) * GUIDE_STEP_MS;
+  return { from: step - GUIDE_BEHIND_MS, to: step + GUIDE_AHEAD_MS };
+};
+
 /** Where the playhead is: wall clock, and the first second the pause buffer holds. */
 export interface PlayheadAt {
   readonly atMs: number;

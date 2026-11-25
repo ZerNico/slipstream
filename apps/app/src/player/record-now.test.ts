@@ -2,7 +2,13 @@ import { type ChannelId, MINUTE, type RecordingId } from "@slipstream/domain";
 import { describe, expect, it } from "vitest";
 import { programme, recording } from "../../tests/fixtures.ts";
 import type { PlayTarget } from "./playback.ts";
-import { playerRecord, playheadAt, recordedText, recordingShown } from "./record-now.ts";
+import {
+  guideWindowAt,
+  playerRecord,
+  playheadAt,
+  recordedText,
+  recordingShown,
+} from "./record-now.ts";
 
 const at = (hours: number, minutes: number) => Date.UTC(2026, 10, 22, hours, minutes);
 const one = "one" as ChannelId;
@@ -10,6 +16,20 @@ const live: PlayTarget = { _tag: "Live", channelId: one, from: "live" };
 const news = programme("news", one, at(19, 0), at(19, 15), "News");
 const film = programme("film", one, at(19, 15), at(21, 0), "Film");
 const now = at(20, 0);
+
+describe("guideWindowAt", () => {
+  it("reaches back over the pause buffer and ahead, on the five minutes", () => {
+    expect(guideWindowAt(at(20, 3))).toEqual({ from: at(16, 0), to: at(28, 0) });
+    expect(guideWindowAt(at(20, 4) + 59_000)).toEqual(guideWindowAt(at(20, 0)));
+  });
+
+  it("moves on with the clock, so a long session still knows what airs now", () => {
+    const later = at(20, 0) + 9 * 3_600_000;
+    const window = guideWindowAt(later);
+    expect(window.from).toBeLessThanOrEqual(later);
+    expect(window.to).toBeGreaterThan(later + 3_600_000);
+  });
+});
 
 describe("playheadAt", () => {
   it("counts live back from now, the buffer from its length", () => {
