@@ -2,7 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   behindLive,
   clampToPlayable,
+  clockAnchors,
+  clockGaps,
+  liveClock,
   livePoint,
+  mediaAt,
+  wallAt,
   wallClockOffset,
   type PlaybackSnapshot,
 } from "./live-position.ts";
@@ -58,5 +63,65 @@ describe("wallClockOffset", () => {
     expect(
       wallClockOffset({ programDateOffset: anchored + 600_000, seekableEnd: 2700, now: NOW }),
     ).toBe(anchored);
+  });
+});
+
+describe("a live window with a gap", () => {
+  const MINUTE = 60_000;
+  /** Ten minutes captured, a 50-minute gap, then 20 minutes up to now; 6 s segments. */
+  const segments = [
+    ...Array.from({ length: 100 }, (_, index) => ({
+      start: index * 6,
+      duration: 6,
+      programDateTime: NOW - 80 * MINUTE + index * 6000,
+    })),
+    ...Array.from({ length: 200 }, (_, index) => ({
+      start: 600 + index * 6,
+      duration: 6,
+      programDateTime: NOW - 20 * MINUTE + index * 6000,
+    })),
+  ];
+  const anchors = clockAnchors(segments);
+  const clock = liveClock({ anchors, seekableEnd: 1800, now: NOW });
+  const gapped: PlaybackSnapshot = {
+    currentTime: 1794,
+    seekableStart: 0,
+    seekableEnd: 1800,
+    liveSync: 1794,
+    ...clock,
+  };
+
+  it("anchors each stretch where its dates start", () => {
+    expect(anchors).toEqual([
+      { media: 0, wall: NOW - 80 * MINUTE },
+      { media: 600, wall: NOW - 20 * MINUTE },
+    ]);
+    expect(clock.clock).toEqual(anchors);
+  });
+
+  it("shows both stretches at their own clock times and the gap between them", () => {
+    expect(wallAt(gapped, 0)).toBe(NOW - 80 * MINUTE);
+    expect(wallAt(gapped, 300)).toBe(NOW - 75 * MINUTE);
+    expect(wallAt(gapped, 1800)).toBe(NOW);
+    expect(clockGaps(gapped)).toEqual([{ start: NOW - 70 * MINUTE, end: NOW - 20 * MINUTE }]);
+  });
+
+  it("seeks by clock time, and from inside the gap to where capturing started again", () => {
+    expect(mediaAt(gapped, NOW - 75 * MINUTE)).toBe(300);
+    expect(mediaAt(gapped, NOW - 40 * MINUTE)).toBe(600);
+    expect(mediaAt(gapped, NOW - 10 * MINUTE)).toBe(1200);
+  });
+
+  it("keeps one clock when the dates run on without a jump", () => {
+    const steady = clockAnchors(segments.slice(100));
+    expect(steady).toHaveLength(1);
+    const single = liveClock({ anchors: steady, seekableEnd: 1200, now: NOW });
+    expect(single.clock).toBeUndefined();
+    expect(clockGaps({ ...snapshot, ...single })).toEqual([]);
+  });
+
+  it("falls back to now when the newest stretch's dates are off", () => {
+    const off = liveClock({ anchors, seekableEnd: 1800 + 600, now: NOW });
+    expect(off).toEqual({ epochOffset: NOW - 2400 * 1000 });
   });
 });

@@ -6,7 +6,7 @@ import type {
   ProfileUpdate,
   RecordingSettings,
 } from "@slipstream/api";
-import type { InviteId, Pin, UserId } from "@slipstream/domain";
+import type { InviteId, LiveKeep, Pin, UserId } from "@slipstream/domain";
 import { useApi } from "~/api/hooks.ts";
 import { keys } from "~/api/queries.ts";
 import { guestWriteKey, profileWriteKey } from "./write-keys.ts";
@@ -149,6 +149,16 @@ export const useSaveRecordingSettings = () => {
     mutationFn: (settings: RecordingSettings) =>
       api.call((c) => c.settings.saveRecording({ payload: settings })),
     onSuccess: (settings) => client.setQueryData(keys.recordingSettings, settings),
+  });
+};
+
+/** Saves how long live TV keeps running and its rewind buffer after viewers leave (admin). */
+export const useSaveLiveSettings = () => {
+  const api = useApi();
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (settings: LiveKeep) => api.call((c) => c.settings.saveLive({ payload: settings })),
+    onSuccess: (settings) => client.setQueryData(keys.liveSettings, settings),
   });
 };
 

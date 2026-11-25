@@ -56,6 +56,7 @@ export const queryKeys = {
   streamsUsage: ["sources", "usage"],
   recordingSettings: ["settings", "recording"],
   artworkSettings: ["settings", "artwork"],
+  liveSettings: ["settings", "live"],
   playbackSettings: ["settings", "playback"],
   pendingSignIn: (userCode: string): QueryKey => ["pendingSignIn", userCode],
 } as const;

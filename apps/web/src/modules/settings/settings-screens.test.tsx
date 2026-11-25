@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it } from "vitest";
-import { pickOption, selectedText, selectTrigger } from "~/test/select.ts";
+import { optionLabels, pickOption, selectedText, selectTrigger } from "~/test/select.ts";
 import { DateTime } from "effect";
 import { UserId, type User } from "@slipstream/domain";
 import { mockPin } from "~/api/mock/household.ts";
@@ -76,6 +76,10 @@ describe("Users & devices", () => {
 
 const startEarly = () => selectTrigger(document, "Start early");
 
+const running = () =>
+  selectTrigger(document, "Keep a channel running after the last viewer leaves");
+const buffer = () => selectTrigger(document, "Keep the rewind buffer after it stops");
+
 describe("Recording defaults", () => {
   it("saves a changed value on its own shortly after", async () => {
     const view = await mountWithMock(<RecordingSection />);
@@ -85,6 +89,33 @@ describe("Recording defaults", () => {
     await view.settle(autosaveDelay + 200);
     await view.waitFor(() =>
       expect(view.server.data.household.recording.extraTime.padding.beforeMinutes).toBe(5),
+    );
+  });
+
+  it("keeps live TV running and its rewind buffer as long as picked", async () => {
+    const view = await mountWithMock(<RecordingSection />);
+    cleanup = view.cleanup;
+    await view.waitFor(() => expect(running()?.disabled).toBe(false));
+    expect(view.text()).toContain("Live TV");
+    expect(selectedText(running())).toBe("10 min");
+    expect(selectedText(buffer())).toBe("1 h");
+    expect(await optionLabels(running())).toEqual([
+      "1 min",
+      "5 min",
+      "10 min",
+      "15 min",
+      "30 min",
+      "1 h",
+      "Until the programme ends",
+    ]);
+    await pickOption(running(), "Until the programme ends");
+    await pickOption(buffer(), "Don’t keep");
+    await view.settle(autosaveDelay + 200);
+    await view.waitFor(() =>
+      expect(view.server.data.household.live).toEqual({
+        keepRunning: "programmeEnd",
+        keepBufferMinutes: 0,
+      }),
     );
   });
 });

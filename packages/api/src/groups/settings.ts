@@ -1,6 +1,12 @@
 import { Schema } from "effect";
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/http-api";
-import { ArtworkOrder, ExtraTimeDefaults, Instant, QualityChoice } from "@slipstream/domain";
+import {
+  ArtworkOrder,
+  ExtraTimeDefaults,
+  Instant,
+  LiveKeep,
+  QualityChoice,
+} from "@slipstream/domain";
 import { Forbidden, InvalidInput, NotFound } from "../errors.ts";
 import { Authentication } from "../security.ts";
 
@@ -85,6 +91,17 @@ export class SettingsGroup extends HttpApiGroup.make("settings")
       payload: PlaybackSettings,
       success: PlaybackSettings,
       error: [InvalidInput, Forbidden],
+    }),
+    /**
+     * Live TV after its viewers leave (Settings › Recording): how long a channel keeps running
+     * after the last viewer left, and how long its rewind buffer stays once it stopped. A change
+     * applies to the next viewer who leaves.
+     */
+    HttpApiEndpoint.get("live", "/live", { success: LiveKeep }),
+    HttpApiEndpoint.put("saveLive", "/live", {
+      payload: LiveKeep,
+      success: LiveKeep,
+      error: [Forbidden],
     }),
   )
   .middleware(Authentication)

@@ -1,5 +1,12 @@
 import type { Band, TimelineData, TimeSpan } from "~/ui/timeline/geometry.ts";
-import { AT_LIVE_TOLERANCE, livePoint, type PlaybackSnapshot } from "./live-position.ts";
+import {
+  AT_LIVE_TOLERANCE,
+  clockGaps,
+  livePoint,
+  mediaAt,
+  type PlaybackSnapshot,
+  wallAt,
+} from "./live-position.ts";
 import type { PlaybackStatus } from "./use-hls-playback.ts";
 import type { SessionRefusal, StreamLimit } from "./use-playback-session.ts";
 
@@ -52,8 +59,13 @@ export interface PlayerPosition {
 const headroomFor = (capturedMs: number) => Math.max(5 * 60_000, capturedMs / 4);
 
 /** Media seconds to wall-clock epoch ms for a running stream. */
-const wallOf = (snapshot: PlaybackSnapshot, seconds: number) =>
-  snapshot.epochOffset + seconds * 1000;
+const wallOf = wallAt;
+
+/** Where the source dropped out and where the playlist's own clock jumps, wall clock. */
+const gapsOf = (snapshot: PlaybackSnapshot, subject: PlayerSubject): readonly TimeSpan[] => {
+  const jumps = clockGaps(snapshot);
+  return jumps.length === 0 ? (subject.gaps ?? []) : [...(subject.gaps ?? []), ...jumps];
+};
 
 /**
  * Maps a playback snapshot onto the subject's window. A running stream uses the playlist's own
@@ -105,6 +117,7 @@ export const playerPosition = (
     ? { start: Math.min(subject.window.start, capturedStart), end: subject.window.end }
     : { start: capturedStart, end: edge + headroomFor(edge - capturedStart) };
   const behindMs = Math.max(0, (live - snapshot.currentTime) * 1000);
+  const gaps = gapsOf(snapshot, subject);
   return {
     timeline: {
       start: window.start,
@@ -112,7 +125,7 @@ export const playerPosition = (
       captured: { start: capturedStart, end: edge },
       playhead: position,
       live: edge,
-      ...(subject.gaps ? { gaps: subject.gaps } : {}),
+      ...(subject.gaps || gaps.length > 0 ? { gaps } : {}),
       ...(subject.marks ? { marks: subject.marks } : {}),
       ...(subject.bands ? { bands: subject.bands } : {}),
     },
@@ -123,7 +136,7 @@ export const playerPosition = (
     offsetMs: Math.max(0, position - window.start),
     lengthMs: window.end - window.start,
     leftMs: Math.max(0, window.end - position),
-    mediaTimeAt: (time) => (time - snapshot.epochOffset) / 1000,
+    mediaTimeAt: (time) => mediaAt(snapshot, time),
   };
 };
 

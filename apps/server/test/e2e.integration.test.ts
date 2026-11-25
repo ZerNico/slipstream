@@ -50,7 +50,7 @@ describe.skipIf(!hasFfmpeg)("recording and live with real ffmpeg", () => {
     { timeout: 120_000 },
     async () => {
       const fake = await startFakeSource();
-      const server = await startTestServer();
+      const server = await startTestServer({ recorder: { keepRunningMs: 1000 } });
       const scratch = mkdtempSync(join(tmpdir(), "slipstream-e2e-"));
       try {
         const admin = new Browser(server.url);

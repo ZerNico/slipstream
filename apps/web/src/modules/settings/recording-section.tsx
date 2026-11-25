@@ -26,6 +26,7 @@ import { LoadingScope, Sk } from "~/ui/skeleton.tsx";
 import { rememberedList } from "~/ui/skeleton-state.ts";
 import { Select } from "~/ui/primitives/select.tsx";
 import { MinutesSelect } from "~/ui/minutes-select.tsx";
+import { LiveSection } from "./live-section.tsx";
 import { ListPanel, ListRow, SettingsSection } from "./parts.tsx";
 import { useSaveArtworkSettings, useSaveRecordingSettings } from "./queries.ts";
 import { SectionProblem } from "./section-problem.tsx";
@@ -309,7 +310,8 @@ function PicturesSection() {
 
 /**
  * Settings › Recording: how early to start and how late to end, then exceptions per channel or
- * guide category. Changes save themselves and never rewrite existing series recordings.
+ * guide category, then what live TV keeps after its viewers leave. Changes save themselves and
+ * never rewrite existing series recordings.
  */
 export function RecordingSection() {
   const queries = useQueries();
@@ -419,6 +421,7 @@ export function RecordingSection() {
           </ListPanel>
         )}
       </SettingsSection>
+      <LiveSection />
       <PicturesSection />
       {loading ? null : (
         <AddOverrideDialog defaults={defaults} channels={channelList} onAdd={setDefaults} />

@@ -539,6 +539,11 @@ describe("live and range playlists", () => {
     expect(before.body).toContain("#EXT-X-MEDIA-SEQUENCE:0\n");
     expect(before.body).toContain("#EXT-X-DISCONTINUITY-SEQUENCE:0\n");
     expect(before.body.match(/#EXT-X-DISCONTINUITY\n/g)).toHaveLength(1);
+    // Each stretch keeps its own clock, so players show the gap between them (a kept buffer
+    // from before the channel stopped, then the capture that started again).
+    expect(before.body).toContain(
+      `#EXT-X-DISCONTINUITY\n#EXT-X-PROGRAM-DATE-TIME:${new Date(now - 30_000).toISOString()}\n`,
+    );
     expect(segmentUris(before.body).map((uri) => uri.split("?")[0])).toEqual([
       "../seg/first-run/0.ts",
       "../seg/first-run/1.ts",

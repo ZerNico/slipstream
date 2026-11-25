@@ -9,6 +9,7 @@ import type {
   ChannelId,
   EpisodeHistoryEntry,
   EpisodeRecording,
+  KeepRunning,
   Programme,
   ProgrammeId,
   Recording,
@@ -206,6 +207,28 @@ export class Lineup extends Context.Service<
   /** A fixed line-up, for tests and single-source setups. */
   static readonly fixed = (snapshot: LineupSnapshot) =>
     Layer.succeed(Lineup, Lineup.of({ snapshot: Effect.succeed(snapshot) }));
+}
+
+/**
+ * What live TV keeps once its viewers leave (the household's Live TV settings): how long the
+ * channel keeps running after the last live viewer left (`0`: it stops at once) and how many
+ * minutes what it captured stays rewindable after it stopped (`0`: none).
+ */
+export interface LiveKeepRules {
+  readonly keepRunning: KeepRunning;
+  readonly keepBufferMinutes: number;
+}
+
+/** Where the capture manager reads the live keep rules; read each time a viewer leaves. */
+export class LiveKeepPolicy extends Context.Service<
+  LiveKeepPolicy,
+  { readonly rules: Effect.Effect<LiveKeepRules> }
+>()("@slipstream/recorder/LiveKeepPolicy") {
+  /** Fixed rules, for tests and setups without settings. */
+  static readonly fixed = (rules: LiveKeepRules) =>
+    Layer.succeed(LiveKeepPolicy, LiveKeepPolicy.of({ rules: Effect.succeed(rules) }));
+  /** Nothing kept: a channel stops with its last consumer and its buffer goes with it. */
+  static readonly none = LiveKeepPolicy.fixed({ keepRunning: 0, keepBufferMinutes: 0 });
 }
 
 /** The streams of a channel in fallback order (lowest priority number first). */

@@ -67,6 +67,7 @@ export const keys = {
   settings: ["settings"] as const,
   recordingSettings: ["settings", "recording"] as const,
   artworkSettings: ["settings", "artwork"] as const,
+  liveSettings: ["settings", "live"] as const,
   playbackSettings: ["settings", "playback"] as const,
   /** Under captures, so `CaptureChanged` refetches who uses which stream. */
   streams: ["captures", "streams"] as const,
@@ -283,6 +284,12 @@ export const createQueries = (api: Api) => ({
     queryOptions({
       queryKey: keys.artworkSettings,
       queryFn: () => api.call((client) => client.settings.artwork()),
+      staleTime: 5 * 60_000,
+    }),
+  liveSettings: () =>
+    queryOptions({
+      queryKey: keys.liveSettings,
+      queryFn: () => api.call((client) => client.settings.live()),
       staleTime: 5 * 60_000,
     }),
   recordingSettings: () =>

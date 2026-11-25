@@ -2,7 +2,7 @@
  * Live viewers and capture rows with real ffmpeg against the fake source:
  *
  * - a live session whose player stops fetching (closed tab, app in the background) is released
- *   after the idle timeout and its ffmpeg stops, while a session that keeps fetching and a
+ *   after the idle timeout and its ffmpeg stops once the channel stopped lingering, while a session that keeps fetching and a
  *   recording on another channel keep theirs; a viewer that comes back holds a capture again;
  * - a capture the source refuses at once still gets its `captures` row (failed) and keeps
  *   ffmpeg's own log lines in `capture_logs`.
@@ -89,7 +89,7 @@ describe.skipIf(!hasFfmpeg)("live viewers and capture rows with real ffmpeg", ()
     async () => {
       const fake = await startFakeSource();
       const server = await startTestServer({
-        recorder: { segmentSeconds: 2, endGraceMs: 3000, liveIdleMs: 4000 },
+        recorder: { segmentSeconds: 2, endGraceMs: 3000, liveIdleMs: 4000, keepRunningMs: 3000 },
       });
       try {
         const { admin, channelIds } = await withSource(server, fake.url);

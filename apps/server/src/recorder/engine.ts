@@ -41,7 +41,7 @@ import {
   type CaptureError,
   CaptureReason,
   type CaptureState,
-  type ChannelId,
+  ChannelId,
   type Padding,
   type ProgrammeId,
   RecordingId,
@@ -59,6 +59,7 @@ import {
   GuideRepoLive,
   HistoryRepoLive,
   LineupLive,
+  LiveKeepPolicyLive,
   PlanningContextRepoLive,
   RecordingRepoLive,
   retentionCandidates,
@@ -99,7 +100,8 @@ export interface RangeRecording {
 
 /**
  * One upstream stream in use: a channel's shared capture, the source it holds a slot on (absent
- * while it waits for one) and who uses it. Recording consumers are recording ids, live consumers
+ * while it waits for one, and while it lingers after its last viewer left: then its stream goes
+ * to anyone who needs one) and who uses it. Recording consumers are recording ids, live consumers
  * playback session ids.
  */
 export interface UpstreamStream {
@@ -498,12 +500,15 @@ const makeRecorder = Effect.gen(function* () {
         for (const recording of running) {
           yield* Effect.ignore(stop(RecordingId.make(recording.id)));
         }
+        // Nobody to keep it running for: it stops with its last consumer.
+        yield* manager.stopWhenIdle(ChannelId.make(row.channelId));
       }),
     /** The channel captures running now, with their source slots and consumers (SPEC 7.9). */
     streams: Effect.map(manager.status, (statuses) =>
       statuses.map((status): UpstreamStream => ({
         channelId: status.channelId,
-        sourceId: status.stream?.sourceId,
+        // A lingering channel's stream is anyone's who needs one, so it counts on no source.
+        sourceId: status.lingeringUntilMs === undefined ? status.stream?.sourceId : undefined,
         startedAtMs: status.startedAtMs,
         consumers: status.consumers.map((consumer) => ({ id: consumer.id, kind: consumer.kind })),
       })),
@@ -592,6 +597,7 @@ export class Recorder extends Context.Service<Recorder, Effect.Success<typeof ma
         PlanningContextRepoLive,
         HistoryRepoLive,
         LineupLive,
+        LiveKeepPolicyLive,
         Storage.node(config.dataDir),
       ).pipe(Layer.provideMerge(RecorderEvents.layer));
       const manager = CaptureManager.layer({

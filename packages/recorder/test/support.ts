@@ -44,6 +44,8 @@ import {
   GuideRepo,
   HistoryRepo,
   Lineup,
+  LiveKeepPolicy,
+  type LiveKeepRules,
   PlanningContextRepo,
   RecordingRepo,
   RuleRepo,
@@ -371,6 +373,8 @@ export const makeHarness = Effect.fnUntraced(function* (setup: {
   readonly slowRepo?: boolean;
   /** History, access and conflicts planning sees; everything open by default. */
   readonly planning?: MemoryPlanningOptions;
+  /** What live TV keeps after its viewers leave; nothing by default. */
+  readonly liveKeep?: LiveKeepRules;
 }) {
   yield* TestClock.setTime(T0);
   const harness: Harness = {
@@ -397,6 +401,7 @@ export const makeHarness = Effect.fnUntraced(function* (setup: {
     ),
     Layer.effect(SegmentRepo, makeMemorySegmentRepo()),
     Lineup.fixed(setup.lineup ?? singleSource()),
+    setup.liveKeep === undefined ? LiveKeepPolicy.none : LiveKeepPolicy.fixed(setup.liveKeep),
     publishedEventsLayer,
     fakeCapture(setup.behaviours ?? {}, harness.log),
   );

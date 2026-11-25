@@ -1,4 +1,5 @@
 import type { PlaybackSettings, RecordingSettings } from "@slipstream/api";
+import type { LiveKeep } from "@slipstream/domain";
 import { m } from "@slipstream/i18n";
 import { Effect, Predicate } from "effect";
 import { Api } from "../../../api/client.ts";
@@ -10,6 +11,9 @@ export const adminSettingsActions = {
   /** Saves the recording defaults; changing a default never rewrites existing rules. */
   saveRecording: (settings: RecordingSettings) =>
     Effect.flatMap(Api, (api) => api.settings.saveRecording({ payload: settings })),
+  /** Saves how long live TV keeps running and its rewind buffer after viewers leave. */
+  saveLive: (settings: LiveKeep) =>
+    Effect.flatMap(Api, (api) => api.settings.saveLive({ payload: settings })),
   /** Connects TMDB with a key, or disconnects it with `null`. */
   saveArtwork: (tmdbKey: string | null) =>
     Effect.flatMap(Api, (api) => api.settings.saveArtwork({ payload: { tmdbKey } })),

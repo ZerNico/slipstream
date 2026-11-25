@@ -5,8 +5,8 @@ import { extraTimeDefaultsProblems } from "@slipstream/domain";
 import { type MockContext, requireAdmin } from "./context.ts";
 
 /**
- * The mock's `settings` group (SPEC 7.7, PLAN 6.11): the household's recording defaults and the
- * playback and conversion settings. Everyone reads them; only admins save them.
+ * The mock's `settings` group (SPEC 7.7, PLAN 6.11): the household's recording defaults, live TV
+ * after its viewers leave, and the playback and conversion settings. Everyone reads them; only admins save them.
  */
 export const settingsGroup = (ctx: MockContext) => {
   const { data } = ctx;
@@ -48,6 +48,14 @@ export const settingsGroup = (ctx: MockContext) => {
           }
           state.tmdb = payload.tmdbKey !== null && payload.tmdbKey.trim() !== "";
           return { tmdb: state.tmdb };
+        }),
+      )
+      .handle("live", () => Effect.sync(() => state.live))
+      .handle("saveLive", ({ payload }) =>
+        Effect.gen(function* () {
+          yield* requireAdmin;
+          state.live = payload;
+          return payload;
         }),
       )
       .handle("playback", () => Effect.sync(() => data.playbackSettings))

@@ -82,8 +82,8 @@ This is the core idea; most features fall out of it.
   playlist gets `#EXT-X-DISCONTINUITY` and the gap is recorded, so the UI can say "missing 00:42
   at 13:12".
 - **Retention** deletes finished recordings under each series recording's or collection's policy,
-  then deletes every segment file that no remaining recording's range and no live viewer's DVR
-  window covers.
+  then deletes every segment file that no remaining recording's range and no live DVR window
+  covers (a viewer's, or the kept buffer of a channel nobody watches any more, see below).
 
 HLS routes live outside the JSON API because players cannot send auth headers reliably:
 
@@ -105,14 +105,25 @@ HLS routes live outside the JSON API because players cannot send auth headers re
   Recordings come first: a recording that finds every stream busy takes one from a channel only
   live viewers are using; live viewers never take a stream from a recording. Conflicts are shown
   when scheduling.
+- **Live TV waits for its viewers.** A live viewer counts as gone after 60 s without fetching
+  anything. The channel then keeps running for a while (Settings › Recording › Live TV: 10
+  minutes by default, up to an hour, or until the programme on air ends, at most 4 hours), so a
+  reload or a short break finds the whole rewind buffer. Such a lingering channel holds no
+  consumer and gives way first: a recording, or a viewer of another channel, that finds no free
+  stream takes its stream at once. Once a watched channel's capture stopped, its DVR window stays
+  retained as a kept buffer (1 hour by default, up to 24 hours, never beyond the DVR window); a
+  viewer coming back rewinds into it, and the live playlist shows the gap with a discontinuity
+  and each stretch's own `PROGRAM-DATE-TIME`. Kept buffers live in memory, so a restart lets them
+  go.
 - **ffmpeg processes are scoped resources** (Effect `Scope`): always killed on interrupt or
   shutdown. Reconnects use `Schedule`.
 - **Startup self-check:** the server runs the ffmpeg it finds against a generated test stream and
   reports problems on the system page instead of producing empty recordings later.
 - **Probing:** ffprobe records codecs, resolution, frame rate, interlacing and audio tracks per
   capture, shown as a quality badge and used by the playback decision.
-- **Disk-space guard:** below a configurable free-space floor, live DVR windows shrink first, then
-  retention runs early on the oldest unprotected recordings. Running recordings are never cut.
+- **Disk-space guard:** below a configurable free-space floor, kept buffers go first, then live
+  DVR windows shrink, then retention runs early on the oldest unprotected recordings. Running
+  recordings are never cut.
 
 The capture engine sits behind an interface, so a native segmenter could replace ffmpeg later if
 it ever mattered.

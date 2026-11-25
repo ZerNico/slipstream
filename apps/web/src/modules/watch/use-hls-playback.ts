@@ -4,9 +4,13 @@ import {
   AT_LIVE_TOLERANCE,
   behindLive,
   clampToPlayable,
+  type ClockAnchor,
+  clockAnchors,
   livePoint,
-  wallClockOffset,
+  liveClock,
+  mediaAt,
   type PlaybackSnapshot,
+  wallAt,
 } from "./live-position.ts";
 
 /**
@@ -55,11 +59,19 @@ const segmentUrls = (playlist: string, base: string): string[] =>
     .filter((line) => line !== "" && !line.startsWith("#"))
     .map((line) => new URL(line, new URL(base, window.location.href)).href);
 
-/** The wall-clock offset the playlist's PROGRAM-DATE-TIME implies, or null without one. */
-const programDateOffset = (data: LevelLoadedData): number | null => {
-  const first = data.details.fragments[0];
-  return first?.programDateTime == null ? null : first.programDateTime - first.start * 1000;
-};
+/** The playlist's stretches on the wall clock, from its PROGRAM-DATE-TIMEs. */
+const anchorsOf = (data: LevelLoadedData): ClockAnchor[] =>
+  clockAnchors(
+    data.details.fragments.map((fragment) => ({
+      start: fragment.start,
+      duration: fragment.duration,
+      programDateTime: fragment.programDateTime ?? null,
+    })),
+  );
+
+/** What tells two clocks apart: each stretch's offset, to the millisecond. */
+const clockKey = (anchors: readonly ClockAnchor[]): string =>
+  anchors.map((anchor) => Math.round(anchor.wall - anchor.media * 1000)).join(",");
 
 /** A start point as a media time, once the playable range and its clock are known. */
 export const startMediaTime = (snapshot: PlaybackSnapshot, start: StartAt): number => {
@@ -69,7 +81,7 @@ export const startMediaTime = (snapshot: PlaybackSnapshot, start: StartAt): numb
     case "live":
       return livePoint(snapshot);
     case "clock":
-      return clampToPlayable(snapshot, (start.at - snapshot.epochOffset) / 1000);
+      return clampToPlayable(snapshot, mediaAt(snapshot, start.at));
     case "offset":
       return clampToPlayable(snapshot, snapshot.seekableStart + start.seconds);
   }
@@ -157,8 +169,8 @@ export function useHlsPlayback(
     if (!video || first === undefined) return;
     appliedRef.current = first;
     let closed = false;
-    let pdtOffset: number | null = null;
-    let offset: number | null = null;
+    let anchors: readonly ClockAnchor[] = [];
+    let clock: Pick<PlaybackSnapshot, "epochOffset" | "clock"> | null = null;
     const continueAt = continueRef.current;
     let pending: StartAt | null =
       continueAt === null ? startRef.current : { kind: "clock", at: continueAt };
@@ -167,13 +179,13 @@ export function useHlsPlayback(
       const { seekable } = video;
       if (seekable.length === 0) return;
       const seekableEnd = seekable.end(seekable.length - 1);
-      offset ??= wallClockOffset({ programDateOffset: pdtOffset, seekableEnd, now: Date.now() });
+      clock ??= liveClock({ anchors, seekableEnd, now: Date.now() });
       const next: PlaybackSnapshot = {
         currentTime: video.currentTime,
         seekableStart: seekable.start(0),
         seekableEnd,
         liveSync: hlsRef.current?.liveSyncPosition ?? null,
-        epochOffset: offset,
+        ...clock,
       };
       if (pending !== null) {
         video.currentTime = startMediaTime(next, pending);
@@ -188,7 +200,7 @@ export function useHlsPlayback(
           reachedLiveRef.current?.();
         }
       }
-      continueRef.current = offset + video.currentTime * 1000;
+      continueRef.current = wallAt(next, video.currentTime);
       setSnapshot({ ...next, currentTime: video.currentTime });
       setPaused(video.paused);
       setEnded(video.ended);
@@ -272,10 +284,14 @@ export function useHlsPlayback(
         renewed = false;
       });
       live.on(Events.LEVEL_LOADED, (_event, data) => {
-        const next = programDateOffset(data);
-        if (next !== pdtOffset) {
-          pdtOffset = next;
-          offset = null;
+        const next = anchorsOf(data);
+        if (clockKey(next) !== clockKey(anchors)) {
+          anchors = next;
+          clock = null;
+        } else {
+          // Same stretches; the window slid, so keep the newest anchors.
+          anchors = next;
+          if (clock?.clock !== undefined) clock = { ...clock, clock: next };
         }
       });
       live.on(Events.MANIFEST_PARSED, autoplay);

@@ -476,6 +476,27 @@ describe("recording settings and record options", () => {
     expect((await lisa.request("PUT", "/api/settings/playback", next)).status).toBe(403);
     expect((await admin.request("PUT", "/api/settings/playback", next)).json).toEqual(next);
   });
+
+  it("keeps live TV running and its rewind buffer as an admin sets it", async () => {
+    // Everyone reads the defaults: 10 minutes running, the buffer kept for an hour.
+    expect((await lisa.request("GET", "/api/settings/live")).json).toEqual({
+      keepRunning: 10,
+      keepBufferMinutes: 60,
+    });
+    const next = { keepRunning: "programmeEnd", keepBufferMinutes: 0 };
+    expect((await lisa.request("PUT", "/api/settings/live", next)).status).toBe(403);
+    expect((await admin.request("PUT", "/api/settings/live", next)).json).toEqual(next);
+    expect((await lisa.request("GET", "/api/settings/live")).json).toEqual(next);
+    // Out of range: at most an hour running, at most a day of buffer.
+    for (const invalid of [
+      { keepRunning: 0, keepBufferMinutes: 60 },
+      { keepRunning: 61, keepBufferMinutes: 60 },
+      { keepRunning: 10, keepBufferMinutes: 24 * 60 + 1 },
+    ]) {
+      expect((await admin.request("PUT", "/api/settings/live", invalid)).status).toBe(400);
+    }
+    expect((await admin.request("GET", "/api/settings/live")).json).toEqual(next);
+  });
 });
 
 describe("artwork", () => {

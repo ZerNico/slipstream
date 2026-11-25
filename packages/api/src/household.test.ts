@@ -167,6 +167,8 @@ const SettingsHandlers = HttpApiBuilder.group(SlipstreamApi, "settings", (handle
       }),
     playback: () => Effect.die("not used in this test"),
     savePlayback: () => Effect.die("not used in this test"),
+    live: () => Effect.die("not used in this test"),
+    saveLive: () => Effect.die("not used in this test"),
   }),
 );
 

@@ -9,6 +9,8 @@ import {
   defaultArtworkOrder,
   fullAccess,
   type GuestInvite,
+  initialLiveKeep,
+  type LiveKeep,
   InviteId,
   type Profile,
   type User,
@@ -33,6 +35,8 @@ export interface HouseholdState {
   /** Tokens of invites that were used or revoked, for the "no longer valid" answers. */
   readonly spent: Map<string, "used" | "revoked">;
   recording: RecordingSettings;
+  /** Live TV after its viewers leave (Settings › Recording). */
+  live: LiveKeep;
   /** Whether a TMDB key is set (the mock keeps no key, only that there is one). */
   tmdb: boolean;
 }
@@ -103,6 +107,7 @@ export const makeHousehold = (now: number, admin: UserId): HouseholdState => {
     invites: [{ invite: lisa, token: mockInviteToken, used: false }],
     spent: new Map(),
     tmdb: false,
+    live: initialLiveKeep,
     recording: {
       extraTime: {
         padding: { beforeMinutes: 2, afterMinutes: 10 },

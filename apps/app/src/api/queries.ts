@@ -252,6 +252,14 @@ export const apiQueries = (runtime: ApiRuntime) => ({
       Effect.flatMap(Api, (api) => api.settings.recording()),
       5 * 60_000,
     ),
+  /** How long live TV keeps running and its rewind buffer after viewers leave. */
+  liveSettings: () =>
+    apiQuery(
+      runtime,
+      queryKeys.liveSettings,
+      Effect.flatMap(Api, (api) => api.settings.live()),
+      5 * 60_000,
+    ),
   artworkSettings: () =>
     apiQuery(
       runtime,

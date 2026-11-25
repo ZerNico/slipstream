@@ -28,6 +28,7 @@ import {
   epochMs,
   eventOf,
   governingRetention,
+  MINUTE,
   placeInCollection,
   type Recording,
   type RecordingId,
@@ -42,6 +43,7 @@ import {
   GuideRepo,
   HistoryRepo,
   Lineup,
+  LiveKeepPolicy,
   PlanningContextRepo,
   RecordingRepo,
   type RetentionGroup,
@@ -74,6 +76,7 @@ import { addHistory } from "../planning/history.ts";
 import { Planning } from "../planning/service.ts";
 import { deleteRecording, loadCollections, loadRecordings } from "../recordings/store.ts";
 import { toRule } from "../rules/store.ts";
+import { loadLiveKeep } from "../settings/service.ts";
 import { streamRequest } from "../sources/mapping.ts";
 import { SecretBox } from "../sources/secret-box.ts";
 import { openStreamUrl, sourceFromRow } from "../sources/store.ts";
@@ -473,6 +476,23 @@ export const GuideRepoLive = Layer.effect(
       changes: bus.events.pipe(
         Stream.filter((event) => event._tag === "GuideRefreshed"),
         Stream.map(() => undefined),
+      ),
+    });
+  }),
+);
+
+/**
+ * The household's Live TV settings, read each time a live viewer leaves or joins. The
+ * configuration's `recorder.keepRunningMs` (tests) replaces how long a channel keeps running.
+ */
+export const LiveKeepPolicyLive = Layer.effect(
+  LiveKeepPolicy,
+  Effect.gen(function* () {
+    const { read } = yield* Db;
+    const override = (yield* ServerConfig).recorder?.keepRunningMs;
+    return LiveKeepPolicy.of({
+      rules: Effect.map(loadLiveKeep(read), (saved) =>
+        override === undefined ? saved : { ...saved, keepRunning: override / MINUTE },
       ),
     });
   }),

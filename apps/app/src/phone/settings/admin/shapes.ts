@@ -6,13 +6,14 @@ import { type GroupShape, METER_EM, ROW_EM, ROW_TWO_LINES_EM } from "./metrics.t
  */
 
 /**
- * Settings › Recording: extra time, Add exception under its heading, then Pictures. Most
+ * Settings › Recording: extra time, Add exception under its heading, Live TV, then Pictures. Most
  * households have no exceptions; the skeleton shows only while the settings first load, so
  * any there are arrive below it.
  */
 export const recordingShape: readonly GroupShape[] = [
   { heading: true, rows: [ROW_EM, ROW_EM] },
   { heading: true, rows: [ROW_EM] },
+  { heading: true, rows: [ROW_TWO_LINES_EM, ROW_TWO_LINES_EM] },
   { heading: true, rows: [ROW_TWO_LINES_EM, ROW_EM] },
 ];
 

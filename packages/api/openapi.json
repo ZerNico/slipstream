@@ -7952,6 +7952,102 @@
         }
       }
     },
+    "/api/settings/live": {
+      "get": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "settings.live",
+        "parameters": [],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "LiveKeep",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveKeep"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "Settings"
+        ],
+        "operationId": "settings.saveLive",
+        "parameters": [],
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "bearer": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "LiveKeep",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveKeep"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UnauthorizedEncoded"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ForbiddenEncoded"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LiveKeep"
+              }
+            }
+          },
+          "required": true
+        }
+      }
+    },
     "/api/artwork": {
       "get": {
         "tags": [
@@ -8316,6 +8412,39 @@
           "_tag"
         ],
         "additionalProperties": false
+      },
+      "LiveKeep": {
+        "type": "object",
+        "properties": {
+          "keepRunning": {
+            "$ref": "#/components/schemas/KeepRunning"
+          },
+          "keepBufferMinutes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1440
+          }
+        },
+        "required": [
+          "keepRunning",
+          "keepBufferMinutes"
+        ],
+        "additionalProperties": false
+      },
+      "KeepRunning": {
+        "anyOf": [
+          {
+            "type": "string",
+            "enum": [
+              "programmeEnd"
+            ]
+          },
+          {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 60
+          }
+        ]
       },
       "InvalidInputEncoded": {
         "type": "object",
