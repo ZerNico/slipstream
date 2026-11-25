@@ -172,7 +172,7 @@ function AccountStep({ onDone }: { onDone: () => void }) {
   );
 }
 
-/** Step 2: the first source, tested before it is saved. */
+/** Step 2: the first source; testing it first is offered, not required. */
 function SourceStep({
   onDone,
   onSkip,
@@ -193,7 +193,6 @@ function SourceStep({
   const [touched, setTouched] = useState(false);
   const errors = sourceErrors(draft, { playlist: false });
   const valid = Object.keys(errors).length === 0;
-  const tested = test.isSuccess;
   const set = (patch: Partial<SourceDraft>) => {
     setDraft((before) => ({ ...before, ...patch }));
     test.reset();
@@ -206,7 +205,8 @@ function SourceStep({
       noValidate
       onSubmit={(event) => {
         event.preventDefault();
-        if (!tested) return;
+        setTouched(true);
+        if (!valid) return;
         create.mutate(sourceInput(draft), {
           onSuccess: (source) => refresh.mutate(source.id, { onSettled: () => onDone(source.id) }),
         });
@@ -268,14 +268,12 @@ function SourceStep({
           size="lg"
           type="submit"
           className="flex-1"
-          disabled={!tested}
           busy={saving}
           icon={<Icon icon={ForwardIcon} />}
         >
           {m.action_continue()}
         </Button>
       </div>
-      {tested ? null : <p className="field-hint -mt-2">{m.setup_test_first()}</p>}
       <Button variant="ghost" className="justify-self-start" onClick={onSkip}>
         {m.setup_skip_source()}
       </Button>
@@ -458,7 +456,7 @@ function DoneStep() {
 }
 
 /**
- * First-run setup (SPEC §8.8): the admin account, the first source (tested before Continue),
+ * First-run setup (SPEC §8.8): the admin account, the first source (a test is offered),
  * the channels, done. The account is created at the end of step 1, so the rest runs signed in.
  */
 export function SetupPage() {

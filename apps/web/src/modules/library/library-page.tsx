@@ -320,7 +320,7 @@ export function LibraryPage({
               {m.action_open_guide()}
             </Button>
             <Button
-              icon={<Icon icon={RulesIcon} />}
+              icon={<Icon icon={AddIcon} />}
               nativeButton={false}
               render={<Link to="/series/new" />}
             >

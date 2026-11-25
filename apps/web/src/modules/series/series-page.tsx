@@ -249,7 +249,7 @@ export function SeriesPage() {
   const ownerName = (rule: Rule) =>
     profiles.data?.find((profile) => profile.id === rule.ownerId)?.displayName ?? "";
 
-  const newSeries = (variant: "primary" | "ghost") => (
+  const newSeries = (variant: "primary" | "secondary" | "ghost") => (
     <Button
       variant={variant}
       icon={<Icon icon={AddIcon} />}
@@ -281,7 +281,7 @@ export function SeriesPage() {
         <EmptyState
           title={m.series_empty()}
           action={
-            <div className="flex flex-wrap justify-center gap-2.5">
+            <div className="flex flex-wrap justify-center gap-2">
               <Button
                 variant="primary"
                 icon={<Icon icon={GuideIcon} />}
@@ -290,7 +290,7 @@ export function SeriesPage() {
               >
                 {m.action_open_guide()}
               </Button>
-              {newSeries("ghost")}
+              {newSeries("secondary")}
             </div>
           }
         />

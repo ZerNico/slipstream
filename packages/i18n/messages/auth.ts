@@ -27,7 +27,6 @@ export const auth = defineArea({
       "The TV won't be signed in. An admin can see the attempt under Users & devices.",
     approve_profile_you: (p: { name: string }) => `${p.name} (you)`,
 
-    auth_claim_title: "Live TV that waits for you.",
     signin_welcome: "Welcome back",
     signin_to_server: (p: { host: string }) => `Sign in to ${p.host}`,
     signin_tv_hint: "Signing in a TV? Open Slipstream on the TV. It shows a code you confirm here.",
@@ -41,7 +40,6 @@ export const auth = defineArea({
       `Strong. ${f.plural(p.length, { one: "# character", other: "# characters" })}.`,
     setup_source_title: "Add your first source",
     setup_source_name: "My TV source",
-    setup_test_first: "Test the source first, so a typo shows up now and not on Sunday.",
     setup_skip_source: "Skip, add a source later",
     setup_channels_title: "Pick your channels",
     setup_channels_text: (p: { picked: number; total: number }, f: F) =>
@@ -125,7 +123,6 @@ export const auth = defineArea({
       "Der Fernseher wird nicht angemeldet. Ein Admin sieht den Versuch unter Benutzer & Geräte.",
     approve_profile_you: (p) => `${p.name} (du)`,
 
-    auth_claim_title: "Fernsehen, das auf dich wartet.",
     signin_welcome: "Willkommen zurück",
     signin_to_server: (p) => `Bei ${p.host} anmelden`,
     signin_tv_hint:
@@ -140,8 +137,6 @@ export const auth = defineArea({
       `Stark. ${f.plural(p.length, { one: "# Zeichen", other: "# Zeichen" })}.`,
     setup_source_title: "Füge deine erste Quelle hinzu",
     setup_source_name: "Meine TV-Quelle",
-    setup_test_first:
-      "Teste die Quelle zuerst, damit ein Tippfehler jetzt auffällt und nicht am Sonntag.",
     setup_skip_source: "Überspringen, Quelle später hinzufügen",
     setup_channels_title: "Wähle deine Sender",
     setup_channels_text: (p, f) =>

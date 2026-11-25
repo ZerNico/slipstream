@@ -1,5 +1,4 @@
 import { type ReactNode, useEffect, useRef } from "react";
-import { m } from "@slipstream/i18n";
 import { Lockup } from "~/shell/logo.tsx";
 import { Artwork } from "~/ui/artwork/artwork.tsx";
 import type { ArtworkSubject } from "~/ui/artwork/generate.ts";
@@ -65,11 +64,6 @@ function AuthWall() {
         ))}
       </div>
       <div className="absolute inset-0 bg-[linear-gradient(90deg,color-mix(in_oklab,var(--bg)_20%,transparent),color-mix(in_oklab,var(--bg)_85%,transparent)),linear-gradient(0deg,color-mix(in_oklab,var(--bg)_90%,transparent),transparent_50%)]" />
-      <div className="absolute right-12 bottom-12 left-12 z-[2] text-fg">
-        <h2 className="max-w-[12ch] font-display text-[44px] leading-none font-[750] tracking-[-0.04em]">
-          {m.auth_claim_title()}
-        </h2>
-      </div>
     </div>
   );
 }
