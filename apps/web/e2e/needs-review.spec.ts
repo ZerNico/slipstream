@@ -139,7 +139,9 @@ test.describe("needs review at 1440 × 900", () => {
 
       await dialog.getByRole("button", { name: "Done" }).click();
       await expect(dialog).toBeHidden();
-      await expect(section).toHaveCount(0);
+      // Its card goes. The section itself may stay: other journeys running at the same time can
+      // add a source whose new streams wait for review.
+      await expect(card).toHaveCount(0);
       await expect(page.getByRole("heading", { name: "Sources", exact: true })).toBeVisible();
     } finally {
       const live = new Set(
