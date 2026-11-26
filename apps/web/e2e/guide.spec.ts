@@ -341,7 +341,7 @@ test.describe("phone 390 × 844 in German", () => {
       // A left-out repeat, then the airing the series recording schedules.
       for (const [airing, buttons] of [
         [repeat, ["Trotzdem aufnehmen", "Serienaufnahme ändern"]],
-        [first, ["Diese auslassen", "Serienaufnahme ändern"]],
+        [first, ["Nicht aufnehmen", "Serienaufnahme ändern"]],
       ] as const) {
         await page.goto(`/guide?sheet=${encodeURIComponent(`prog:${airing.id}`)}`);
         await expect(footer.getByRole("button")).toHaveText([...buttons]);
