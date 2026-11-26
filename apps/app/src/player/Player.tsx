@@ -15,6 +15,7 @@ import * as ScreenOrientation from "expo-screen-orientation";
 import { StatusBar } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  AppState,
   BackHandler,
   StyleSheet,
   Text,
@@ -29,6 +30,7 @@ import Video, {
   type AudioTrack,
   type OnProgressData,
   type VideoRef,
+  type VideoTrack,
 } from "react-native-video";
 import type { Effect } from "effect";
 import type { Api } from "../api/client.ts";
@@ -43,18 +45,22 @@ import { CaptureTimeline } from "../ui/CaptureTimeline.tsx";
 import { FocusButton } from "../ui/FocusButton.tsx";
 import { StatusScreen } from "../ui/StatusScreen.tsx";
 import { useToast } from "../ui/toast.ts";
-import { readPress } from "../tv/guide/remote.ts";
+import { HELD_REPEAT_MS, readPress } from "../tv/guide/remote.ts";
 import {
+  backPress,
+  focusPart,
   hideControls,
   initialControls,
   keepControls,
   playerKeyFor,
   reduceKey,
+  repeatsWhileHeld,
   shownControls,
   tapPicture,
   tickControls,
   type ControlsState,
   type PlayerCommand,
+  type PlayerKey,
 } from "./controls.ts";
 import {
   isAuthRefusal,
@@ -73,8 +79,10 @@ import {
   recordedText,
   recordingShown,
 } from "./record-now.ts";
+import { nowPlaying, playingSubject } from "./now-playing.ts";
 import { PictureGestures } from "./PictureGestures.tsx";
-import { ControlsRow, TopBar } from "./PlayerControls.tsx";
+import { pauseAway, PIP_SETTLE_MS, pipArmed } from "./pip.ts";
+import { ControlsRow, TimelineFocus, TopBar } from "./PlayerControls.tsx";
 import { savePrefs, usePlayerPrefs } from "./player-prefs.ts";
 import { makeProgressSaver, progressAt, type ProgressSaver } from "./progress.ts";
 import {
@@ -85,6 +93,8 @@ import {
   startTarget,
   type PlayerProgress,
 } from "./seek.ts";
+import { statsRows } from "./stats.ts";
+import { StatsOverlay } from "./StatsOverlay.tsx";
 import { usePlaybackSession } from "./use-playback-session.ts";
 
 /** A readable name for an audio track: its language in the reader's language, else its title. */
@@ -183,13 +193,11 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const toast = useToast();
   const recordingId = target?._tag === "Recording" ? target.recordingId : undefined;
   const recording = useQuery(queries.recording(recordingId));
-  // Live and a captured range have no recording to name them: the channel does.
-  const channelOfTarget = target?._tag === "Recording" ? undefined : target?.channelId;
+  // The channel of whatever plays: its name and logo lead the top bar.
+  const channelOfTarget =
+    target?._tag === "Recording" ? recording.data?.channelId : target?.channelId;
   const channels = useQuery({ ...queries.channels(), enabled: channelOfTarget !== undefined });
-  const title =
-    recording.data?.title ??
-    channels.data?.find((channel) => channel.id === channelOfTarget)?.name ??
-    "";
+  const channelName = channels.data?.find((channel) => channel.id === channelOfTarget)?.name;
   // Record: only for a profile that may record; it needs the library (is it recorded already?)
   // and the channel's programmes around the playhead, back as far as the pause buffer reaches.
   const profile = useQuery(queries.myProfile());
@@ -198,11 +206,12 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const [now, setNow] = useState(() => Date.now());
   // The window moves on with the clock, so a session hours long still finds what airs now;
   // the last answer stays while the next window loads (never another channel's).
+  // Live and a captured range also name the programme at the playhead from it.
   const guideWindow = guideWindowAt(now);
-  const guideChannel = target?._tag === "Live" ? target.channelId : recording.data?.channelId;
+  const guideChannel = channelOfTarget;
   const channelGuide = useQuery({
     ...queries.channelGuide(guideChannel, guideWindow.from, guideWindow.to),
-    enabled: mayRecord,
+    enabled: mayRecord || (target !== undefined && target._tag !== "Recording"),
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === guideChannel ? previous : undefined,
   });
@@ -218,11 +227,26 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const [holding, setHolding] = useState(false);
   // In picture-in-picture only the picture shows: no controls, no hints.
   const [inPip, setInPip] = useState(false);
+  const inPipRef = useRef(inPip);
+  useEffect(() => {
+    inPipRef.current = inPip;
+  }, [inPip]);
   const [buffering, setBuffering] = useState(true);
   const [failed, setFailed] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [tracks, setTracks] = useState<readonly AudioTrack[]>([]);
   const [trackIndex, setTrackIndex] = useState<number | undefined>(undefined);
+  // What the playback stats read: the picture, its tracks, the bandwidth and the loaded end.
+  const [videoSize, setVideoSize] = useState<
+    { readonly width: number; readonly height: number } | undefined
+  >(undefined);
+  const [videoTracks, setVideoTracks] = useState<readonly VideoTrack[]>([]);
+  const [networkBitrate, setNetworkBitrate] = useState<number | undefined>(undefined);
+  const [loadedTo, setLoadedTo] = useState<number | undefined>(undefined);
+  const statsRef = useRef(prefs.stats);
+  useEffect(() => {
+    statsRef.current = prefs.stats;
+  }, [prefs.stats]);
   // Phone opens with its controls up (they hide by themselves); TV with them hidden.
   const [controls, setControls] = useState<ControlsState>(() =>
     isTV ? initialControls : shownControls(Date.now()),
@@ -336,6 +360,9 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
         case "TogglePause":
           setPaused((value) => !value);
           return;
+        case "CloseStats":
+          savePrefs({ stats: false });
+          return;
         case "Exit":
           router.back();
           return;
@@ -349,34 +376,95 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   useEffect(() => {
     controlsRef.current = controls;
   }, [controls]);
-  const onRemote = useCallback(
-    (event: TVRemoteEvent) => {
-      // The options sheet has the remote while it is open.
-      if (optionsOpenRef.current) return;
-      const press = readPress(event);
-      const key = press === undefined ? undefined : playerKeyFor(press.key);
-      if (press === undefined || key === undefined || key === "back") return;
-      const result = reduceKey(controlsRef.current, key, press.phase, Date.now());
+  // A held arrow arrives once more as a long press and then not again until it comes up, so
+  // while it scrubs the timeline the player repeats it, as the guide does.
+  const repeating = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const stopRepeating = useCallback(() => {
+    if (repeating.current !== undefined) clearInterval(repeating.current);
+    repeating.current = undefined;
+  }, []);
+  useEffect(() => stopRepeating, [stopRepeating]);
+  const feed = useCallback(
+    (key: PlayerKey, phase: "down" | "up") => {
+      const result = reduceKey(controlsRef.current, key, phase, Date.now());
       controlsRef.current = result.state;
       setControls(result.state);
       apply(result.command);
     },
     [apply],
   );
+  const onRemote = useCallback(
+    (event: TVRemoteEvent) => {
+      const press = readPress(event);
+      if (press?.phase === "up") stopRepeating();
+      // The options sheet has the remote while it is open.
+      if (optionsOpenRef.current) return;
+      const key = press === undefined ? undefined : playerKeyFor(press.key);
+      // Back is the BackHandler's alone, so it never counts twice.
+      if (press === undefined || key === undefined || key === "back") return;
+      feed(key, press.phase);
+      if (
+        press.held === true &&
+        press.phase === "down" &&
+        repeatsWhileHeld(controlsRef.current, key)
+      ) {
+        stopRepeating();
+        repeating.current = setInterval(() => {
+          if (repeatsWhileHeld(controlsRef.current, key)) feed(key, "down");
+          else stopRepeating();
+        }, HELD_REPEAT_MS);
+      }
+    },
+    [feed, stopRepeating],
+  );
   useTVEventHandler(onRemote);
+
+  // Focus says which part of the shown controls the remote drives (`focusPart`).
+  const onFocusPart = useCallback((part: "timeline" | "controls") => {
+    const next = focusPart(controlsRef.current, part, Date.now());
+    if (next === controlsRef.current) return;
+    controlsRef.current = next;
+    setControls(next);
+  }, []);
 
   useEffect(() => {
     // A phone's Back leaves the player, as every phone player's does.
     if (!isTV) return;
     const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
-      const result = reduceKey(controlsRef.current, "back", "down", Date.now());
+      const result = backPress(controlsRef.current, statsRef.current, Date.now());
       if (result.command?._tag === "Exit") return false;
       controlsRef.current = result.state;
       setControls(result.state);
+      apply(result.command);
       return true;
     });
     return () => subscription.remove();
+  }, [isTV, apply]);
+
+  // Picture-in-picture plays on (`pip.ts`); in the background without its window, pause.
+  useEffect(() => {
+    if (isTV) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const check = () => {
+      if (timer !== undefined) clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (pauseAway(AppState.currentState, inPipRef.current)) setPaused(true);
+      }, PIP_SETTLE_MS);
+    };
+    const subscription = AppState.addEventListener("change", check);
+    return () => {
+      subscription.remove();
+      if (timer !== undefined) clearTimeout(timer);
+    };
   }, [isTV]);
+  useEffect(() => {
+    // The window closed while the app stays in the background: pause, once it has settled.
+    if (isTV || inPip) return;
+    const timer = setTimeout(() => {
+      if (pauseAway(AppState.currentState, inPipRef.current)) setPaused(true);
+    }, PIP_SETTLE_MS);
+    return () => clearTimeout(timer);
+  }, [isTV, inPip]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -398,6 +486,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const onProgress = (data: OnProgressData) => {
     const next = { currentTime: data.currentTime, seekableDuration: data.seekableDuration };
     setProgress(next);
+    setLoadedTo(data.playableDuration);
     // Faster than real time ends by itself at the live edge (SPEC 7.1).
     if (!finished && isAtLive(next)) {
       if (speed > 1) changeSpeed(1);
@@ -492,6 +581,29 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const openRecordOptions =
     recordProgramme === undefined ? undefined : () => setRecordSheet("options");
 
+  // The programme at the playhead, changing as the playhead moves into the next one.
+  const playing = nowPlaying(
+    playingSubject({
+      target,
+      atMs: playhead.atMs,
+      programmes: channelGuide.data ?? [],
+      recording: recording.data,
+    }),
+    channelName,
+  );
+  const stats = prefs.stats
+    ? statsRows({
+        videoSize,
+        tracks: videoTracks,
+        plan: session.session.plan,
+        networkBitrate,
+        position:
+          progress === undefined || loadedTo === undefined
+            ? undefined
+            : { currentTime: progress.currentTime, playableDuration: loadedTo },
+      })
+    : undefined;
+
   const f = formatters();
   const behind = progress === undefined ? 0 : behindLive(progress);
   const atLive = !finished && (progress === undefined || isAtLive(progress));
@@ -547,11 +659,18 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
         // controls on Android TV, so they never showed.
         viewType={ViewType.TEXTURE}
         controls={false}
+        // Media3's own LIVE badge sits in the corner whatever our controls do; they say live.
+        controlsStyles={{ hideLiveBadge: true }}
         paused={paused}
         rate={holding ? Math.max(speed, holdSpeed) : speed}
-        // Leaving the app while it plays keeps the picture in a small window (phone).
-        enterPictureInPictureOnLeave={!isTV && !paused}
+        // Leaving the app while it plays keeps the picture in a small window (phone), and it
+        // keeps playing there (`pip.ts`).
+        enterPictureInPictureOnLeave={pipArmed(isTV, paused)}
+        playInBackground={pipArmed(isTV, paused)}
         onPictureInPictureStatusChanged={(event) => setInPip(event.isActive)}
+        reportBandwidth={prefs.stats}
+        onBandwidthUpdate={(event) => setNetworkBitrate(event.bitrate)}
+        onVideoTracks={(event) => setVideoTracks(event.videoTracks)}
         progressUpdateInterval={1000}
         selectedAudioTrack={
           trackIndex === undefined
@@ -562,8 +681,10 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
         onBuffer={(event) => setBuffering(event.isBuffering)}
         onReadyForDisplay={() => setBuffering(false)}
         onAudioTracks={(event) => setTracks(event.audioTracks)}
-        onLoad={() => {
+        onLoad={(event) => {
           reloaded.current = true;
+          setVideoSize(event.naturalSize);
+          setVideoTracks(event.videoTracks);
         }}
         onError={(event) => {
           // An expired or refused token: renew the session once and play on from here.
@@ -615,6 +736,9 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
           </Text>
         </View>
       ) : null}
+      {stats === undefined || inPip ? null : (
+        <StatsOverlay rows={stats} top={(isTV ? 7.4 : 4.6) * em} left={pad} />
+      )}
       {buffering ? (
         <Text
           style={{
@@ -650,7 +774,9 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
             <Rect x="0" y="0" width="100%" height="100%" fill="url(#shade)" />
           </Svg>
           <TopBar
-            title={title}
+            title={playing.title}
+            line={playing.line}
+            channelId={channelOfTarget}
             recordingNow={recordingNow || recordingShown(record)}
             now={now}
             size={size}
@@ -673,11 +799,14 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
               gap: 0.8 * em,
             }}
           >
-            <CaptureTimeline
-              width={width - 2 * pad}
-              focused={controls.mode === "timeline"}
-              marks={{ captured: 1, played, preview, ticks: [] }}
-            />
+            <TimelineFocus onFocus={() => onFocusPart("timeline")}>
+              <CaptureTimeline
+                width={width - 2 * pad}
+                focused={isTV && controls.mode === "timeline"}
+                focusable={isTV}
+                marks={{ captured: 1, played, preview, ticks: [], live: !finished }}
+              />
+            </TimelineFocus>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text
                 style={{
@@ -736,6 +865,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
                 setTrackIndex(tracks[(position + 1) % tracks.length]?.index);
               }}
               onOptions={() => setOptionsOpen(true)}
+              onFocus={() => onFocusPart("controls")}
             />
           </View>
         </Animated.View>
@@ -780,6 +910,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
           onQuality={changeQuality}
           onSpeed={changeSpeed}
           onFit={(fit) => savePrefs({ fit })}
+          onStats={(on) => savePrefs({ stats: on })}
           onClose={() => {
             setOptionsOpen(false);
             setOptionsClosed(true);

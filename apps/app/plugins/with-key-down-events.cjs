@@ -5,7 +5,8 @@
  * up, unless `ReactFeatureFlags.enableKeyDownEvents` is on (ReactAndroidHWInputDeviceHelper).
  * The TV guide, the record sheet's and the series editor's steppers act on a key going down
  * (at once, as the remote is pressed), so without this the arrows did nothing there. The player
- * reads both and counts a lone `up` as a press, so it works either way.
+ * acts on a key going down too, and on an arrow coming up only to commit a scrub; each press
+ * then sends both, so a handler acts on one of them, never on both.
  */
 const { withMainApplication } = require("expo/config-plugins");
 
