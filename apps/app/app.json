@@ -3,7 +3,7 @@
     "name": "Slipstream",
     "slug": "slipstream",
     "scheme": "slipstream",
-    "version": "0.1.7",
+    "version": "0.1.8",
     "orientation": "default",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#0B0E13",
