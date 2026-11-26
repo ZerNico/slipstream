@@ -57,7 +57,14 @@ import { RecordingProblem } from "./recording-problem.tsx";
  * it sits, and the facts. A running recording shows REC, its length "so far" and where it will
  * be exported when it ends.
  */
-export function RecordingPage({ id }: { id: RecordingId }) {
+export function RecordingPage({
+  id,
+  askDelete = false,
+}: {
+  id: RecordingId;
+  /** Opened from a card's Delete…: the question shows at once. */
+  askDelete?: boolean;
+}) {
   const data = useLibraryData();
   const queries = useQueries();
   const overlay = useOverlay();
@@ -86,7 +93,7 @@ export function RecordingPage({ id }: { id: RecordingId }) {
     placeholderData: (previous) => previous ?? keptConflicts,
     enabled: query.data?.state === "scheduled",
   });
-  const [confirming, setConfirming] = useState(false);
+  const [confirming, setConfirming] = useState(askDelete);
   const moreRef = useRef<HTMLSpanElement | null>(null);
   useSuppressMiniPlayer([id]);
 
