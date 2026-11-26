@@ -516,7 +516,7 @@ const makeRecorder = Effect.gen(function* () {
     /** How far back live viewers can rewind right now (the disk guard may have shrunk it). */
     dvrWindowMs: manager.dvrWindowMs,
     /**
-     * "Skip this one" or "stop looking": the chain of `originalId` stops looking for good. Its
+     * "Don't record" or "stop looking": the chain of `originalId` stops looking for good. Its
      * rerun line changed, so its owners refetch it (`RecordingChanged`).
      */
     declineRerun: (originalId: RecordingId) =>

@@ -659,7 +659,7 @@ const makeRecordings = Effect.gen(function* () {
       }
       if (ACTIVE.includes(recording.state)) {
         // Scheduled ones are cancelled, and a cancelled repeat ends its chain's search in the
-        // recorder ("Skip this one", §3.7 step 7). Running ones end now and release their
+        // recorder ("Don't record", §3.7 step 7). Running ones end now and release their
         // capture first; deleting a running repeat stops its chain's search too.
         yield* recorder.stopAndSettle(recording.id);
         if (recording.state === "recording" && recording.replacesId !== undefined) {

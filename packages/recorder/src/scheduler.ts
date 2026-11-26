@@ -726,7 +726,7 @@ const makeScheduler = Effect.fnUntraced(function* (options: SchedulerOptions) {
     });
 
   /**
-   * "Skip this one" on a planned repeat: the chains of all its originals stop looking for good
+   * "Don't record" on a planned repeat: the chains of all its originals stop looking for good
    * (§3.7 step 7).
    */
   const declineRerun = (repeat: StoredRecording, now: number) =>

@@ -240,7 +240,7 @@ test.describe("desktop interactions", () => {
     await expect(main.getByRole("button", { name: /^(Play|Watch|Resume)/u })).toHaveCount(0);
     await expect(main.locator("dt", { hasText: "Size" })).toHaveCount(0);
     await expect(main.locator("dt", { hasText: "Will record by" })).toBeVisible();
-    await expect(main.getByRole("button", { name: "Skip this one" })).toBeVisible();
+    await expect(main.getByRole("button", { name: "Don't record" })).toBeVisible();
     await main.getByRole("link", { name: "Series options" }).click();
     await expect(page).toHaveURL(new RegExp(`/series/${scheduled.ruleId ?? ""}$`, "u"));
   });

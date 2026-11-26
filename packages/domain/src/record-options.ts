@@ -234,7 +234,7 @@ export const recordOptionsFor = <A extends RecordedCandidate>(
 export type RecordSheetState =
   /** Running now and recorded for the caller: Watch (choice dialog) · Edit rule. */
   | { readonly kind: "recording" }
-  /** Scheduled for the caller, maybe in conflict: Skip this one · Edit rule. */
+  /** Scheduled for the caller, maybe in conflict: Don't record · Edit rule. */
   | { readonly kind: "scheduled"; readonly conflict: boolean }
   /** Recorded and finished: Watch. */
   | { readonly kind: "recorded" }

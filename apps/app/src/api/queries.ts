@@ -369,7 +369,7 @@ export const apiActions = {
   /** Ends a running recording now (the player's Stop recording). */
   stopRecording: (recordingId: RecordingId) =>
     Effect.flatMap(Api, (api) => api.recordings.stop({ params: { recordingId } })),
-  /** "Skip this one": removes a scheduled recording from the schedule. */
+  /** "Don't record": removes a scheduled recording from the schedule. */
   deleteRecording: (recordingId: RecordingId) =>
     Effect.flatMap(Api, (api) => api.recordings.remove({ params: { recordingId }, query: {} })),
   /** Checks a profile's PIN; run it on that profile's own runtime. */

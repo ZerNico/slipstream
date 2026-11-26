@@ -48,7 +48,7 @@ const makeReruns = Effect.gen(function* () {
   const repo = yield* RecordingRepo;
   const sweeper = yield* RetentionSweeper;
 
-  /** "Skip this one" or "stop looking": the chain of `originalId` stops looking for good. */
+  /** "Don't record" or "stop looking": the chain of `originalId` stops looking for good. */
   const declineRerun = (originalId: RecordingId) =>
     repo.update(originalId, (current) =>
       searchOpen(current) ? { ...current, rerunOutcome: "declined" } : current,

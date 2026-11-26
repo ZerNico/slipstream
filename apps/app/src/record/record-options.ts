@@ -59,7 +59,7 @@ export type SheetOption =
   | "anyway"
   /** The start-early and keep-after steppers. */
   | "extraTime"
-  /** "Skip this one": take the scheduled recording off the schedule. */
+  /** "Don't record": take the scheduled recording off the schedule. */
   | "skip"
   /** Open the recording: at its live edge while it runs, else where this profile left off. */
   | "watch"
