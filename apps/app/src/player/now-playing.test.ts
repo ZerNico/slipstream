@@ -78,14 +78,21 @@ describe("nowPlaying", () => {
 
 describe("playingMetadata", () => {
   const playing = { title: "Tagesschau", line: "Das Erste · 20:00–20:15" };
+  const ard = { name: "Das Erste", logoUrl: "https://logos.example/ard.png" };
 
-  it("names the programme, its line and the channel, with the channel's logo", () => {
-    expect(
-      playingMetadata(playing, { name: "Das Erste", logoUrl: "https://logos.example/ard.png" }),
-    ).toEqual({
+  it("names a recording's programme, its line and the channel, with the channel's logo", () => {
+    expect(playingMetadata(playing, ard, true, "Live TV")).toEqual({
       title: "Tagesschau",
       subtitle: "Das Erste · 20:00–20:15",
       artist: "Das Erste",
+      imageUri: "https://logos.example/ard.png",
+    });
+  });
+
+  it("names the channel on live TV, where the programme changes while it plays", () => {
+    expect(playingMetadata(playing, ard, false, "Live TV")).toEqual({
+      title: "Das Erste",
+      artist: "Live TV",
       imageUri: "https://logos.example/ard.png",
     });
   });
@@ -95,9 +102,11 @@ describe("playingMetadata", () => {
       playingMetadata(
         { title: "Tagesschau", line: "" },
         { name: "Das Erste", logoUrl: "https://logos.example/ard.svg?v=2" },
+        true,
+        "Live TV",
       ),
     ).toEqual({ title: "Tagesschau", artist: "Das Erste" });
-    expect(playingMetadata(playing, undefined)).toEqual({
+    expect(playingMetadata(playing, undefined, false, "Live TV")).toEqual({
       title: "Tagesschau",
       subtitle: "Das Erste · 20:00–20:15",
     });

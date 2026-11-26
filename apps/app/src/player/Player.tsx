@@ -82,6 +82,7 @@ import {
 } from "./record-now.ts";
 import { nowPlaying, playingMetadata, playingSubject } from "./now-playing.ts";
 import { PictureGestures } from "./PictureGestures.tsx";
+import { pausedFromNative } from "./outside-pause.ts";
 import { pauseOnPipExit, pipArmed, resumeAfterPipExit } from "./pip.ts";
 import { ControlsRow, TimelineFocus, TopBar } from "./PlayerControls.tsx";
 import { savePrefs, usePlayerPrefs } from "./player-prefs.ts";
@@ -232,6 +233,8 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   // In picture-in-picture only the picture shows: no controls, no hints.
   const [inPip, setInPip] = useState(false);
   const [buffering, setBuffering] = useState(true);
+  // Read in the native player's events, which can come before the state has rendered.
+  const bufferingRef = useRef(true);
   const [failed, setFailed] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [tracks, setTracks] = useState<readonly AudioTrack[]>([]);
@@ -587,9 +590,15 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
     }),
     channelName,
   );
-  // The phone's media notification and lock screen name what plays. Metadata is not part of the
-  // native player's source identity, so a new title never restarts the stream.
-  const metadata = isTV ? undefined : playingMetadata(playing, playingChannel);
+  // The phone's media notification and lock screen name what plays (`playingMetadata`).
+  const metadata = isTV
+    ? undefined
+    : playingMetadata(
+        playing,
+        playingChannel,
+        target?._tag === "Recording",
+        m.player_notification_live(),
+      );
   const source = {
     uri: session.session.uri,
     type: "m3u8",
@@ -692,8 +701,22 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
             : { type: SelectedTrackType.INDEX, value: trackIndex }
         }
         onProgress={onProgress}
-        onBuffer={(event) => setBuffering(event.isBuffering)}
-        onReadyForDisplay={() => setBuffering(false)}
+        onBuffer={(event) => {
+          bufferingRef.current = event.isBuffering;
+          setBuffering(event.isBuffering);
+        }}
+        // Play or pause from the notification, the lock screen or headphones (`outside-pause.ts`).
+        onPlaybackStateChanged={(event) => {
+          const next = pausedFromNative(event, {
+            buffering: bufferingRef.current,
+            loaded: reloaded.current,
+          });
+          if (next !== undefined && next !== pausedRef.current) setPaused(next);
+        }}
+        onReadyForDisplay={() => {
+          bufferingRef.current = false;
+          setBuffering(false);
+        }}
         onAudioTracks={(event) => setTracks(event.audioTracks)}
         onLoad={(event) => {
           reloaded.current = true;
