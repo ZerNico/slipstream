@@ -1,8 +1,8 @@
 import {
   ceilTo,
+  firstEndingAfter,
   floorTo,
   hasData,
-  nearestProgrammeIndex,
   programmeIndexAt,
   type Guide,
   type GuideChannel,
@@ -14,13 +14,15 @@ import { DAY } from "@slipstream/domain";
 /**
  * Where the guide cursor is and what the viewport shows.
  *
- * `row` and `programme` name the focused cell (`programme` is -1 only on a channel without any
- * data). `anchor` is the time the person is "at": up and down keep it, so moving through
- * channels stays in the same time slot even when programme boundaries differ. `viewStart` is the
- * left edge of the time axis and `topRow` the first row in the viewport.
+ * `row` and `programme` name the focused cell. `programme` is -1 when the channel airs nothing at
+ * `anchor` (a gap, or no guide data at all): the cursor then rests on the row's empty space, one
+ * "nothing in the guide" cell, and OK still watches the channel. `anchor` is the time the person
+ * is "at": up and down keep it, so moving through channels stays in the same time slot even when
+ * programme boundaries differ, and every channel is reachable whether it has data or not.
+ * `viewStart` is the left edge of the time axis and `topRow` the first row in the viewport.
  *
- * Invariants kept by {@link step}: `viewStart <= anchor < viewStart + visibleSpan`, the focused
- * programme is airing at `anchor` (unless the channel has no data), and `row` lies within
+ * Invariants kept by {@link step}: `viewStart <= anchor < viewStart + visibleSpan`, `programme`
+ * is the one airing at `anchor` on that row (-1 when none is), and `row` lies within
  * `[topRow, topRow + visibleRows)`.
  */
 export interface GuideCursor {
@@ -44,22 +46,13 @@ type Direction = 1 | -1;
 const programmesOf = (guide: Guide, row: number): readonly GuideProgramme[] =>
   guide.channels[row]?.programmes ?? [];
 
-/** Whether a row has a programme airing at `time` (rows without one are skipped). */
-const covers = (guide: Guide, row: number, time: number): boolean =>
-  programmeIndexAt(programmesOf(guide, row), time) !== -1;
+/** The programme airing at `time` on `row`, or -1 (the row's empty space). */
+const airingOn = (guide: Guide, row: number, time: number): number =>
+  programmeIndexAt(programmesOf(guide, row), time);
 
-/** First row from `from` (inclusive) walking in `direction` that airs something at `time`. */
-const coveringRowFrom = (
-  guide: Guide,
-  from: number,
-  direction: Direction,
-  time: number,
-): number => {
-  for (let row = from; row >= 0 && row < guide.channels.length; row += direction) {
-    if (covers(guide, row, time)) return row;
-  }
-  return -1;
-};
+/** Whether a row has a programme airing at `time`. */
+const covers = (guide: Guide, row: number, time: number): boolean =>
+  airingOn(guide, row, time) !== -1;
 
 /** The row nearest to `row` that matches, looking below first on a tie; -1 when none does. */
 const nearestRow = (guide: Guide, row: number, matches: (row: number) => boolean): number => {
@@ -123,10 +116,7 @@ const revealTime = (guide: Guide, config: GuideConfig, viewStart: number, time: 
   return clampView(guide, config, floorTo(time - config.nowLead, config.slot));
 };
 
-/**
- * Lands on `row` at `anchor`. When nothing airs there the cursor takes the channel's nearest
- * programme and moves the anchor onto it, so the focused cell and the anchor always agree.
- */
+/** Lands on `row` at `anchor`, focusing what airs then (or the row's empty space). */
 const landOn = (
   guide: Guide,
   config: GuideConfig,
@@ -134,30 +124,36 @@ const landOn = (
   row: number,
   anchor: number,
   viewStart: number,
-): GuideCursor => {
-  const programmes = programmesOf(guide, row);
-  const programme = nearestProgrammeIndex(programmes, anchor);
-  const focused = programmes[programme];
-  const time =
-    focused === undefined || (focused.start <= anchor && focused.end > anchor)
-      ? anchor
-      : focused.start > anchor
-        ? focused.start
-        : focused.end - 1;
-  const view = revealTime(guide, config, viewStart, time);
-  return {
-    row,
-    programme,
-    anchor: time,
-    viewStart: view,
-    topRow: revealRow(guide, config, base.topRow, row),
-  };
-};
+): GuideCursor => ({
+  row,
+  programme: airingOn(guide, row, anchor),
+  anchor,
+  viewStart: revealTime(guide, config, viewStart, anchor),
+  topRow: revealRow(guide, config, base.topRow, row),
+});
 
 /** The row to settle on at `time`: the nearest one airing something, else `row` itself. */
 const settleRow = (guide: Guide, row: number, time: number): number => {
   const covering = nearestRow(guide, row, (candidate) => covers(guide, candidate, time));
   return covering === -1 ? row : covering;
+};
+
+/** Moves `rows` rows (negative is up) at the same anchor, stopping at the first and last row. */
+const moveRows = (
+  guide: Guide,
+  config: GuideConfig,
+  cursor: GuideCursor,
+  rows: number,
+  topRow: number,
+): GuideCursor => {
+  const row = clamp(cursor.row + rows, 0, guide.channels.length - 1);
+  if (row === cursor.row) return cursor;
+  return {
+    ...cursor,
+    row,
+    programme: airingOn(guide, row, cursor.anchor),
+    topRow: revealRow(guide, config, topRow, row),
+  };
 };
 
 const moveVertical = (
@@ -166,20 +162,22 @@ const moveVertical = (
   cursor: GuideCursor,
   direction: Direction,
   steps: number,
-): GuideCursor => {
-  let row = cursor.row;
-  for (let taken = 0; taken < steps; taken++) {
-    const next = coveringRowFrom(guide, row + direction, direction, cursor.anchor);
-    if (next === -1) break;
-    row = next;
-  }
-  if (row === cursor.row) return cursor;
-  return {
-    ...cursor,
-    row,
-    programme: programmeIndexAt(programmesOf(guide, row), cursor.anchor),
-    topRow: revealRow(guide, config, cursor.topRow, row),
-  };
+): GuideCursor => moveRows(guide, config, cursor, direction * steps, cursor.topRow);
+
+/**
+ * The programme `steps` along from the cursor. From the empty space between programmes, the
+ * first step goes to the next programme after the gap (right) or the last one before it (left).
+ */
+const horizontalTarget = (
+  programmes: readonly GuideProgramme[],
+  cursor: GuideCursor,
+  direction: Direction,
+  steps: number,
+): number => {
+  if (cursor.programme !== -1) return cursor.programme + direction * steps;
+  // Nothing airs at the anchor, so the first programme ending after it starts after it.
+  const next = firstEndingAfter(programmes, cursor.anchor);
+  return direction === 1 ? next + steps - 1 : next - steps;
 };
 
 const moveHorizontal = (
@@ -190,10 +188,18 @@ const moveHorizontal = (
   steps: number,
 ): GuideCursor => {
   const programmes = programmesOf(guide, cursor.row);
-  if (cursor.programme === -1) return cursor;
-  const target = clamp(cursor.programme + direction * steps, 0, programmes.length - 1);
+  if (programmes.length === 0) return cursor;
+  const target = clamp(
+    horizontalTarget(programmes, cursor, direction, steps),
+    0,
+    programmes.length - 1,
+  );
   const programme = programmes[target];
   if (target === cursor.programme || programme === undefined) return cursor;
+  // From a gap, a programme on the wrong side means there is none that way.
+  if (cursor.programme === -1 && programme.start > cursor.anchor !== (direction === 1)) {
+    return cursor;
+  }
   const viewStart = revealProgramme(guide, config, cursor.viewStart, programme);
   return {
     ...cursor,
@@ -203,29 +209,17 @@ const moveHorizontal = (
   };
 };
 
+/** CH +/-: `pageRows` rows at once, whatever they air, scrolling the viewport with the cursor. */
 const page = (
   guide: Guide,
   config: GuideConfig,
   cursor: GuideCursor,
   direction: Direction,
 ): GuideCursor => {
-  const last = guide.channels.length - 1;
-  const target = clamp(cursor.row + direction * config.pageRows, 0, last);
-  let row = coveringRowFrom(guide, target, direction, cursor.anchor);
-  if (row === -1) {
-    // Nothing airs beyond the target: take the farthest covering row short of it.
-    row = coveringRowFrom(guide, target - direction, direction === 1 ? -1 : 1, cursor.anchor);
-    if (direction === 1 ? row <= cursor.row : row >= cursor.row) row = -1;
-  }
-  if (row === -1 || row === cursor.row) return cursor;
+  const row = clamp(cursor.row + direction * config.pageRows, 0, guide.channels.length - 1);
   const maxTop = Math.max(0, guide.channels.length - config.visibleRows);
   const scrolled = clamp(cursor.topRow + (row - cursor.row), 0, maxTop);
-  return {
-    ...cursor,
-    row,
-    programme: programmeIndexAt(programmesOf(guide, row), cursor.anchor),
-    topRow: revealRow(guide, config, scrolled, row),
-  };
+  return moveRows(guide, config, cursor, row - cursor.row, scrolled);
 };
 
 const jumpDay = (
@@ -237,19 +231,21 @@ const jumpDay = (
   const anchor = clampTime(guide, cursor.anchor + direction * DAY);
   if (anchor === cursor.anchor) return cursor;
   const shifted = clampView(guide, config, cursor.viewStart + (anchor - cursor.anchor));
-  return landOn(guide, config, cursor, settleRow(guide, cursor.row, anchor), anchor, shifted);
+  return landOn(guide, config, cursor, cursor.row, anchor, shifted);
 };
+
+/** The time axis a jump to now puts in view. */
+const nowView = (guide: Guide, config: GuideConfig, now: number): number =>
+  clampView(guide, config, floorTo(clampTime(guide, now) - config.nowLead, config.slot));
 
 const jumpNow = (
   guide: Guide,
   config: GuideConfig,
   cursor: GuideCursor,
   now: number,
-): GuideCursor => {
-  const anchor = clampTime(guide, now);
-  const viewStart = clampView(guide, config, floorTo(anchor - config.nowLead, config.slot));
-  return landOn(guide, config, cursor, settleRow(guide, cursor.row, anchor), anchor, viewStart);
-};
+  row = cursor.row,
+): GuideCursor =>
+  landOn(guide, config, cursor, row, clampTime(guide, now), nowView(guide, config, now));
 
 /** Row of channel `number`, else the next higher number, else the last row; -1 without rows. */
 export const rowForChannelNumber = (channels: readonly GuideChannel[], number: number): number => {
@@ -271,10 +267,8 @@ const jumpChannel = (
   cursor: GuideCursor,
   number: number,
 ): GuideCursor => {
-  const target = rowForChannelNumber(guide.channels, number);
-  if (target === -1) return cursor;
-  const withData = nearestRow(guide, target, (row) => programmesOf(guide, row).length > 0);
-  const row = withData === -1 ? target : withData;
+  const row = rowForChannelNumber(guide.channels, number);
+  if (row === -1) return cursor;
   return landOn(guide, config, cursor, row, cursor.anchor, cursor.viewStart);
 };
 
@@ -286,8 +280,9 @@ const sameCursor = (a: GuideCursor, b: GuideCursor): boolean =>
   a.topRow === b.topRow;
 
 /**
- * The cursor to start with: on `row` (or the nearest row airing something) at `now`, with the
- * time axis showing `nowLead` of the past.
+ * The cursor to start with: at `now` with the time axis showing `nowLead` of the past, on `row`
+ * or the nearest row airing something then, so the guide opens on a programme. Rows with nothing
+ * on stay reachable by moving to them.
  */
 export const initialCursor = (
   guide: Guide,
@@ -297,12 +292,12 @@ export const initialCursor = (
 ): GuideCursor => {
   const start = clamp(row, 0, Math.max(0, guide.channels.length - 1));
   const base: GuideCursor = { row: start, programme: -1, anchor: now, viewStart: 0, topRow: 0 };
-  return jumpNow(guide, config, base, now);
+  return jumpNow(guide, config, base, now, settleRow(guide, start, clampTime(guide, now)));
 };
 
 /**
  * Applies one action. Returns the very same cursor object when the action changes nothing
- * (at an edge, or no channel airs anything in that direction), so callers can detect edges
+ * (at an edge), so callers can detect edges
  * with `===`, for example to hand focus back to the navigation rail.
  */
 export const step = (
@@ -350,27 +345,40 @@ export const step = (
 };
 
 /**
- * Whether the cursor already shows "now": the focused programme is airing at `now` and the
- * time axis sits where a jump to now would put it. Back uses this: first back to now, then out.
+ * Whether the cursor already shows "now": it focuses what airs at `now` on its row (the empty
+ * space when nothing does) and the time axis sits where a jump to now would put it. Back uses
+ * this: first back to now, then out.
  */
 export const isAtNow = (
   guide: Guide,
   config: GuideConfig,
   cursor: GuideCursor,
   now: number,
-): boolean => {
-  const programme = programmesOf(guide, cursor.row)[cursor.programme];
-  const time = clampTime(guide, now);
-  const viewStart = clampView(guide, config, floorTo(time - config.nowLead, config.slot));
-  return (
-    programme !== undefined &&
-    programme.start <= time &&
-    programme.end > time &&
-    cursor.viewStart === viewStart
-  );
+): boolean =>
+  cursor.programme === airingOn(guide, cursor.row, clampTime(guide, now)) &&
+  cursor.viewStart === nowView(guide, config, now);
+
+/**
+ * The time the empty cell covers while the cursor rests on a row's empty space: from the end of
+ * the programme before the anchor to the start of the one after it, cut to the viewport.
+ * Undefined while the cursor focuses a programme.
+ */
+export const emptySpan = (
+  guide: Guide,
+  config: GuideConfig,
+  cursor: GuideCursor,
+): { readonly start: number; readonly end: number } | undefined => {
+  if (cursor.programme !== -1 || guide.channels[cursor.row] === undefined) return undefined;
+  const programmes = programmesOf(guide, cursor.row);
+  const next = firstEndingAfter(programmes, cursor.anchor);
+  const viewEnd = cursor.viewStart + config.visibleSpan;
+  return {
+    start: Math.max(programmes[next - 1]?.end ?? cursor.viewStart, cursor.viewStart),
+    end: Math.min(programmes[next]?.start ?? viewEnd, viewEnd),
+  };
 };
 
-/** The focused channel and programme, if the channel has data. */
+/** The focused channel and programme (no programme on the row's empty space). */
 export const focusedCell = <P extends GuideProgramme>(
   guide: Guide<P>,
   cursor: GuideCursor,
@@ -400,5 +408,5 @@ export const relocate = (
     ...cursor,
     topRow: clamp(cursor.topRow, 0, Math.max(0, next.channels.length - config.visibleRows)),
   };
-  return landOn(next, config, base, settleRow(next, row, anchor), anchor, viewStart);
+  return landOn(next, config, base, row, anchor, viewStart);
 };

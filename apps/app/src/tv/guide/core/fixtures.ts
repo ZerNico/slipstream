@@ -38,8 +38,9 @@ export const hourly = (id: string, number: number, hours = 48): GuideChannel => 
 
 /**
  * The mockup's morning plus filler rows:
- * row 0 Das Erste (1), row 1 ZDF (2), row 2 no data (3), row 3 a gap 06:00 to 07:00 (7),
- * row 4 Eurosport 1 (130), rows 5 to 24 hourly for two days (200 to 219).
+ * row 0 Das Erste (1), row 1 ZDF (2), row 2 no guide data at all (3), row 3 a gap 06:00 to
+ * 07:00 (7), row 4 Eurosport 1 (130), rows 5 to 24 hourly for two days (200 to 219).
+ * The cursor stops on rows 2 and 3 like on any other; at 06:12 both air nothing.
  */
 export const sampleGuide = (): Guide =>
   makeGuide([

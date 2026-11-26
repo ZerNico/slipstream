@@ -111,23 +111,6 @@ export const programmeIndexAt = (programmes: readonly GuideProgramme[], time: nu
   return programme !== undefined && programme.end > time ? index : -1;
 };
 
-/**
- * Index of the programme closest to `time`: the one airing, otherwise whichever of the previous
- * and next programme is nearer in time (the next one wins a tie). -1 for a channel without data.
- */
-export const nearestProgrammeIndex = (
-  programmes: readonly GuideProgramme[],
-  time: number,
-): number => {
-  const before = lastStartingBy(programmes, time);
-  const previous = programmes[before];
-  if (previous !== undefined && previous.end > time) return before;
-  const next = programmes[before + 1];
-  if (previous === undefined) return next === undefined ? -1 : before + 1;
-  if (next === undefined) return before;
-  return next.start - time <= time - previous.end ? before + 1 : before;
-};
-
 /** Index of the first programme still running at or after `time` (ending after it). */
 export const firstEndingAfter = (programmes: readonly GuideProgramme[], time: number): number => {
   const index = lastStartingBy(programmes, time);

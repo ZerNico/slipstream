@@ -6,7 +6,6 @@ import {
   floorTo,
   hasData,
   makeGuide,
-  nearestProgrammeIndex,
   programmeIndexAt,
 } from "./guide.ts";
 import { MINUTE } from "@slipstream/domain";
@@ -61,24 +60,6 @@ describe("programmeIndexAt", () => {
     expect(programmeIndexAt(morning.programmes, at("04:59"))).toBe(-1);
     expect(programmeIndexAt(morning.programmes, at("08:00"))).toBe(-1);
     expect(programmeIndexAt([], at("06:00"))).toBe(-1);
-  });
-});
-
-describe("nearestProgrammeIndex", () => {
-  it("prefers the airing programme", () => {
-    expect(nearestProgrammeIndex(morning.programmes, at("06:10"))).toBe(1);
-  });
-
-  it("picks the closer neighbour in a gap, the next one on a tie", () => {
-    expect(nearestProgrammeIndex(morning.programmes, at("06:35"))).toBe(1);
-    expect(nearestProgrammeIndex(morning.programmes, at("06:55"))).toBe(2);
-    expect(nearestProgrammeIndex(morning.programmes, at("06:45"))).toBe(2);
-  });
-
-  it("falls back to the first or last programme outside the data", () => {
-    expect(nearestProgrammeIndex(morning.programmes, at("01:00"))).toBe(0);
-    expect(nearestProgrammeIndex(morning.programmes, at("23:00"))).toBe(2);
-    expect(nearestProgrammeIndex([], at("06:00"))).toBe(-1);
   });
 });
 
