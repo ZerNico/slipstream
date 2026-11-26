@@ -6,8 +6,16 @@ import { useTheme } from "../../../src/theme/theme.ts";
  * Problems push inside the tab, so the tab bar stays and Back walks up.
  */
 export default function RecordingsLayout() {
-  const { colors } = useTheme();
+  const { colors, isTV } = useTheme();
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.bg },
+        // On TV each page draws the rail itself: a fade keeps it in place where Android's
+        // zoom would carry it along with the page.
+        animation: isTV ? "fade" : "default",
+      }}
+    />
   );
 }

@@ -6,8 +6,16 @@ import { useTheme } from "../../../src/theme/theme.ts";
  * stays and Back walks up. The TV shows only the first page.
  */
 export default function SettingsLayout() {
-  const { colors } = useTheme();
+  const { colors, isTV } = useTheme();
   return (
-    <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: colors.bg } }} />
+    <Stack
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: colors.bg },
+        // On TV each page draws the rail itself: a fade keeps it in place where Android's
+        // zoom would carry it along with the page.
+        animation: isTV ? "fade" : "default",
+      }}
+    />
   );
 }
