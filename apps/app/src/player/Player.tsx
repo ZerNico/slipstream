@@ -17,6 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppState,
   BackHandler,
+  Pressable,
   StyleSheet,
   Text,
   useTVEventHandler,
@@ -734,6 +735,17 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
           setFailed(true);
         }}
       />
+      {isTV && !chromeShown ? (
+        // While the controls are hidden (unmounted) something must hold the TV's focus:
+        // without it Android hands OK to nobody and the first arrow only finds a focus, so
+        // the first press did nothing. The remote handler acts on the keys; this only listens.
+        <Pressable
+          focusable
+          hasTVPreferredFocus
+          accessible={false}
+          style={StyleSheet.absoluteFill}
+        />
+      ) : null}
       {isTV || inPip ? null : (
         <PictureGestures
           fit={prefs.fit}
