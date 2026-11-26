@@ -170,6 +170,40 @@ describe("playerBar for a recording", () => {
   });
 });
 
+describe("a recording whose capture started late", () => {
+  const target: PlayTarget = {
+    _tag: "Recording",
+    recordingId: "rec" as RecordingId,
+    from: "resume",
+  };
+
+  it("places the playhead and live edge from now, not from the window's start", () => {
+    const running = recording({
+      id: "rec",
+      channelId: one,
+      start: at(17, 0),
+      end: at(18, 0),
+      title: "Life Below Zero",
+      state: "recording",
+    });
+    // Capture began at 17:20, so the playlist holds 10 minutes at 17:30.
+    const bar = playerBar({
+      target,
+      progress: { currentTime: 590, seekableDuration: 600 },
+      now: at(17, 30),
+      recording: running,
+      running: true,
+      programmes,
+      at: 590,
+    });
+    expect(bar.data.start).toBe(at(17, 0));
+    expect(bar.data.captured).toEqual({ start: at(17, 20), end: at(17, 30) });
+    expect(bar.data.live).toBe(at(17, 30));
+    expect(bar.data.playhead).toBe(at(17, 30) - 10_000);
+    expect(bar.seekAt(0.25)).toBe(0);
+  });
+});
+
 describe("readoutOf", () => {
   it("says what is left of a finished recording, when it ends and the gap it has", () => {
     const incomplete = recording({

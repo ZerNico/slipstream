@@ -309,7 +309,7 @@ describe("system", () => {
     const info = await browser.request("GET", "/api/system");
     expect(info.status).toBe(200);
     expect(info.json).toMatchObject({
-      version: "0.1.6",
+      version: "0.1.7",
       timeZone: "Europe/Berlin",
       ffmpeg: { selfCheck: "pending" },
       storage: [{ recordingsBytes: 0, bufferBytes: 0 }],

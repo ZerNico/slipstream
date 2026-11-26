@@ -104,8 +104,11 @@ export const playerBar = (input: BarInput): PlayerBar => {
       : target._tag === "Recording" && padded !== undefined
         ? epochMs(padded.end)
         : undefined;
-  // Live counts back from now; anything else counts on from its window's start.
-  const origin = target._tag === "Live" ? input.now - seekable * 1000 : (windowStart ?? input.now);
+  // Live and a recording still running count back from now: their playlist ends at the
+  // present, and it may begin later than the window (capture started late). A finished one
+  // counts on from its window's start.
+  const countsBack = target._tag === "Live" || (target._tag === "Recording" && input.running);
+  const origin = countsBack ? input.now - seekable * 1000 : (windowStart ?? input.now);
   const wallAt = (seconds: number) => origin + seconds * 1000;
   const edge = wallAt(seekable);
   const channelId = target._tag === "Recording" ? recording?.channelId : target.channelId;
@@ -123,7 +126,8 @@ export const playerBar = (input: BarInput): PlayerBar => {
     start = origin;
     end = seekable > 0 ? edge : (windowEnd ?? origin);
   } else {
-    start = origin;
+    // The whole window shows, a late capture start as a stretch nothing was recorded in.
+    start = Math.min(windowStart ?? origin, origin);
     end = Math.max(windowEnd ?? edge, edge);
   }
 
