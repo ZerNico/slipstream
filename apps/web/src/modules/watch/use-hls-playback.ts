@@ -114,7 +114,7 @@ const trackOf = (track: {
  * request for that playlist, and for a finished playlist's segments, goes out with the fresh
  * URL. A playlist or segment refused with 401/403 asks `renew` for a fresh URL and retries
  * once; refused again, playback fails. A `src` for another playlist loads it and continues at
- * the same moment.
+ * the same moment, paused if it was paused.
  */
 export function useHlsPlayback(
   src: string | undefined,
@@ -154,6 +154,9 @@ export function useHlsPlayback(
   const appliedRef = useRef<string | undefined>(undefined);
   // Swaps a renewed URL of the same playlist into the running load; set while one runs.
   const swapRef = useRef<((next: string) => Promise<void>) | null>(null);
+  // Whether the load being replaced was paused by then: another playlist (a renewal that
+  // changed the delivery, another quality) continues paused or playing as it was.
+  const keepPausedRef = useRef(false);
   useEffect(() => {
     startRef.current = start;
     reachedLiveRef.current = options.onReachedLive;
@@ -174,6 +177,11 @@ export function useHlsPlayback(
     const continueAt = continueRef.current;
     let pending: StartAt | null =
       continueAt === null ? startRef.current : { kind: "clock", at: continueAt };
+    const stayPaused = keepPausedRef.current;
+    keepPausedRef.current = false;
+    // Whether this load got as far as starting playback, and whether it failed since.
+    let started = false;
+    let failed = false;
 
     const sample = () => {
       const { seekable } = video;
@@ -216,7 +224,9 @@ export function useHlsPlayback(
     };
 
     const autoplay = () => {
+      started = true;
       video.playbackRate = rateRef.current;
+      if (stayPaused) return;
       video.play().catch(() => setPaused(true));
     };
 
@@ -275,6 +285,7 @@ export function useHlsPlayback(
       };
       swapRef.current = apply;
       const fail = () => {
+        failed = true;
         setStatus("failed");
         live.destroy();
         hlsRef.current = null;
@@ -334,7 +345,10 @@ export function useHlsPlayback(
       live.loadSource(first);
       live.attachMedia(video);
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
-      const fail = () => setStatus("failed");
+      const fail = () => {
+        failed = true;
+        setStatus("failed");
+      };
       video.addEventListener("loadedmetadata", autoplay, { once: true });
       video.addEventListener("error", fail, { once: true });
       video.src = first;
@@ -354,6 +368,8 @@ export function useHlsPlayback(
 
     return () => {
       closed = true;
+      // Try again after a failure plays; a load that never started has nothing to keep.
+      keepPausedRef.current = started && !failed && video.paused;
       swapRef.current = null;
       window.clearInterval(timer);
       for (const event of events) video.removeEventListener(event, sample);

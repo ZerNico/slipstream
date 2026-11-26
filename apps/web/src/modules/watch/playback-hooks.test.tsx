@@ -253,6 +253,10 @@ const requested = (hls: FakeHls, url: string): string => {
   return call === undefined ? url : String(call[1]);
 };
 
+/** Sets what the video element reports as paused (happy-dom never plays). */
+const setPaused = (video: HTMLVideoElement, paused: boolean) =>
+  Object.defineProperty(video, "paused", { value: paused, configurable: true });
+
 /** The one hls.js instance the player made. */
 const onlyHls = (): FakeHls => {
   expect(fake.instances).toHaveLength(1);
@@ -286,6 +290,35 @@ describe("hls.js playback with a renewed token", () => {
     expect(fake.instances).toHaveLength(2);
     expect(hls.destroyed).toBe(true);
     await view.unmount();
+  });
+
+  it("loads another playlist paused when it was paused, playing when it was playing", async () => {
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(function (
+      this: HTMLMediaElement,
+    ) {
+      setPaused(this as HTMLVideoElement, false);
+      return Promise.resolve();
+    });
+    const renew = renewer();
+    const view = await mount(<Harness src={first} renew={renew} />, noApi);
+    await act(async () => onlyHls().emit("MANIFEST_PARSED", {}));
+    expect(play).toHaveBeenCalledTimes(1);
+
+    // Paused, then the renewal changed the delivery: the new playlist stays paused.
+    const video = document.querySelector("video");
+    if (video === null) throw new Error("no video");
+    setPaused(video, true);
+    await view.render(<Harness src="/hls/live/ard/a1.m3u8?session=s&token=t1" renew={renew} />);
+    await act(async () => fake.instances[1]?.emit("MANIFEST_PARSED", {}));
+    expect(play).toHaveBeenCalledTimes(1);
+
+    // Playing, another playlist plays on.
+    setPaused(video, false);
+    await view.render(<Harness src="/hls/live/ard/a2.m3u8?session=s&token=t2" renew={renew} />);
+    await act(async () => fake.instances[2]?.emit("MANIFEST_PARSED", {}));
+    expect(play).toHaveBeenCalledTimes(2);
+    await view.unmount();
+    play.mockRestore();
   });
 
   it("renews and retries once on a 403, and fails on the second", async () => {
