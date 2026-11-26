@@ -8,15 +8,15 @@ import { Sheet } from "../ui/Sheet.tsx";
 
 /**
  * Record's sheet while the programme in the player records (the web's recording menu): "Recording
- * until 20:30", then Extend, Stop recording and the full record options. Each row acts and
- * closes; the player says how it went.
+ * until 20:30", then Extend and Stop recording. The full record options have nothing more for a
+ * running recording than Watch, which the player already does, so they are not offered here.
+ * Each row acts and closes; the player says how it went.
  */
 export const RecordNowSheet = ({
   title,
   until,
   onExtend,
   onStop,
-  onOptions,
   onClose,
 }: {
   readonly title: string;
@@ -24,8 +24,6 @@ export const RecordNowSheet = ({
   readonly until: string;
   readonly onExtend: () => void;
   readonly onStop: () => void;
-  /** The record sheet for the programme, when the guide has it. */
-  readonly onOptions: (() => void) | undefined;
   readonly onClose: () => void;
 }) => {
   const { colors, em, fonts } = useTheme();
@@ -57,9 +55,6 @@ export const RecordNowSheet = ({
           onPress={then(onExtend)}
         />
         <OptionRow icon="delete" title={m.guide_stop_recording()} onPress={then(onStop)} />
-        {onOptions === undefined ? null : (
-          <OptionRow icon="more" title={m.record_now_options()} onPress={then(onOptions)} />
-        )}
       </View>
     </Sheet>
   );

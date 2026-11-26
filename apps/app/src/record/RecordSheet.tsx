@@ -242,8 +242,12 @@ export const RecordSheet = ({
     [channels.data],
   );
   const sheet = sheetProgramme(programme);
+  // The options as they were when a write started: the answer that comes back after it (now
+  // scheduled, "Don't record") must not flash up in the moment before the sheet closes.
+  const [frozenOptions, setFrozenOptions] = useState<typeof options.data>(undefined);
+  const shownOptions = frozenOptions ?? options.data;
   const plan =
-    options.data === undefined ? undefined : sheetPlan(options.data, sheet, conflicts, now);
+    shownOptions === undefined ? undefined : sheetPlan(shownOptions, sheet, conflicts, now);
   const every = plan?.every;
   const padding = chosen ?? plan?.padding;
   const offers = plan?.options ?? [];
@@ -295,6 +299,7 @@ export const RecordSheet = ({
     if (busy) return;
     setBusy(true);
     setMessage(undefined);
+    setFrozenOptions(options.data);
     write(effect)
       .then((result) => {
         setMessage(done);
@@ -302,10 +307,12 @@ export const RecordSheet = ({
       })
       .then((stays) => {
         setBusy(false);
-        if (!stays) closeAfter(doneMillis);
+        if (stays) setFrozenOptions(undefined);
+        else closeAfter(doneMillis);
       })
       .catch(() => {
         setBusy(false);
+        setFrozenOptions(undefined);
         setMessage(m.guide_action_failed());
       });
   };

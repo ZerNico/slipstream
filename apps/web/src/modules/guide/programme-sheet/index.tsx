@@ -79,7 +79,7 @@ const fail = () => {
 
 /**
  * Two footer buttons: each keeps its label on one line. They share a row while both fit, and
- * stack, each as wide as the footer, when they don't ("Diese auslassen" beside "Serienaufnahme
+ * stack, each as wide as the footer, when they don't ("Nicht aufnehmen" beside "Serienaufnahme
  * ändern" at 390 px): the footer is a wrapping row whose items grow (`.sheet-footer`).
  */
 const pair = (first: ReactNode, second: ReactNode) =>

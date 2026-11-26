@@ -42,3 +42,16 @@ export const behindLive = (progress: PlayerProgress): number =>
 /** Whether playback is close enough to the edge to call it live. */
 export const isAtLive = (progress: PlayerProgress): boolean =>
   behindLive(progress) <= LIVE_TOLERANCE;
+
+/** How close the reported position has to come to a seek's target before the seek counts as done, s. */
+export const SEEK_SETTLED_SECONDS = 2;
+
+/** How long the playhead waits on a seek's target at most, ms, should the player never get there. */
+export const SEEK_PENDING_MAX_MS = 10_000;
+
+/**
+ * Whether a seek has landed: until it has, the player still reports where it was, and the
+ * playhead stays on the target instead of jumping back there and forward again.
+ */
+export const seekSettled = (target: number, currentTime: number): boolean =>
+  Math.abs(currentTime - target) <= SEEK_SETTLED_SECONDS;

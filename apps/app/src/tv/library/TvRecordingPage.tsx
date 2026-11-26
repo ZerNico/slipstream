@@ -286,7 +286,7 @@ const Detail = ({
             />
           ))}
           <FocusButton
-            label={m.library_protect()}
+            label={entry.protected ? m.library_unprotect() : m.library_protect()}
             icon={entry.protected ? "check" : "lock"}
             size={1.2}
             variant="ghost"

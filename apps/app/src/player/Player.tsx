@@ -47,6 +47,7 @@ import { CaptureTimeline } from "../ui/CaptureTimeline.tsx";
 import { PhoneScrub } from "./PhoneScrub.tsx";
 import { FocusButton } from "../ui/FocusButton.tsx";
 import { StatusScreen } from "../ui/StatusScreen.tsx";
+import { LoadingSpinner } from "./LoadingSpinner.tsx";
 import { useToast } from "../ui/toast.ts";
 import { HELD_REPEAT_MS, readPress } from "../tv/guide/remote.ts";
 import {
@@ -94,12 +95,17 @@ import {
   isAtLive,
   liveTarget,
   relativeTarget,
+  SEEK_PENDING_MAX_MS,
+  seekSettled,
   startTarget,
   type PlayerProgress,
 } from "./seek.ts";
 import { statsRows } from "./stats.ts";
 import { StatsOverlay } from "./StatsOverlay.tsx";
 import { usePlaybackSession } from "./use-playback-session.ts";
+
+/** How long the stream may wait for data before the spinner shows, ms. */
+const SPINNER_DELAY_MS = 400;
 
 /** A readable name for an audio track: its language in the reader's language, else its title. */
 const trackLabel = (track: AudioTrack): string => {
@@ -234,7 +240,22 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const [holding, setHolding] = useState(false);
   // In picture-in-picture only the picture shows: no controls, no hints.
   const [inPip, setInPip] = useState(false);
-  const [buffering, setBuffering] = useState(true);
+  // The spinner waits a moment into a wait for data, so a short one shows nothing.
+  const [spinnerShown, setSpinnerShown] = useState(true);
+  const spinnerTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const onBuffering = useCallback((waiting: boolean) => {
+    if (spinnerTimer.current !== undefined) clearTimeout(spinnerTimer.current);
+    spinnerTimer.current = waiting
+      ? setTimeout(() => setSpinnerShown(true), SPINNER_DELAY_MS)
+      : undefined;
+    if (!waiting) setSpinnerShown(false);
+  }, []);
+  useEffect(
+    () => () => {
+      if (spinnerTimer.current !== undefined) clearTimeout(spinnerTimer.current);
+    },
+    [],
+  );
   const [failed, setFailed] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [tracks, setTracks] = useState<readonly AudioTrack[]>([]);
@@ -347,8 +368,15 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
         ? undefined
         : epochMs(padded.start);
 
+  // A seek's target until the player reports it got there (`seekSettled`): the playhead waits
+  // there instead of jumping back to where playback was while the new spot loads.
+  const [pendingSeek, setPendingSeek] = useState<
+    { readonly target: number; readonly at: number } | undefined
+  >(undefined);
   const seek = useCallback((position: number | undefined) => {
-    if (position !== undefined) video.current?.seek(position);
+    if (position === undefined) return;
+    video.current?.seek(position);
+    setPendingSeek({ target: position, at: Date.now() });
   }, []);
 
   const apply = useCallback(
@@ -484,6 +512,13 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
 
   const onProgress = (data: OnProgressData) => {
     const next = { currentTime: data.currentTime, seekableDuration: data.seekableDuration };
+    if (
+      pendingSeek !== undefined &&
+      (seekSettled(pendingSeek.target, data.currentTime) ||
+        Date.now() - pendingSeek.at > SEEK_PENDING_MAX_MS)
+    ) {
+      setPendingSeek(undefined);
+    }
     setProgress(next);
     setLoadedTo(data.playableDuration);
     // Faster than real time ends by itself at the live edge (SPEC 7.1).
@@ -552,7 +587,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const details = useQuery(queries.programme(isTV ? undefined : subject?.programmeId));
 
   if (target === undefined) return <StatusScreen title={m.error_not_found()} />;
-  if (session._tag === "Starting") return <StatusScreen title={m.loading()} busy />;
+  if (session._tag === "Starting") return <LoadingSpinner backdrop />;
   if (session._tag === "Failed" || failed) {
     const problem = failureText(session._tag === "Failed" ? session.failure : { _tag: "Other" });
     return (
@@ -650,20 +685,25 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
     progress.seekableDuration > 0
       ? progress.seekableDuration
       : 1;
-  const played = progress === undefined ? 0 : progress.currentTime / seekable;
+  // A seek still loading counts as played to its target, so the bar does not jump back either.
+  const played =
+    progress === undefined
+      ? 0
+      : (pendingSeek === undefined ? progress.currentTime : pendingSeek.target) / seekable;
   // A finger dragging the phone's timeline wins over the remote's scrub.
-  const preview =
-    drag !== undefined
-      ? drag
-      : controls.scrub === 0 || progress === undefined
-        ? undefined
-        : (progress.currentTime + controls.scrub) / seekable;
-  const shownTime =
+  // Where playback is about to be: the finger's spot, a seek still loading, or the remote's scrub.
+  const heading =
     progress === undefined
       ? undefined
       : drag !== undefined
         ? drag * seekable
-        : progress.currentTime + controls.scrub;
+        : pendingSeek !== undefined && controls.scrub === 0
+          ? pendingSeek.target
+          : controls.scrub === 0
+            ? undefined
+            : progress.currentTime + controls.scrub;
+  const preview = heading === undefined ? undefined : heading / seekable;
+  const shownTime = heading ?? progress?.currentTime;
   // TV mounts the controls only while they show (its focus lives in them); phone fades them.
   const showOverlay = isTV ? chromeShown : !inPip;
   const size = isTV ? 1.05 : 0.85;
@@ -713,13 +753,13 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
             : { type: SelectedTrackType.INDEX, value: trackIndex }
         }
         onProgress={onProgress}
-        onBuffer={(event) => setBuffering(event.isBuffering)}
+        onBuffer={(event) => onBuffering(event.isBuffering)}
         // Play or pause from the notification, the lock screen or headphones (`outside-pause.ts`).
         onPlaybackStateChanged={(event) => {
           const next = pausedFromNative(event, { loaded: reloaded.current });
           if (next !== undefined && next !== pausedRef.current) setPaused(next);
         }}
-        onReadyForDisplay={() => setBuffering(false)}
+        onReadyForDisplay={() => onBuffering(false)}
         onAudioTracks={(event) => setTracks(event.audioTracks)}
         onLoad={(event) => {
           reloaded.current = true;
@@ -729,7 +769,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
         onError={(event) => {
           // An expired or refused token: renew the session once and play on from here.
           if (isAuthRefusal(event.error) && recover()) {
-            setBuffering(true);
+            onBuffering(true);
             return;
           }
           setFailed(true);
@@ -790,20 +830,8 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
       {stats === undefined || inPip ? null : (
         <StatsOverlay rows={stats} top={(isTV ? 7.4 : 4.6) * em} left={pad} />
       )}
-      {buffering ? (
-        <Text
-          style={{
-            position: "absolute",
-            top: 2.7 * em,
-            right: 4 * em,
-            fontFamily: fonts.fUi,
-            fontSize: em,
-            color: colors.fg2,
-          }}
-        >
-          {m.loading()}
-        </Text>
-      ) : null}
+      {/* A short wait for data shows nothing; only a longer one shows the spinner. */}
+      {spinnerShown ? <LoadingSpinner /> : null}
       {showOverlay ? (
         <Animated.View
           style={[StyleSheet.absoluteFill, chromeFade]}
@@ -914,7 +942,9 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
                       busy: recordBusy,
                       onPress:
                         record.kind === "record" ? recordNow : () => setRecordSheet("recording"),
-                      onLongPress: openRecordOptions,
+                      // Held: the full record options, for a programme not recording yet; a
+                      // running one has its own sheet (Extend, Stop) on a press.
+                      onLongPress: record.kind === "record" ? openRecordOptions : undefined,
                     }
               }
               track={
@@ -959,7 +989,6 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
               m.player_recording_stopped(),
             )
           }
-          onOptions={openRecordOptions}
           onClose={() => setRecordSheet((open) => (open === "recording" ? undefined : open))}
         />
       ) : null}

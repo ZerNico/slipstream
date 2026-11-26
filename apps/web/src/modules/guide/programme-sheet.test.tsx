@@ -142,7 +142,7 @@ describe("programme sheet: record a programme", () => {
       afterMinutes: 15,
     });
     await waitFor(() => expect(text()).toContain("Will be recorded"));
-    expect(button("Skip this one")).toBeDefined();
+    expect(button("Don't record")).toBeDefined();
   });
 
   it("keeps the badge row laid out before Record, so the Scheduled badge moves nothing", async () => {
@@ -293,7 +293,7 @@ describe("programme sheet: Record series", () => {
     // One count: the series preview's, which the series recording editor shows too.
     await h.waitFor(() => expect(norm(line()?.textContent)).toMatch(/^\d+ will record/u));
     const willRecord = /^(\d+) will record/u.exec(norm(line()?.textContent))?.[0];
-    expect(footerButtons()).toEqual(["Skip this one", "Series options"]);
+    expect(footerButtons()).toEqual(["Don't record", "Series options"]);
     const added = shown(toasts, `Series recording added: every “Live F1” · ${willRecord ?? ""}`);
     expect(added).toBeDefined();
     await undo(h, added);
@@ -484,9 +484,9 @@ describe("programme sheet: states", () => {
 
   it("skips a scheduled programme", async () => {
     const { waitFor, click, server } = await openSheet("Tatort");
-    await waitFor(() => expect(button("Skip this one")).toBeDefined());
+    await waitFor(() => expect(button("Don't record")).toBeDefined());
     expect(text()).toContain("Scheduled · by your series recording Tatort");
-    await click(button("Skip this one"));
+    await click(button("Don't record"));
     // Last week's finished episode stays; only the scheduled one goes.
     await waitFor(() =>
       expect(

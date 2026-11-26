@@ -196,7 +196,7 @@ const Detail = ({
         )}
         <ActionRow
           icon="lock"
-          title={m.library_protect()}
+          title={entry.protected ? m.library_unprotect() : m.library_protect()}
           trailing={entry.protected ? "check" : undefined}
           onPress={protect}
         />

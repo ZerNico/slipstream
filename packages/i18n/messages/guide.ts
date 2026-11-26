@@ -146,7 +146,7 @@ export const guide = defineArea({
     guide_all_scheduled: "All scheduled",
     guide_everyone_title: "Already being recorded for everyone",
     guide_ended_not_recorded: "This programme has ended and wasn't recorded.",
-    guide_skip_this: "Skip this one",
+    guide_skip_this: "Don't record",
     guide_series_options: "Series options",
     guide_recording_started: (p: { title: string }) => `Recording ${p.title}`,
     guide_recording_scheduled: (p: { title: string; start: Date }, f: F) =>
@@ -294,7 +294,7 @@ export const guide = defineArea({
     guide_all_scheduled: "Alle geplanten",
     guide_everyone_title: "Wird schon für alle aufgenommen",
     guide_ended_not_recorded: "Diese Sendung ist vorbei und wurde nicht aufgenommen.",
-    guide_skip_this: "Diese auslassen",
+    guide_skip_this: "Nicht aufnehmen",
     guide_series_options: "Serienaufnahme ändern",
     guide_recording_started: (p) => `${p.title} wird aufgenommen`,
     guide_recording_scheduled: (p, f) => `${p.title} wird um ${f.time(p.start)} aufgenommen`,

@@ -96,9 +96,8 @@ export const RecordingSheet = ({
             />
           ))}
           <OptionRow
-            icon="lock"
-            title={m.library_protect()}
-            selected={entry.protected}
+            icon={entry.protected ? "check" : "lock"}
+            title={entry.protected ? m.library_unprotect() : m.library_protect()}
             preferredFocus={rows.length === 0}
             onPress={protect}
           />

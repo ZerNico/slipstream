@@ -131,15 +131,15 @@ describe("recording detail of a running recording", () => {
     const view = await render(<RecordingPage id={RecordingId.make("tagesschau-failed")} />);
     await view.waitFor(() => expect(view.text()).toContain("Recording failed"));
     expect(view.text()).not.toContain("Exported as");
-    expect(view.button("Protect")).toBeUndefined();
+    expect(view.button("Keep forever")).toBeUndefined();
     await view.click(view.button("Delete"));
     await view.waitFor(() => expect(view.text()).toContain("Delete this recording?"));
     expect(document.activeElement?.textContent).toBe("Delete");
   });
 
-  it("shows a scheduled recording as what will happen: no play, Skip this one and Series options", async () => {
+  it("shows a scheduled recording as what will happen: no play, Don't record and Series options", async () => {
     const view = await render(<RecordingPage id={RecordingId.make("tatort-schattenmann")} />);
-    await view.waitFor(() => expect(view.text()).toContain("Skip this one"));
+    await view.waitFor(() => expect(view.text()).toContain("Don't record"));
     expect(view.host.querySelector(".badge-sched")?.textContent).toBe("Scheduled");
     expect(view.text()).toMatch(/Starts (Today|Mon|Tue|Wed|Thu|Fri|Sat|Sun) \d{1,2} · /u);
     // One decision for the artwork overlay and the primary button: neither is there.
@@ -147,7 +147,7 @@ describe("recording detail of a running recording", () => {
     expect(view.host.querySelector("button[aria-label='Play'], button[aria-label='Watch']")).toBe(
       null,
     );
-    expect(view.button("Protect")).toBeUndefined();
+    expect(view.button("Keep forever")).toBeUndefined();
     const terms = [...view.host.querySelectorAll("dt")].map((term) => term.textContent);
     expect(terms).toEqual(expect.arrayContaining(["Will record by"]));
     // The meta line has no size for something not recorded yet.
@@ -157,7 +157,7 @@ describe("recording detail of a running recording", () => {
     );
     expect(edit?.getAttribute("href")).toBe("/series/tatort");
 
-    await view.click(view.button("Skip this one"));
+    await view.click(view.button("Don't record"));
     await view.waitFor(() => expect(view.path()).toBe("/recordings/scheduled"));
   });
 

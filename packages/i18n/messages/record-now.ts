@@ -13,7 +13,7 @@ export const recordNow = defineArea({
   en: {
     record_now_action: "Record",
     record_now_key: "Record the programme you're watching",
-    record_now_options: "Record options…",
+    record_now_options: "Record options",
     // The toast's second line after Record: where the recording starts, and how much of it the
     // capture already had when the button was pressed.
     record_now_from: (p: { from: Date }, f: F) => `From ${f.time(p.from)}`,
@@ -23,7 +23,7 @@ export const recordNow = defineArea({
   de: {
     record_now_action: "Aufnehmen",
     record_now_key: "Die laufende Sendung aufnehmen",
-    record_now_options: "Aufnahmeoptionen…",
+    record_now_options: "Aufnahmeoptionen",
     record_now_from: (p, f) => `Ab ${f.time(p.from)}`,
     record_now_from_earlier: (p, f) =>
       `Ab ${f.time(p.from)} · ${f.number(p.minutes)} Min. bevor du gedrückt hast`,

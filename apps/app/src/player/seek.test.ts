@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  seekSettled,
   LIVE_EDGE_OFFSET,
   behindLive,
   isAtLive,
@@ -43,5 +44,13 @@ describe("live state", () => {
 
   it("counts a position near the edge as live", () => {
     expect(isAtLive({ currentTime: liveTarget(progress), seekableDuration: 1800 })).toBe(true);
+  });
+});
+
+describe("seekSettled", () => {
+  it("waits until the reported position reaches the target", () => {
+    expect(seekSettled(600, 120)).toBe(false);
+    expect(seekSettled(600, 599)).toBe(true);
+    expect(seekSettled(600, 601.5)).toBe(true);
   });
 });

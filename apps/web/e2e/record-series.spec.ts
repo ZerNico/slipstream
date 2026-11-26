@@ -113,7 +113,7 @@ test.describe("desktop 1440 × 900", () => {
       await expect(page.getByText("Scheduled · by your series recording Live F1")).toBeVisible();
       await expect(page.locator("[data-series-line]")).toContainText(/\d+ will record/u);
       await expect(page.locator(".sheet-footer").getByRole("button")).toHaveText([
-        "Skip this one",
+        "Don't record",
         "Series options",
       ]);
       const toast = page.locator(".toast", { hasText: "Series recording added: every “Live F1”" });

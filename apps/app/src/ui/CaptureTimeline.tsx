@@ -83,8 +83,8 @@ export const CaptureTimeline = ({
             bottom: 0,
             width: width * captured,
             backgroundColor: timeline.captured,
-            borderTopLeftRadius: radius,
-            borderBottomLeftRadius: radius,
+            // Round at both ends: the fill's end shows on its own while the knob fades.
+            borderRadius: radius,
           }}
         />
         {marks.played === undefined ? null : (
@@ -96,8 +96,7 @@ export const CaptureTimeline = ({
               bottom: 0,
               width: width * clamp(marks.played),
               backgroundColor: timeline.played,
-              borderTopLeftRadius: radius,
-              borderBottomLeftRadius: radius,
+              borderRadius: radius,
             }}
           />
         )}

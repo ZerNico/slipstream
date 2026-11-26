@@ -114,7 +114,7 @@ test.describe("guide programme sheet", () => {
       )
       .toBe(true);
     // Recorded now: the footer offers to skip it instead of recording it again.
-    await expect(sheet.getByRole("button", { name: "Skip this one" })).toBeVisible();
+    await expect(sheet.getByRole("button", { name: "Don't record" })).toBeVisible();
   });
 });
 
