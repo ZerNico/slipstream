@@ -8,7 +8,7 @@ import {
   type QualityChoice,
   qualityRequest,
 } from "@slipstream/domain";
-import { formatLocale, formatters, m, streamLimitText } from "@slipstream/i18n";
+import { formatLocale, m, streamLimitText } from "@slipstream/i18n";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import * as ScreenOrientation from "expo-screen-orientation";
@@ -45,6 +45,8 @@ import { SchemeOverride, useTheme } from "../theme/theme.ts";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { CaptureTimeline } from "../ui/CaptureTimeline.tsx";
 import { PhoneScrub } from "./PhoneScrub.tsx";
+import { barLabels, barTypeSizes, playerBar, readoutOf } from "./bar.ts";
+import { AboveBar, BelowBar, ReadoutView } from "./PlayerTimeline.tsx";
 import { FocusButton } from "../ui/FocusButton.tsx";
 import { StatusScreen } from "../ui/StatusScreen.tsx";
 import { LoadingSpinner } from "./LoadingSpinner.tsx";
@@ -144,22 +146,6 @@ const failureText = (
 };
 
 /**
- * The read-out right under the timeline: a finished recording says what is left and when it
- * ends; anything with a live edge says how far behind live it is (`deltaText`).
- */
-const readoutText = (
-  finished: boolean,
-  progress: PlayerProgress | undefined,
-  now: number,
-  deltaText: string,
-): string => {
-  if (!finished || progress === undefined) return deltaText;
-  const f = formatters();
-  const left = Math.max(0, progress.seekableDuration - progress.currentTime);
-  return `${f.behind(left)} · ${m.player_sub_ends({ clock: f.time(new Date(now + left * 1000)) })}`;
-};
-
-/**
  * One playback attempt (design doc "TV · Player"): plays the server's signed HLS playlist with
  * react-native-video (Media3) and our own controls. Three states on TV: hidden (left and right
  * skip 10 s and flash the delta), timeline (scrub with accelerating steps) and the controls row
@@ -217,12 +203,12 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const [now, setNow] = useState(() => Date.now());
   // The window moves on with the clock, so a session hours long still finds what airs now;
   // the last answer stays while the next window loads (never another channel's).
-  // Live and a captured range also name the programme at the playhead from it.
+  // It names the programme at the playhead and gives the timeline its bands.
   const guideWindow = guideWindowAt(now);
   const guideChannel = channelOfTarget;
   const channelGuide = useQuery({
     ...queries.channelGuide(guideChannel, guideWindow.from, guideWindow.to),
-    enabled: mayRecord || (target !== undefined && target._tag !== "Recording"),
+    enabled: target !== undefined,
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[2] === guideChannel ? previous : undefined,
   });
@@ -664,7 +650,6 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
       })
     : undefined;
 
-  const f = formatters();
   const behind = progress === undefined ? 0 : behindLive(progress);
   const atLive = !finished && (progress === undefined || isAtLive(progress));
   // Above 1x, when playback reaches live, while that falls inside the window (SPEC 7.1).
@@ -679,35 +664,65 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
           speed,
           ...(windowEnd === undefined ? {} : { windowEnd }),
         });
-  const seekable =
-    progress !== undefined &&
-    Number.isFinite(progress.seekableDuration) &&
-    progress.seekableDuration > 0
-      ? progress.seekableDuration
-      : 1;
+  // The timeline on the wall clock with the channel's programmes (`bar.ts`); a recording names
+  // itself when the guide no longer has it.
+  const barInput = {
+    target,
+    progress,
+    now,
+    recording: recording.data,
+    running: recordingNow,
+    programmes: channelGuide.data ?? [],
+  };
+  const plainBar = playerBar({ ...barInput, at: undefined });
   // A seek still loading counts as played to its target, so the bar does not jump back either.
-  const played =
+  const playedAt =
     progress === undefined
-      ? 0
-      : (pendingSeek === undefined ? progress.currentTime : pendingSeek.target) / seekable;
+      ? undefined
+      : pendingSeek === undefined
+        ? progress.currentTime
+        : pendingSeek.target;
   // A finger dragging the phone's timeline wins over the remote's scrub.
   // Where playback is about to be: the finger's spot, a seek still loading, or the remote's scrub.
   const heading =
     progress === undefined
       ? undefined
       : drag !== undefined
-        ? drag * seekable
+        ? plainBar.seekAt(drag)
         : pendingSeek !== undefined && controls.scrub === 0
           ? pendingSeek.target
           : controls.scrub === 0
             ? undefined
             : progress.currentTime + controls.scrub;
-  const preview = heading === undefined ? undefined : heading / seekable;
-  const shownTime = heading ?? progress?.currentTime;
+  const bar = playerBar({ ...barInput, at: heading ?? playedAt });
+  const timelineMarks = {
+    captured:
+      bar.layout.captured === undefined
+        ? 0
+        : (bar.layout.captured.left + bar.layout.captured.width) / 100,
+    played: playedAt === undefined ? 0 : bar.share(playedAt),
+    preview: heading === undefined ? undefined : bar.share(heading),
+    ticks: bar.layout.marks.map((mark) => mark / 100),
+  };
   // TV mounts the controls only while they show (its focus lives in them); phone fades them.
   const showOverlay = isTV ? chromeShown : !inPip;
   const size = isTV ? 1.05 : 0.85;
   const pad = (isTV ? 4 : 1) * em;
+  const barWidth = width - 2 * pad;
+  const labels =
+    progress === undefined
+      ? undefined
+      : barLabels(bar, atLive, barWidth, barTypeSizes(em, isTV).label);
+  const readout = readoutOf({
+    finished: finished || target._tag === "Range",
+    progress,
+    atLive,
+    speed,
+    now,
+    playhead: playhead.atMs,
+    windowEnd,
+    recording: recording.data,
+  });
   const deltaParts = [
     finished
       ? m.recordings_time_left({ seconds: behind })
@@ -875,59 +890,42 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
               left: pad,
               right: pad,
               bottom: (isTV ? 2.4 : 1) * em,
-              gap: 0.8 * em,
+              gap: (isTV ? 0.8 : 0.5) * em,
             }}
           >
-            {isTV ? (
-              <TimelineFocus onFocus={() => onFocusPart("timeline")}>
-                <CaptureTimeline
-                  width={width - 2 * pad}
-                  focused={controls.mode === "timeline"}
-                  focusable
-                  marks={{ captured: 1, played, preview, ticks: [] }}
-                />
-              </TimelineFocus>
-            ) : (
-              <PhoneScrub
-                width={width - 2 * pad}
-                onDrag={(fraction) => {
-                  setDrag(fraction);
-                  setControls((current) => keepControls(current, Date.now()));
-                }}
-                onSeek={(fraction) => {
-                  if (progress !== undefined) seek(fraction * seekable);
-                  setControls((current) => keepControls(current, Date.now()));
-                }}
-              >
-                <CaptureTimeline
-                  width={width - 2 * pad}
-                  grabbed={drag !== undefined}
-                  marks={{ captured: 1, played, preview, ticks: [] }}
-                />
-              </PhoneScrub>
-            )}
-            <View style={{ flexDirection: "row", alignItems: "center" }}>
-              <Text
-                style={{
-                  flex: 1,
-                  fontFamily: fonts.fUi,
-                  fontSize: size * em,
-                  color: colors.fg2,
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                {shownTime === undefined ? "" : f.clock(shownTime)}
-              </Text>
-              <Text
-                style={{
-                  fontFamily: fonts.fUiSemiBold,
-                  fontSize: size * em,
-                  color: atLive ? colors.liveText : colors.fg2,
-                  fontVariant: ["tabular-nums"],
-                }}
-              >
-                {readoutText(finished, progress, now, deltaText)}
-              </Text>
+            {/* Read-out, then the bands, the bar and its ends: every row's height is kept. */}
+            <ReadoutView readout={readout} />
+            <View>
+              <AboveBar bar={bar} labels={labels} width={barWidth} />
+              {isTV ? (
+                <TimelineFocus onFocus={() => onFocusPart("timeline")}>
+                  <CaptureTimeline
+                    width={barWidth}
+                    focused={controls.mode === "timeline"}
+                    focusable
+                    marks={timelineMarks}
+                  />
+                </TimelineFocus>
+              ) : (
+                <PhoneScrub
+                  width={barWidth}
+                  onDrag={(fraction) => {
+                    setDrag(fraction);
+                    setControls((current) => keepControls(current, Date.now()));
+                  }}
+                  onSeek={(fraction) => {
+                    seek(plainBar.seekAt(fraction));
+                    setControls((current) => keepControls(current, Date.now()));
+                  }}
+                >
+                  <CaptureTimeline
+                    width={barWidth}
+                    grabbed={drag !== undefined}
+                    marks={timelineMarks}
+                  />
+                </PhoneScrub>
+              )}
+              <BelowBar labels={labels} width={barWidth} />
             </View>
             <ControlsRow
               size={size}

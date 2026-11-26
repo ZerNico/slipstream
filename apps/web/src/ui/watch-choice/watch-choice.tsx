@@ -6,7 +6,7 @@ import { Dialog } from "~/ui/dialog.tsx";
 import { Icon } from "~/ui/icon.tsx";
 import { FromStartIcon, GoLiveIcon, PlayIcon } from "~/ui/icons.ts";
 import { Button } from "~/ui/primitives/button.tsx";
-import type { TimelineData } from "~/ui/timeline/geometry.ts";
+import type { TimelineData } from "@slipstream/domain";
 import { Timeline } from "~/ui/timeline/timeline.tsx";
 import { rovingIndex } from "~/ui/roving.ts";
 import { type ChoiceInput, type ChoiceOption, watchChoice } from "@slipstream/domain";

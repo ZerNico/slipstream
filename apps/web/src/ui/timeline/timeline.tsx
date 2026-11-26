@@ -20,7 +20,7 @@ import {
   seekForKey,
   seekTimeAt,
   type TimelineData,
-} from "./geometry.ts";
+} from "@slipstream/domain";
 
 /** What the Timeline component shows and how it seeks. */
 export interface TimelineProps {

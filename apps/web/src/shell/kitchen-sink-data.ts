@@ -3,7 +3,7 @@
  * not interface copy). Times are relative to the moment the page renders.
  */
 import type { ArtworkSubject } from "~/ui/artwork/generate.ts";
-import type { TimelineData } from "~/ui/timeline/geometry.ts";
+import type { TimelineData } from "@slipstream/domain";
 import { MINUTE } from "@slipstream/domain";
 
 /** One programme per artwork genre, with its channel. */

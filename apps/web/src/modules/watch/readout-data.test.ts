@@ -1,19 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { RecordingEntry, SourceStreams } from "@slipstream/api";
 import { makeMockData } from "~/api/mock/fixtures.ts";
-import { ChannelId, PlaybackSessionId, SourceId } from "@slipstream/domain";
+import { bandsIn, bandTitle, ChannelId, PlaybackSessionId, SourceId } from "@slipstream/domain";
 import { DateTime } from "effect";
 import { playerPosition } from "./player-model.ts";
 import { readoutFor } from "./readout.ts";
 import { sourceWatchers, watcherName } from "./streams.ts";
-import {
-  bandTitle,
-  bandsIn,
-  channelItems,
-  recordingStart,
-  siblingItems,
-  slotLine,
-} from "./watch-data.ts";
+import { channelItems, recordingStart, siblingItems, slotLine } from "./watch-data.ts";
 
 const MIN = 60_000;
 const now = Date.UTC(2026, 10, 22, 17, 42);

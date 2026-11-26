@@ -63,6 +63,16 @@ export const liveEta = (input: {
   return input.windowEnd !== undefined && eta > input.windowEnd ? undefined : eta;
 };
 
+/**
+ * When a finished recording ends if it plays on at `speed` from now, epoch ms: what is left
+ * divided by the speed ("ends 17:26" under the read-out).
+ */
+export const playbackEndsAt = (input: {
+  readonly now: number;
+  readonly leftMs: number;
+  readonly speed: number;
+}): number => input.now + Math.max(0, input.leftMs) / Math.max(0.25, input.speed);
+
 /** How close to its end a finished recording counts as watched: the last minute. */
 export const watchedThreshold = MINUTE;
 

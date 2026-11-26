@@ -59,6 +59,8 @@ export {
   seriesTemplateText,
 } from "./series-text.ts";
 export type { SeriesSkipMark } from "./series-text.ts";
+export { playerReadout, readoutLine } from "./player-readout-text.ts";
+export type { PlayerReadout, ReadoutInput, ReadoutPiece } from "./player-readout-text.ts";
 export { streamLimitText, transcodeReasonText } from "./status-text.ts";
 export { watchOptionText } from "./watch-choice-text.ts";
 export type { WatchOptionText } from "./watch-choice-text.ts";
