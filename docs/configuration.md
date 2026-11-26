@@ -93,21 +93,49 @@ To check by hand, `docker exec <container> vainfo` lists what the Intel or AMD d
 The image sets the paths and ffmpeg locations for you; the defaults in brackets are the image's
 where they differ from running the server directly.
 
-| Variable                         | Default                                                | What it does                                                                                                                                                                                      |
-| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `SLIPSTREAM_TIME_ZONE`           | the host's zone [`UTC`]                                | The server's IANA time zone, e.g. `Europe/Berlin`. Weekdays in series recordings and dates in library folders are read in it. **Set it in Docker.**                                               |
-| `SLIPSTREAM_PUBLIC_URL`          | unset                                                  | How people reach Slipstream, e.g. `https://tv.example.com` (an optional path prefix is allowed, no trailing slash). Used for links (invites, TV sign-in, mDNS). `https://` makes cookies `Secure` |
-| `SLIPSTREAM_TRUSTED_PROXIES`     | empty (trust nobody)                                   | Comma-separated addresses or CIDR ranges whose `X-Forwarded-*` headers are believed, e.g. `172.16.0.0/12`. See [Reverse proxy](#reverse-proxy)                                                    |
-| `SLIPSTREAM_HOST`                | `0.0.0.0`                                              | Address the HTTP server binds to                                                                                                                                                                  |
-| `SLIPSTREAM_PORT`                | `8080`                                                 | Port for the web app, API and HLS                                                                                                                                                                 |
-| `SLIPSTREAM_CONFIG_DIR`          | `.data/config` [`/config`]                             | Database, its backups and `secret.key`                                                                                                                                                            |
-| `SLIPSTREAM_DATA_DIR`            | `.data/data` [`/data`]                                 | The segment store                                                                                                                                                                                 |
-| `SLIPSTREAM_WEB_DIR`             | unset: API only [`/app/apps/web/dist`]                 | A built web app to serve, with fallback to `index.html` for client-side routes                                                                                                                    |
-| `SLIPSTREAM_FFMPEG`              | `ffmpeg` on `PATH` [`/usr/lib/jellyfin-ffmpeg/ffmpeg`] | ffmpeg for captures, the self-check and hardware detection                                                                                                                                        |
-| `SLIPSTREAM_FFPROBE`             | next to `SLIPSTREAM_FFMPEG`, else `ffprobe`            | ffprobe for stream information                                                                                                                                                                    |
-| `SLIPSTREAM_FREE_SPACE_FLOOR_GB` | `20`                                                   | Free space to keep on the segment store. Below it, live TV buffers shrink first, then retention runs early. Running recordings are never cut                                                      |
-| `SLIPSTREAM_MDNS`                | `true` [`false`]                                       | Announce `_slipstream._tcp` on the local network so the Android app finds the server. In Docker this only works with host networking                                                              |
-| `SLIPSTREAM_STARTUP_CHECKS`      | `true`                                                 | Run the ffmpeg self-check and hardware encoder detection in the background at startup                                                                                                             |
+| Variable                         | Default                                                | What it does                                                                                                                                                                                                      |
+| -------------------------------- | ------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SLIPSTREAM_TIME_ZONE`           | the host's zone [`UTC`]                                | The server's IANA time zone, e.g. `Europe/Berlin`. Weekdays in series recordings and dates in library folders are read in it. **Set it in Docker.**                                                               |
+| `SLIPSTREAM_PUBLIC_URL`          | unset                                                  | How people reach Slipstream, e.g. `https://tv.example.com` (an optional path prefix is allowed, no trailing slash). Used for links (invites, TV sign-in, mDNS). `https://` makes cookies `Secure`                 |
+| `SLIPSTREAM_TRUSTED_PROXIES`     | empty (trust nobody)                                   | Comma-separated addresses or CIDR ranges whose `X-Forwarded-*` headers are believed, e.g. `172.16.0.0/12`. See [Reverse proxy](#reverse-proxy)                                                                    |
+| `SLIPSTREAM_HOST`                | `0.0.0.0`                                              | Address the HTTP server binds to                                                                                                                                                                                  |
+| `SLIPSTREAM_PORT`                | `8080`                                                 | Port for the web app, API and HLS                                                                                                                                                                                 |
+| `SLIPSTREAM_CONFIG_DIR`          | `.data/config` [`/config`]                             | Database, its backups and `secret.key`                                                                                                                                                                            |
+| `SLIPSTREAM_DATA_DIR`            | `.data/data` [`/data`]                                 | The segment store                                                                                                                                                                                                 |
+| `SLIPSTREAM_WEB_DIR`             | unset: API only [`/app/apps/web/dist`]                 | A built web app to serve, with fallback to `index.html` for client-side routes                                                                                                                                    |
+| `SLIPSTREAM_FFMPEG`              | `ffmpeg` on `PATH` [`/usr/lib/jellyfin-ffmpeg/ffmpeg`] | ffmpeg for captures, the self-check and hardware detection                                                                                                                                                        |
+| `SLIPSTREAM_FFPROBE`             | next to `SLIPSTREAM_FFMPEG`, else `ffprobe`            | ffprobe for stream information                                                                                                                                                                                    |
+| `SLIPSTREAM_FREE_SPACE_FLOOR_GB` | `20`                                                   | Free space to keep on the segment store. Below it, live TV buffers shrink first, then retention runs early. Running recordings are never cut                                                                      |
+| `SLIPSTREAM_MDNS`                | `true` [`false`]                                       | Announce `_slipstream._tcp` on the local network so the Android app finds the server. In Docker this only works with host networking; see [Finding the server on the network](#finding-the-server-on-the-network) |
+| `SLIPSTREAM_STARTUP_CHECKS`      | `true`                                                 | Run the ffmpeg self-check and hardware encoder detection in the background at startup                                                                                                                             |
+
+## Finding the server on the network
+
+The Android app's sign-in screen lists Slipstream servers it finds over mDNS / DNS-SD
+(`_slipstream._tcp`). When the announcement carries a `url` TXT record, the app connects to that
+address (your `SLIPSTREAM_PUBLIC_URL`) instead of the LAN address it was found at.
+
+A container on Docker's default bridge network cannot send multicast onto your LAN, so the image
+keeps the announcement off. Either run the container with host networking and
+`SLIPSTREAM_MDNS=true`, or let the host announce it. Most NAS systems (Unraid, Synology,
+TrueNAS) already run avahi; put this in `/etc/avahi/services/slipstream.service` with your
+published port and public URL:
+
+```xml
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+<service-group>
+  <name replace-wildcards="yes">Slipstream (%h)</name>
+  <service>
+    <type>_slipstream._tcp</type>
+    <port>8080</port>
+    <txt-record>url=https://tv.example.com</txt-record>
+  </service>
+</service-group>
+```
+
+Without a `url` record the app connects to the announcing host at that port over plain http.
+On Unraid `/etc` lives in memory: write the file from a script that `/boot/config/go` runs.
 
 ## Reverse proxy
 
