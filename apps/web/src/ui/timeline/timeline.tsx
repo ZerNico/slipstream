@@ -50,8 +50,9 @@ const span = (segment: { left: number; width: number }): CSSProperties => ({
  * The timeline (SPEC §5): one component for the hero, sheets, the choice dialog, the player, the
  * recording detail and the mini player. Every row is reserved; labels that would collide hide by
  * visibility; hover only scales the track and moves the absolutely positioned marker and tooltip.
- * With `onSeek` the whole bar is a slider: drag with pointer capture, ←/→ 10 s, Shift or PgUp/PgDn
- * 60 s, Home to the programme start, End to live.
+ * With `onSeek` the whole bar is a slider: drag with pointer capture (the knob follows, the seek
+ * happens on release; Escape drops it), ←/→ 10 s, Shift or PgUp/PgDn 60 s, Home to the programme
+ * start, End to live.
  */
 export function Timeline({
   data: given,
@@ -63,13 +64,22 @@ export function Timeline({
   caption,
   className,
 }: TimelineProps) {
-  const data = withOverrun(given);
+  const base = withOverrun(given);
+  const [hover, setHover] = useState<{ fraction: number; info: HoverInfo } | null>(null);
+  /**
+   * A pointer drag in progress and where it would seek. The knob and your time follow it; the
+   * player seeks once, on release, so it does not load every spot passed on the way.
+   */
+  const [drag, setDrag] = useState<{
+    readonly pointerId: number;
+    readonly target: number | undefined;
+  } | null>(null);
+  const dragging = drag !== null;
+  const data = drag?.target === undefined ? base : { ...base, playhead: drag.target };
   const layout = layoutTimeline(data);
   const trackRef = useRef<HTMLDivElement | null>(null);
   const width = useWidth(trackRef);
   const labels = placeLabels(layout, width);
-  const [hover, setHover] = useState<{ fraction: number; info: HoverInfo } | null>(null);
-  const [dragging, setDragging] = useState(false);
   const interactive = onSeek !== undefined;
   const showBands = variant === "full" && layout.bands.length > 0;
 
@@ -79,13 +89,18 @@ export function Timeline({
     const rect = trackRef.current?.getBoundingClientRect();
     return rect && rect.width > 0 ? (clientX - rect.left) / rect.width : 0;
   };
-  const seekTo = (clientX: number) => {
-    const target = seekTimeAt(data, fractionAt(clientX));
-    if (target !== undefined) onSeek?.(target);
-  };
+  const targetAt = (clientX: number) => seekTimeAt(base, fractionAt(clientX));
   const track = (clientX: number) => {
     const fraction = Math.min(1, Math.max(0, fractionAt(clientX)));
-    setHover({ fraction, info: hoverAt(data, fraction) });
+    setHover({ fraction, info: hoverAt(base, fraction) });
+  };
+  /** Ends a drag; drops its preview without seeking (Escape, a cancelled pointer). */
+  const dropDrag = (element: HTMLElement) => {
+    if (drag !== null && element.hasPointerCapture(drag.pointerId)) {
+      element.releasePointerCapture(drag.pointerId);
+    }
+    setDrag(null);
+    setHover(null);
   };
 
   const sliderProps = interactive
@@ -98,9 +113,15 @@ export function Timeline({
         "aria-valuenow": Math.round(((data.playhead ?? data.start) - data.start) / 1000),
         "aria-valuetext": valueText(data, relative),
         onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => {
+          if (event.key === "Escape" && dragging) {
+            event.preventDefault();
+            event.stopPropagation();
+            dropDrag(event.currentTarget);
+            return;
+          }
           const next = seekForKey(
-            data,
-            data.playhead ?? data.start,
+            base,
+            base.playhead ?? base.start,
             event.key,
             event.shiftKey,
             programmeStart,
@@ -112,18 +133,25 @@ export function Timeline({
         onPointerDown: (event: PointerEvent<HTMLDivElement>) => {
           if (event.button !== 0) return;
           event.currentTarget.setPointerCapture(event.pointerId);
-          setDragging(true);
+          setDrag({ pointerId: event.pointerId, target: targetAt(event.clientX) });
           track(event.clientX);
-          seekTo(event.clientX);
         },
         onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
           // On touch the tooltip shows only while dragging, so it never sticks after a tap.
           if (event.pointerType !== "mouse" && !dragging) return;
           track(event.clientX);
-          if (dragging) seekTo(event.clientX);
+          if (dragging) setDrag({ pointerId: drag.pointerId, target: targetAt(event.clientX) });
         },
-        onPointerUp: () => setDragging(false),
-        onPointerCancel: () => setDragging(false),
+        // A click or a drag seeks once, where it is let go.
+        onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
+          if (!dragging) return;
+          setDrag(null);
+          const target = targetAt(event.clientX);
+          if (target !== undefined) onSeek(target);
+        },
+        onPointerCancel: (event: PointerEvent<HTMLDivElement>) => {
+          if (dragging) dropDrag(event.currentTarget);
+        },
         onPointerLeave: () => {
           if (!dragging) setHover(null);
         },

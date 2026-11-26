@@ -132,15 +132,20 @@ export interface OverlayBinding {
 
 /**
  * Binds a sheet or dialog to one overlay name (`useOverlayBinding("sheet", "prog")`), so the
- * URL decides whether it is open and every way of closing it goes back through history.
+ * URL decides whether it is open and every way of closing it goes back through history. With
+ * `arg`, only that one (`card:<id>`): one of many overlays of the same name on a page.
  */
 export function useOverlayBinding<K extends OverlayKind>(
   kind: K,
   name?: OverlayName<K>,
+  arg?: string,
 ): OverlayBinding {
   const controls = useOverlay();
   const { open, overlay } = useLatchedOverlay((current) =>
-    current !== null && current.kind === kind && (name === undefined || current.name === name)
+    current !== null &&
+    current.kind === kind &&
+    (name === undefined || current.name === name) &&
+    (arg === undefined || current.arg === arg)
       ? current
       : null,
   );

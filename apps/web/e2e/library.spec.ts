@@ -181,14 +181,36 @@ test.describe("desktop interactions", () => {
     await settled(page);
     const card = page.locator("main .card").first();
     if ((await card.count()) > 0) {
+      // The art and its ⋯ button lift together; that is a transform, not a move.
       await expectNoShiftOn(page, () => card.hover(), {
-        ignore: [".card-play", ".art", ".card-media"],
+        ignore: [".card-play", ".art", ".card-media", ".card-more"],
       });
     }
     await page.goto("/recordings/scheduled");
     await settled(page);
     const row = page.locator("main section .grid > div").first();
     if ((await row.count()) > 0) await expectNoShiftOn(page, () => row.hover());
+  });
+
+  test("a card's ⋯ menu shows on hover and its Delete… opens the detail asking", async ({
+    page,
+  }) => {
+    await seed(page);
+    const finished = await completedRecording(page);
+    await page.goto("/recordings?group=date");
+    await settled(page);
+    const wrap = page.locator("main .card-wrap", {
+      has: page.locator(`a[href*='${finished.id}']`),
+    });
+    const slot = wrap.locator(".card-more");
+    await expect(slot).toHaveCSS("opacity", "0");
+    await wrap.locator(".card").hover();
+    await expect(slot).toHaveCSS("opacity", "1");
+    await slot.locator("button").click();
+    await expect(page.getByRole("menuitem", { name: "Details" })).toBeVisible();
+    await page.getByRole("menuitem", { name: "Delete…" }).click();
+    await expect(page).toHaveURL(new RegExp(`/recordings/r/${finished.id}\\?ask=delete`, "u"));
+    await expect(page.locator("[data-delete-confirm]")).toBeVisible();
   });
 
   test("the toolbar keeps its filters in the URL and Back restores them", async ({ page }) => {
@@ -395,5 +417,24 @@ test.describe("phone 390, touch", () => {
     await expectOverlaysFit(page);
     await page.goBack();
     await expect(page).not.toHaveURL(/dlg=move/u);
+  });
+
+  test("a card's ⋯ is always there on touch and opens only its own menu as a sheet", async ({
+    page,
+  }) => {
+    await seed(page);
+    const finished = await completedRecording(page);
+    await page.goto("/recordings?group=date");
+    await settled(page);
+    const slot = page
+      .locator("main .card-wrap", { has: page.locator(`a[href*='${finished.id}']`) })
+      .locator(".card-more");
+    await expect(slot).toHaveCSS("opacity", "1");
+    await slot.locator("button").tap();
+    await expect(page).toHaveURL(new RegExp(`dlg=card(?::|%3A)${finished.id}`, "u"));
+    await expect(page.getByRole("menu")).toHaveCount(1);
+    await expectOverlaysFit(page);
+    await page.goBack();
+    await expect(page).not.toHaveURL(/dlg=card/u);
   });
 });

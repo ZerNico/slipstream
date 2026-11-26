@@ -289,6 +289,67 @@ describe("library", () => {
   });
 });
 
+/** A menu row by its text, in a popover or a sheet (both render in a portal). */
+const item = (name: string) =>
+  [...document.querySelectorAll<HTMLElement>("[role^=menuitem]")].find(
+    (element) => element.textContent?.trim() === name,
+  );
+
+describe("a recording card's ⋯ menu", () => {
+  const id = "rennen-las-vegas";
+  /** The ⋯ button beside the card whose link points at the recording, outside the link. */
+  const moreOf = (host: HTMLElement) =>
+    [...host.querySelectorAll<HTMLElement>(".card-wrap")]
+      .find((wrap) => wrap.querySelector(`a[href*='${id}']`) !== null)
+      ?.querySelector<HTMLElement>(".card-more button");
+  const openMenu = async (view: Awaited<ReturnType<typeof render>>) => {
+    await view.waitFor(() => expect(moreOf(view.host)).toBeDefined());
+    const more = moreOf(view.host);
+    expect(more?.closest("a")).toBeNull();
+    expect(more?.getAttribute("aria-label")).toBe("More actions: Live F1: Rennen - GP Las Vegas");
+    await view.click(more);
+  };
+
+  it("keeps it forever and opens the detail with the Delete question", async () => {
+    const view = await render(<LibraryPage view="collections" filter="all" query="" />);
+    await openMenu(view);
+    await view.waitFor(() => expect(item("Keep forever")).toBeDefined());
+    expect(item("Details")).toBeDefined();
+    expect(item("Mark as watched")).toBeDefined();
+    await view.click(item("Keep forever"));
+    await view.waitFor(() =>
+      expect(view.server.data.recordings.find((r) => r.id === id)?.protected).toBe(true),
+    );
+    await openMenu(view);
+    await view.waitFor(() => expect(item("Don't keep forever")).toBeDefined());
+    await view.click(item("Delete…"));
+    await view.waitFor(() => expect(view.path()).toBe(`/recordings/r/${id}`));
+    expect(view.search()["ask"]).toBe("delete");
+  });
+
+  it("opens only the pressed card's menu as a sheet on phones", async () => {
+    const matchMedia = window.matchMedia.bind(window);
+    // A phone: the menus' query (coarse pointer, narrow) matches.
+    window.matchMedia = (query: string) => {
+      const list = matchMedia(query);
+      if (query.includes("pointer: coarse"))
+        Object.defineProperty(list, "matches", { value: true });
+      return list;
+    };
+    cleanups.push(async () => {
+      window.matchMedia = matchMedia;
+    });
+    const view = await render(<LibraryPage view="date" filter="all" query="" />);
+    await view.waitFor(() =>
+      expect(view.host.querySelectorAll(".card-more").length).toBeGreaterThan(1),
+    );
+    await openMenu(view);
+    await view.waitFor(() => expect(view.search()["dlg"]).toBe(`card:${id}`));
+    await view.waitFor(() => expect(document.querySelectorAll("[role=menu]")).toHaveLength(1));
+    expect(item("Keep forever")).toBeDefined();
+  });
+});
+
 describe("scheduled", () => {
   it("writes days in the pills' notation without repeating the day in every row", async () => {
     const view = await render(<ScheduledPage />);

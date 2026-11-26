@@ -21,9 +21,13 @@ export type DialogName =
   | "merge-review"
   | "gone-review";
 
-/** The menus, which are sheets under `?dlg=` on phones (`ResponsiveMenu`). */
+/**
+ * The menus, which are sheets under `?dlg=` on phones (`ResponsiveMenu`). A menu that repeats
+ * on a page takes its item as the arg: `card:<recordingId>` is that recording card's ⋯ menu.
+ */
 export type MenuName =
   | "account"
+  | "card"
   | "recording"
   | "filter"
   | "day"

@@ -1,6 +1,8 @@
 // @vitest-environment happy-dom
+import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale, setRegion } from "@slipstream/i18n";
+import { formatClock } from "~/i18n/formats.ts";
 import { mount } from "~/test/dom.tsx";
 import type { TimelineData } from "./geometry.ts";
 import { Timeline } from "./timeline.tsx";
@@ -113,6 +115,76 @@ describe("Timeline", () => {
     expect(onSeek).toHaveBeenLastCalledWith((qualifying.playhead ?? 0) - 60_000);
     await key("End");
     expect(onSeek).toHaveBeenLastCalledWith(qualifying.live);
+  });
+
+  describe("dragging the playhead", () => {
+    /** The bar as 1000 px from x = 0, so x / 10 is the knob's left in percent. */
+    const slider = async (onSeek: (time: number) => void) => {
+      const mounted = await render(<Timeline data={qualifying} onSeek={onSeek} />);
+      const bar = mounted.host.querySelector<HTMLElement>('[role="slider"]');
+      const trackEl = mounted.host.querySelector<HTMLElement>(".tl-track");
+      if (!bar || !trackEl) throw new Error("no slider");
+      vi.spyOn(trackEl, "getBoundingClientRect").mockReturnValue(
+        DOMRect.fromRect({ x: 0, y: 0, width: 1000, height: 8 }),
+      );
+      const pointer = (type: string, clientX: number) =>
+        act(async () => {
+          bar.dispatchEvent(
+            new PointerEvent(type, {
+              bubbles: true,
+              button: 0,
+              clientX,
+              pointerId: 1,
+              pointerType: "mouse",
+            }),
+          );
+        });
+      const knob = () => mounted.host.querySelector<HTMLElement>(".tl-knob")?.style.left;
+      return { ...mounted, bar, pointer, knob };
+    };
+    const windowMs = qualifying.end - qualifying.start;
+    const timeAt = (fraction: number) => qualifying.start + fraction * windowMs;
+
+    it("moves only the knob while dragging and seeks once, where it is let go", async () => {
+      const onSeek = vi.fn<(time: number) => void>();
+      const view = await slider(onSeek);
+      const before = view.knob();
+      await view.pointer("pointerdown", 100);
+      await view.pointer("pointermove", 150);
+      await view.pointer("pointermove", 200);
+      expect(onSeek).not.toHaveBeenCalled();
+      expect(view.knob()).toBe("20%");
+      expect(view.knob()).not.toBe(before);
+      expect(view.host.querySelector(".tl-label-here")?.textContent).toBe(formatClock(timeAt(0.2)));
+      await view.pointer("pointerup", 200);
+      expect(onSeek).toHaveBeenCalledTimes(1);
+      expect(onSeek).toHaveBeenCalledWith(timeAt(0.2));
+    });
+
+    it("seeks at once on a plain click", async () => {
+      const onSeek = vi.fn<(time: number) => void>();
+      const view = await slider(onSeek);
+      await view.pointer("pointerdown", 100);
+      await view.pointer("pointerup", 100);
+      expect(onSeek).toHaveBeenCalledTimes(1);
+      expect(onSeek).toHaveBeenCalledWith(timeAt(0.1));
+    });
+
+    it("drops the drag without seeking on Escape or a cancelled pointer", async () => {
+      const onSeek = vi.fn<(time: number) => void>();
+      const view = await slider(onSeek);
+      const before = view.knob();
+      view.bar.focus();
+      await view.pointer("pointerdown", 100);
+      await view.pointer("pointermove", 200);
+      await view.key("Escape");
+      expect(view.knob()).toBe(before);
+      await view.pointer("pointerup", 200);
+      await view.pointer("pointerdown", 100);
+      await view.pointer("pointercancel", 100);
+      expect(view.knob()).toBe(before);
+      expect(onSeek).not.toHaveBeenCalled();
+    });
   });
 
   it("says Live at the live edge", async () => {
