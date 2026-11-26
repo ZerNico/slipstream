@@ -51,6 +51,7 @@ const RadioContext = createContext<{
  */
 export function ResponsiveMenu({
   name,
+  arg,
   label,
   trigger,
   align = "end",
@@ -63,6 +64,11 @@ export function ResponsiveMenu({
 }: {
   /** The URL name (`account`, `filter`, `day`). */
   name: MenuName;
+  /**
+   * What this menu is about, for a menu that repeats on a page (`?dlg=card:<id>`): only the
+   * pressed one opens as a sheet.
+   */
+  arg?: string;
   /** The menu's accessible name and the sheet's header. */
   label: string;
   /** The trigger button element. */
@@ -84,7 +90,7 @@ export function ResponsiveMenu({
 }) {
   const asSheet = useMediaQuery(media.menuAsSheet);
   const overlay = useOverlay();
-  const binding = useOverlayBinding("dlg", name);
+  const binding = useOverlayBinding("dlg", name, arg);
   const triggerRef = useRef<HTMLElement | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const firstRef = useRef<HTMLElement | null>(null);
@@ -141,7 +147,7 @@ export function ResponsiveMenu({
         triggerRef={triggerRef}
         onOpen={() => {
           keyboardTarget();
-          overlay.open({ kind: "dlg", name });
+          overlay.open({ kind: "dlg", name, ...(arg === undefined ? {} : { arg }) });
         }}
       />
       <Sheet
