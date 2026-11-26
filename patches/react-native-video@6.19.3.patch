@@ -1,0 +1,54 @@
+diff --git a/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java b/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
+index 623d90c8b3ea080edd16a14fa0a494b1547d9dd7..fdd0232156c033051da65d68747ad3767660c594 100644
+--- a/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
++++ b/android/src/main/java/com/brentvatne/exoplayer/ReactExoplayerView.java
+@@ -2026,13 +2026,21 @@ public class ReactExoplayerView extends FrameLayout implements
+         eventEmitter.onVolumeChange.invoke(volume);
+     }
+ 
++    @Override
++    public void onPlayWhenReadyChanged(boolean playWhenReady, int reason) {
++        // Slipstream: a pause or play from the notification, headphones or audio focus.
++        eventEmitter.onVideoPlaybackStateChanged.invoke(playWhenReady, isSeeking);
++    }
++
+     @Override
+     public void onIsPlayingChanged(boolean isPlaying) {
+         if (isPlaying && isSeeking) {
+             eventEmitter.onVideoSeek.invoke(player.getCurrentPosition(), seekPosition);
+         }
+         PictureInPictureUtil.applyPlayingStatus(themedReactContext, pictureInPictureParamsBuilder, pictureInPictureReceiver, !isPlaying);
+-        eventEmitter.onVideoPlaybackStateChanged.invoke(isPlaying, isSeeking);
++        // Slipstream: report whether the player means to play (playWhenReady), not whether frames
++        // move this instant, so waiting for data never reads as a pause in JavaScript.
++        eventEmitter.onVideoPlaybackStateChanged.invoke(player != null && player.getPlayWhenReady(), isSeeking);
+ 
+         if (isPlaying) {
+             isSeeking = false;
+@@ -2153,11 +2161,26 @@ public class ReactExoplayerView extends FrameLayout implements
+                 hasVideoEnded = false;
+                 playerNeedsSource = true;
+                 initializePlayer();
++            } else {
++                // Slipstream: the same stream with new metadata (the next programme on live TV)
++                // updates the notification in place; Media3 swaps the item without reloading.
++                updateMediaMetadata(source);
+             }
+         } else {
+             clearSrc();
+         }
+     }
++    private void updateMediaMetadata(Source source) {
++        if (player == null || player.getMediaItemCount() == 0) return;
++        MediaItem current = player.getCurrentMediaItem();
++        if (current == null) return;
++        MediaMetadata metadata = ConfigurationUtils.buildCustomMetadata(source.getMetadata());
++        if (metadata == null || metadata.equals(current.mediaMetadata)) return;
++        player.replaceMediaItem(
++                player.getCurrentMediaItemIndex(),
++                current.buildUpon().setMediaMetadata(metadata).build());
++    }
++
+     public void clearSrc() {
+         if (source.getUri() != null) {
+             if (player != null) {

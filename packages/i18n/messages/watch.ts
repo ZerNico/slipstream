@@ -35,7 +35,6 @@ export const watch = defineArea({
     // Badges over the picture
     player_badge_recording: "Recording",
     player_badge_live: "Live",
-    player_notification_live: "Live TV",
     player_badge_incomplete: "Incomplete",
     // The read-out
     player_behind_live_label: "behind live",
@@ -158,7 +157,6 @@ export const watch = defineArea({
     player_loading: "Stream wird geladen",
     player_badge_recording: "Aufnahme",
     player_badge_live: "Live",
-    player_notification_live: "Live-TV",
     player_badge_incomplete: "Unvollständig",
     player_behind_live_label: "hinter live",
     player_left_label: "übrig",

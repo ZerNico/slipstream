@@ -36,6 +36,7 @@ import type { Effect } from "effect";
 import type { Api } from "../api/client.ts";
 import { queryKeys } from "../api/keys.ts";
 import { apiActions } from "../api/queries.ts";
+import { pictureFor } from "../data/artwork.ts";
 import { useApiQueries } from "../data/hooks.ts";
 import { useSession } from "../session/session-context.ts";
 import Animated, { useAnimatedStyle, useDerivedValue, withTiming } from "react-native-reanimated";
@@ -233,8 +234,6 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   // In picture-in-picture only the picture shows: no controls, no hints.
   const [inPip, setInPip] = useState(false);
   const [buffering, setBuffering] = useState(true);
-  // Read in the native player's events, which can come before the state has rendered.
-  const bufferingRef = useRef(true);
   const [failed, setFailed] = useState(false);
   const [speed, setSpeed] = useState(1);
   const [tracks, setTracks] = useState<readonly AudioTrack[]>([]);
@@ -538,6 +537,19 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
       .finally(() => setRecordBusy(false));
   };
 
+  // The programme at the playhead, changing as the playhead moves into the next one. On a
+  // phone its details give the media notification a picture (the guide's entries carry none).
+  const subject =
+    target === undefined
+      ? undefined
+      : playingSubject({
+          target,
+          atMs: playheadAt(target, progress, now, windowStart).atMs,
+          programmes: channelGuide.data ?? [],
+          recording: recording.data,
+        });
+  const details = useQuery(queries.programme(isTV ? undefined : subject?.programmeId));
+
   if (target === undefined) return <StatusScreen title={m.error_not_found()} />;
   if (session._tag === "Starting") return <StatusScreen title={m.loading()} busy />;
   if (session._tag === "Failed" || failed) {
@@ -580,24 +592,23 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const openRecordOptions =
     recordProgramme === undefined ? undefined : () => setRecordSheet("options");
 
-  // The programme at the playhead, changing as the playhead moves into the next one.
-  const playing = nowPlaying(
-    playingSubject({
-      target,
-      atMs: playhead.atMs,
-      programmes: channelGuide.data ?? [],
-      recording: recording.data,
-    }),
-    channelName,
-  );
-  // The phone's media notification and lock screen name what plays (`playingMetadata`).
+  const playing = nowPlaying(subject, channelName);
+  // The phone's media notification and lock screen name what plays (`playingMetadata`), with
+  // its picture when one is on the open web (a recording's frame needs the device's token).
+  const picture =
+    target._tag === "Recording"
+      ? recording.data === undefined
+        ? undefined
+        : pictureFor(recording.data)
+      : details.data === undefined
+        ? undefined
+        : pictureFor(details.data);
   const metadata = isTV
     ? undefined
     : playingMetadata(
         playing,
         playingChannel,
-        target?._tag === "Recording",
-        m.player_notification_live(),
+        picture?.kind === "outside" ? picture.uri : undefined,
       );
   const source = {
     uri: session.session.uri,
@@ -701,22 +712,13 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
             : { type: SelectedTrackType.INDEX, value: trackIndex }
         }
         onProgress={onProgress}
-        onBuffer={(event) => {
-          bufferingRef.current = event.isBuffering;
-          setBuffering(event.isBuffering);
-        }}
+        onBuffer={(event) => setBuffering(event.isBuffering)}
         // Play or pause from the notification, the lock screen or headphones (`outside-pause.ts`).
         onPlaybackStateChanged={(event) => {
-          const next = pausedFromNative(event, {
-            buffering: bufferingRef.current,
-            loaded: reloaded.current,
-          });
+          const next = pausedFromNative(event, { loaded: reloaded.current });
           if (next !== undefined && next !== pausedRef.current) setPaused(next);
         }}
-        onReadyForDisplay={() => {
-          bufferingRef.current = false;
-          setBuffering(false);
-        }}
+        onReadyForDisplay={() => setBuffering(false)}
         onAudioTracks={(event) => setTracks(event.audioTracks)}
         onLoad={(event) => {
           reloaded.current = true;

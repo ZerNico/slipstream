@@ -4,8 +4,9 @@
  * the native player directly; the player hears it as react-native-video's playing state and
  * follows, so its own Pause button is never one press behind.
  *
- * The native player also says "not playing" while it waits for data, seeks, or loads a renewed
- * playlist. None of those is a pause, so they never change the player's state.
+ * The event says whether the native player means to play (Media3's playWhenReady, patched in
+ * `patches/react-native-video@6.19.3.patch`), so waiting for data never reads as a pause; a
+ * seek or a renewed playlist loading says nothing either way.
  */
 
 export interface NativePlaying {
@@ -15,13 +16,13 @@ export interface NativePlaying {
 
 /**
  * Whether the player should now be paused, from the native player's playing state, or
- * `undefined` when that state says nothing about it (buffering, seeking, loading).
+ * `undefined` when that state says nothing about it (seeking, loading).
  */
 export const pausedFromNative = (
   event: NativePlaying,
-  context: { readonly buffering: boolean; readonly loaded: boolean },
+  context: { readonly loaded: boolean },
 ): boolean | undefined => {
   if (event.isPlaying) return false;
-  if (event.isSeeking || context.buffering || !context.loaded) return undefined;
+  if (event.isSeeking || !context.loaded) return undefined;
   return true;
 };

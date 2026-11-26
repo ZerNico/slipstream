@@ -1,4 +1,10 @@
-import { epochMs, type GuideEntry, programmeAt, rowsByChannel } from "@slipstream/domain";
+import {
+  epochMs,
+  type GuideEntry,
+  programmeAt,
+  type ProgrammeId,
+  rowsByChannel,
+} from "@slipstream/domain";
 import { formatters, m } from "@slipstream/i18n";
 import type { PlayTarget } from "./playback.ts";
 
@@ -39,11 +45,12 @@ export const playingSubject = (input: {
   readonly atMs: number;
   readonly programmes: readonly GuideEntry[];
   readonly recording: PlayingSubject | undefined;
-}): PlayingSubject | undefined => {
+}): (PlayingSubject & { readonly programmeId?: ProgrammeId }) | undefined => {
   const { target } = input;
   if (target._tag === "Recording") return input.recording;
   const row = rowsByChannel(input.programmes).get(target.channelId) ?? [];
-  return programmeAt(row, input.atMs);
+  const entry = programmeAt(row, input.atMs);
+  return entry === undefined ? undefined : { ...entry, programmeId: entry.id };
 };
 
 /** The title and the line under it for the programme playing on `channelName`. */
@@ -72,29 +79,24 @@ export interface PlayingMetadata {
 }
 
 /**
- * The media notification's words and picture. The native player reads them once, when the
- * stream loads, so they must not go stale: a recording names its programme, live TV and a
- * captured range name the channel (the programme there changes while it plays). The channel's
- * logo is the picture unless it is an SVG, which a notification cannot draw.
+ * The media notification's words and picture: the programme at the playhead (the player keeps
+ * them current as it moves into the next one), its line, the channel, and the programme's
+ * picture, else the channel's logo unless that is an SVG, which a notification cannot draw.
  */
 export const playingMetadata = (
   playing: NowPlaying,
   channel: { readonly name: string; readonly logoUrl?: string | undefined } | undefined,
-  recording: boolean,
-  /** What names live TV where a recording names its channel ("Live TV"). */
-  liveLabel: string,
+  picture: string | undefined,
 ): PlayingMetadata => {
-  const image =
+  const logo =
     channel?.logoUrl === undefined || /\.svg(?:$|[?#])/iu.test(channel.logoUrl)
-      ? {}
-      : { imageUri: channel.logoUrl };
-  if (!recording && channel !== undefined) {
-    return { title: channel.name, artist: liveLabel, ...image };
-  }
+      ? undefined
+      : channel.logoUrl;
+  const image = picture ?? logo;
   return {
     title: playing.title,
     ...(playing.line === "" ? {} : { subtitle: playing.line }),
     ...(channel === undefined ? {} : { artist: channel.name }),
-    ...image,
+    ...(image === undefined ? {} : { imageUri: image }),
   };
 };

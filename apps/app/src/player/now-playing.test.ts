@@ -23,11 +23,11 @@ describe("playingSubject", () => {
   it("takes the programme at the playhead, not the one on air now", () => {
     expect(
       playingSubject({ target: live, atMs: at(20, 0), programmes, recording: undefined }),
-    ).toBe(film);
+    ).toEqual({ ...film, programmeId: film.id });
     // Behind live, back in the news.
     expect(
       playingSubject({ target: live, atMs: at(19, 5), programmes, recording: undefined }),
-    ).toBe(news);
+    ).toEqual({ ...news, programmeId: news.id });
   });
 
   it("reads a captured range from its channel, and has nothing where the guide is empty", () => {
@@ -40,7 +40,7 @@ describe("playingSubject", () => {
     };
     expect(
       playingSubject({ target: range, atMs: at(19, 30), programmes, recording: undefined }),
-    ).toBe(elsewhere);
+    ).toEqual({ ...elsewhere, programmeId: elsewhere.id });
     expect(
       playingSubject({ target: live, atMs: at(22, 0), programmes, recording: undefined }),
     ).toBeUndefined();
@@ -80,33 +80,25 @@ describe("playingMetadata", () => {
   const playing = { title: "Tagesschau", line: "Das Erste · 20:00–20:15" };
   const ard = { name: "Das Erste", logoUrl: "https://logos.example/ard.png" };
 
-  it("names a recording's programme, its line and the channel, with the channel's logo", () => {
-    expect(playingMetadata(playing, ard, true, "Live TV")).toEqual({
+  it("names the programme, its line and the channel, with the programme's picture", () => {
+    expect(playingMetadata(playing, ard, "https://art.example/news.jpg")).toEqual({
       title: "Tagesschau",
       subtitle: "Das Erste · 20:00–20:15",
       artist: "Das Erste",
-      imageUri: "https://logos.example/ard.png",
+      imageUri: "https://art.example/news.jpg",
     });
   });
 
-  it("names the channel on live TV, where the programme changes while it plays", () => {
-    expect(playingMetadata(playing, ard, false, "Live TV")).toEqual({
-      title: "Das Erste",
-      artist: "Live TV",
-      imageUri: "https://logos.example/ard.png",
-    });
-  });
-
-  it("leaves out an SVG logo, an empty line and an unknown channel", () => {
+  it("shows the channel's logo without a programme picture, but never an SVG", () => {
+    expect(playingMetadata(playing, ard, undefined).imageUri).toBe("https://logos.example/ard.png");
     expect(
       playingMetadata(
         { title: "Tagesschau", line: "" },
         { name: "Das Erste", logoUrl: "https://logos.example/ard.svg?v=2" },
-        true,
-        "Live TV",
+        undefined,
       ),
     ).toEqual({ title: "Tagesschau", artist: "Das Erste" });
-    expect(playingMetadata(playing, undefined, false, "Live TV")).toEqual({
+    expect(playingMetadata(playing, undefined, undefined)).toEqual({
       title: "Tagesschau",
       subtitle: "Das Erste · 20:00–20:15",
     });
