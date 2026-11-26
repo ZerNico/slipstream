@@ -9,6 +9,7 @@ export {
   type GuideProgramme,
 } from "./guide.ts";
 export {
+  emptySpan,
   focusedCell,
   initialCursor,
   isAtNow,

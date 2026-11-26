@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  emptySpan,
   focusedCell,
   initialCursor,
   isAtNow,
@@ -43,7 +44,7 @@ describe("initialCursor", () => {
     });
   });
 
-  it("moves off a row without data to the nearest row airing something", () => {
+  it("prefers the nearest row airing something when it starts on one without data", () => {
     // Row 2 has no data and row 3 is in a gap at 06:12, so row 1 is nearest.
     expect(start(2)).toMatchObject({ row: 1, programme: 0 });
   });
@@ -61,19 +62,42 @@ describe("up and down", () => {
     expect(focusedId(down)).toBe("zdf@05:45");
   });
 
-  it("skips channels without data and channels in a gap at the anchor", () => {
+  it("stops on a channel without data, on its empty space, keeping the anchor", () => {
     const cursor = run(start(), { _tag: "Down" }, { _tag: "Down" });
-    expect(cursor.row).toBe(4);
-    expect(focusedId(cursor)).toBe("e1@05:30");
-    expect(run(cursor, { _tag: "Up" }).row).toBe(1);
+    expect(cursor).toMatchObject({ row: 2, programme: -1, anchor: NOW, viewStart: at("05:30") });
+    expect(focusedCell(guide, cursor)).toMatchObject({ channel: { id: "empty" } });
+    expect(focusedId(cursor)).toBeUndefined();
   });
 
-  it("stops on a gap channel once the anchor is outside the gap", () => {
+  it("stops on a channel in a gap at the anchor, then carries on at the same time", () => {
+    const gap = run(start(), { _tag: "Down", steps: 3 });
+    expect(gap).toMatchObject({ row: 3, programme: -1, anchor: NOW });
+    const below = run(gap, { _tag: "Down" });
+    expect(below).toMatchObject({ row: 4, anchor: NOW });
+    expect(focusedId(below)).toBe("e1@05:30");
+    expect(run(below, { _tag: "Up" }, { _tag: "Up" }, { _tag: "Up" }).row).toBe(1);
+  });
+
+  it("focuses a gap channel's programme once the anchor is outside the gap", () => {
     const later = run(start(1), { _tag: "Right" }, { _tag: "Right" });
     expect(later.anchor).toBe(at("07:00"));
-    const down = run(later, { _tag: "Down" });
+    const empty = run(later, { _tag: "Down" });
+    expect(empty).toMatchObject({ row: 2, programme: -1, anchor: at("07:00") });
+    const down = run(empty, { _tag: "Down" });
     expect(down.row).toBe(3);
     expect(focusedId(down)).toBe("gap@07:00");
+  });
+
+  it("reaches every channel one row at a time", () => {
+    const rows: number[] = [];
+    let cursor = start();
+    for (;;) {
+      rows.push(cursor.row);
+      const next = step(guide, config, cursor, { _tag: "Down" });
+      if (next === cursor) break;
+      cursor = next;
+    }
+    expect(rows).toEqual(Array.from({ length: guide.channels.length }, (_, row) => row));
   });
 
   it("returns to the same short programme after crossing longer ones", () => {
@@ -92,14 +116,15 @@ describe("up and down", () => {
     expect(step(guide, config, bottom, { _tag: "Down" })).toBe(bottom);
   });
 
-  it("returns the same object when no row below airs anything", () => {
+  it("moves onto a last row without data, then stops there", () => {
     const lonely = makeGuide([channel("a", 1, [["06:00", "07:00"]]), channel("b", 2, [])]);
-    const cursor = initialCursor(lonely, config, NOW);
+    const cursor = step(lonely, config, initialCursor(lonely, config, NOW), { _tag: "Down" });
+    expect(cursor).toMatchObject({ row: 1, programme: -1, anchor: NOW });
     expect(step(lonely, config, cursor, { _tag: "Down" })).toBe(cursor);
   });
 
-  it("moves several focusable rows at once for held keys", () => {
-    expect(run(start(), { _tag: "Down", steps: 3 }).row).toBe(5);
+  it("moves several rows at once for held keys", () => {
+    expect(run(start(), { _tag: "Down", steps: 3 }).row).toBe(3);
     expect(run(start(), { _tag: "Down", steps: 99 }).row).toBe(24);
   });
 
@@ -108,7 +133,7 @@ describe("up and down", () => {
     expect(fifth).toMatchObject({ row: 7, topRow: 1 });
     const up = run(fifth, { _tag: "Up" });
     expect(up).toMatchObject({ row: 6, topRow: 1 });
-    const top = run(up, { _tag: "Up", steps: 5 });
+    const top = run(up, { _tag: "Up", steps: 6 });
     expect(top).toMatchObject({ row: 0, topRow: 0 });
   });
 });
@@ -141,6 +166,37 @@ describe("left and right", () => {
     const empty = makeGuide([channel("empty", 1, [])]);
     const cursor = initialCursor(empty, config, NOW);
     expect(step(empty, config, cursor, { _tag: "Right" })).toBe(cursor);
+    expect(step(empty, config, cursor, { _tag: "Left" })).toBe(cursor);
+    const inGuide = run(start(), { _tag: "Down", steps: 2 });
+    expect(run(inGuide, { _tag: "Right" })).toBe(inGuide);
+    expect(run(inGuide, { _tag: "Left" })).toBe(inGuide);
+  });
+
+  it("leaves a gap for the programme after it (right) or before it (left)", () => {
+    const gap = run(start(), { _tag: "Down", steps: 3 });
+    const right = run(gap, { _tag: "Right" });
+    expect(right).toMatchObject({ programme: 1, anchor: at("07:00"), viewStart: at("05:30") });
+    expect(focusedId(right)).toBe("gap@07:00");
+    expect(run(gap, { _tag: "Right", steps: 5 })).toEqual(right);
+    const left = run(gap, { _tag: "Left" });
+    expect(left).toMatchObject({ programme: 0, anchor: at("05:00"), viewStart: at("05:00") });
+    expect(focusedId(left)).toBe("gap@05:00");
+  });
+
+  it("returns the same object from a gap with nothing that way", () => {
+    // A full second channel keeps 06:12 inside the guide's data.
+    const onFirst = (on: Guide) =>
+      step(on, config, initialCursor(on, config, NOW, 1), { _tag: "Up" });
+    const ended = makeGuide([channel("a", 1, [["05:00", "06:00"]]), hourly("b", 2)]);
+    const cursor = onFirst(ended);
+    expect(cursor).toMatchObject({ row: 0, programme: -1, anchor: NOW });
+    expect(step(ended, config, cursor, { _tag: "Right" })).toBe(cursor);
+    expect(step(ended, config, cursor, { _tag: "Left" }).programme).toBe(0);
+    const later = makeGuide([channel("a", 1, [["07:00", "08:00"]]), hourly("b", 2)]);
+    const before = onFirst(later);
+    expect(before).toMatchObject({ row: 0, programme: -1 });
+    expect(step(later, config, before, { _tag: "Left" })).toBe(before);
+    expect(step(later, config, before, { _tag: "Right" }).programme).toBe(0);
   });
 });
 
@@ -158,23 +214,30 @@ describe("page up and down", () => {
     expect(step(guide, config, end, { _tag: "PageDown" })).toBe(end);
   });
 
-  it("walks past rows that air nothing at the anchor", () => {
-    // Seven rows up from row 10 is row 3, which is in its gap, and row 2 has no data.
+  it("lands on rows that air nothing at the anchor, on their empty space", () => {
+    // Seven rows up from row 10 is row 3, which is in its gap.
     const from = run(start(), { _tag: "Channel", number: 205 });
     expect(from.row).toBe(10);
-    expect(run(from, { _tag: "PageUp" }).row).toBe(1);
+    expect(run(from, { _tag: "PageUp" })).toMatchObject({
+      row: 3,
+      programme: -1,
+      anchor: NOW,
+      topRow: 0,
+    });
   });
 
-  it("falls back to the farthest row short of the target when nothing airs beyond it", () => {
+  it("lands on rows without any data", () => {
     const sparse = makeGuide([
       channel("a", 1, [["06:00", "07:00"]]),
       channel("b", 2, [["06:00", "07:00"]]),
       channel("c", 3, []),
       channel("d", 4, []),
     ]);
-    const cursor = initialCursor(sparse, { ...config, pageRows: 3 }, NOW);
-    const paged = step(sparse, { ...config, pageRows: 3 }, cursor, { _tag: "PageDown" });
-    expect(paged.row).toBe(1);
+    const paging = { ...config, pageRows: 3 };
+    const cursor = initialCursor(sparse, paging, NOW);
+    const paged = step(sparse, paging, cursor, { _tag: "PageDown" });
+    expect(paged).toMatchObject({ row: 3, programme: -1, anchor: NOW });
+    expect(step(sparse, paging, paged, { _tag: "PageUp" })).toMatchObject({ row: 0, programme: 0 });
   });
 });
 
@@ -191,10 +254,10 @@ describe("day jumps", () => {
     expect(run(tomorrow, { _tag: "DayBack" })).toEqual(cursor);
   });
 
-  it("settles on the nearest channel with data on the new day", () => {
+  it("stays on a channel with nothing on the new day, on its empty space", () => {
     const tomorrow = run(start(), { _tag: "DayForward" });
-    expect(tomorrow.row).toBe(5);
-    expect(tomorrow.anchor).toBe(NOW + DAY);
+    expect(tomorrow).toMatchObject({ row: 0, programme: -1, anchor: NOW + DAY });
+    expect(run(tomorrow, { _tag: "DayBack" })).toEqual(start());
   });
 
   it("clamps to the end of the data, then stops", () => {
@@ -219,6 +282,16 @@ describe("jump to now", () => {
     expect(isAtNow(guide, config, now, NOW)).toBe(true);
   });
 
+  it("counts a row's empty space at now as now, so Back can leave", () => {
+    const empty = run(start(), { _tag: "Down", steps: 2 });
+    expect(isAtNow(guide, config, empty, NOW)).toBe(true);
+    const away = run(empty, { _tag: "DayForward" });
+    expect(isAtNow(guide, config, away, NOW)).toBe(false);
+    const back = run(away, { _tag: "Now", now: NOW });
+    expect(back).toMatchObject({ row: 2, programme: -1, anchor: NOW });
+    expect(isAtNow(guide, config, back, NOW)).toBe(true);
+  });
+
   it("is false once the focused programme has ended", () => {
     const cursor = start();
     expect(isAtNow(guide, config, cursor, NOW)).toBe(true);
@@ -233,15 +306,15 @@ describe("jump to channel number", () => {
     expect(focusedId(cursor)).toBe("h10@6");
   });
 
-  it("focuses the nearest programme when the channel is in a gap", () => {
+  it("lands on a channel in a gap, on its empty space at the same time", () => {
     const cursor = run(start(), { _tag: "Channel", number: 7 });
-    expect(cursor.row).toBe(3);
-    expect(focusedId(cursor)).toBe("gap@05:00");
-    expect(cursor.anchor).toBe(at("06:00") - 1);
+    expect(cursor).toMatchObject({ row: 3, programme: -1, anchor: NOW });
   });
 
-  it("moves from a channel without data to the nearest one with data", () => {
-    expect(run(start(), { _tag: "Channel", number: 3 }).row).toBe(3);
+  it("lands on the channel typed even without data", () => {
+    const cursor = run(start(), { _tag: "Channel", number: 3 });
+    expect(cursor).toMatchObject({ row: 2, programme: -1, anchor: NOW });
+    expect(focusedCell(guide, cursor)?.channel.id).toBe("empty");
   });
 
   it("takes the next higher number, or the last row", () => {
@@ -261,9 +334,39 @@ describe("relocate", () => {
     expect(moved.anchor).toBe(NOW);
   });
 
+  it("stays on a channel whose programmes went away", () => {
+    const cursor = run(start(), { _tag: "Channel", number: 130 });
+    const refreshed = makeGuide(
+      guide.channels.map((row) => (row.id === "e1" ? { ...row, programmes: [] } : row)),
+    );
+    const moved = relocate(guide, refreshed, config, cursor);
+    expect(moved).toMatchObject({ row: 4, programme: -1, anchor: NOW });
+  });
+
   it("survives the guide emptying out", () => {
     const moved = relocate(guide, makeGuide([]), config, start(10));
     expect(moved).toMatchObject({ row: 0, programme: -1, topRow: 0 });
+  });
+});
+
+describe("emptySpan", () => {
+  it("covers the viewport on a channel without data", () => {
+    const empty = run(start(), { _tag: "Down", steps: 2 });
+    expect(emptySpan(guide, config, empty)).toEqual({ start: at("05:30"), end: at("08:30") });
+  });
+
+  it("covers the gap between programmes, cut to the viewport", () => {
+    const gap = run(start(), { _tag: "Down", steps: 3 });
+    expect(emptySpan(guide, config, gap)).toEqual({ start: at("06:00"), end: at("07:00") });
+    const ended = makeGuide([channel("a", 1, [["05:00", "06:00"]]), hourly("b", 2)]);
+    const after = initialCursor(ended, config, NOW);
+    expect(after.row).toBe(1);
+    const top = step(ended, config, after, { _tag: "Up" });
+    expect(emptySpan(ended, config, top)).toEqual({ start: at("06:00"), end: at("08:30") });
+  });
+
+  it("is undefined while a programme has the focus", () => {
+    expect(emptySpan(guide, config, start())).toBeUndefined();
   });
 });
 
@@ -284,7 +387,7 @@ const brokenInvariants = (on: Guide, settings: GuideConfig, cursor: GuideCursor)
     ["top row too far", cursor.topRow > Math.max(0, on.channels.length - settings.visibleRows)],
     [
       "focused programme not at anchor",
-      programmes.length > 0 && cursor.programme !== programmeIndexAt(programmes, cursor.anchor),
+      cursor.programme !== programmeIndexAt(programmes, cursor.anchor),
     ],
   ];
   return checks.filter(([, broken]) => broken).map(([name]) => name);

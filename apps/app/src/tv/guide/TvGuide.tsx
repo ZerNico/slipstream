@@ -16,6 +16,7 @@ import {
   type GuideCursor,
 } from "./core/index.ts";
 import {
+  ChannelId,
   type ChoiceOption,
   dayKey,
   type ProgrammeId,
@@ -38,7 +39,7 @@ import {
 import { type AppProgramme, cellLabel } from "../../data/guide-data.ts";
 import { useApiQueries, useGuideData } from "../../data/hooks.ts";
 import { householdZone } from "../../data/zone.ts";
-import { playerParams } from "../../player/playback.ts";
+import { channelPlayTarget, playerParams } from "../../player/playback.ts";
 import { choiceTarget, pickProgramme } from "../../player/watch-choice.ts";
 import { useTheme } from "../../theme/theme.ts";
 import { Chip } from "../../ui/Chip.tsx";
@@ -276,7 +277,13 @@ export const TvGuide = () => {
   // programme without one plays its captured range. A started recording asks Resume or From
   // start first, as on the web. Before it starts, OK opens the record options.
   const watch = () => {
-    if (programme === undefined) return;
+    if (focused === undefined) return;
+    if (programme === undefined) {
+      // The row's empty space: the channel live, as OK on an airing programme plays it.
+      const live = channelPlayTarget(ChannelId.make(focused.channel.id), data.recordings, now);
+      if (live !== undefined) router.push({ pathname: "/player", params: playerParams(live) });
+      return;
+    }
     const pick = pickProgramme(programme, data.recordings, now);
     if (pick._tag === "Sheet") setSheetFor(programme);
     else if (pick._tag === "Choose") setChoice({ title: programme.title, choice: pick.choice });
@@ -327,7 +334,7 @@ export const TvGuide = () => {
               {[
                 channel?.name,
                 programme === undefined
-                  ? undefined
+                  ? m.guide_no_info()
                   : f.timeRange(new Date(programme.start), new Date(programme.end)),
               ]
                 .filter((part) => part !== undefined)
@@ -344,7 +351,7 @@ export const TvGuide = () => {
               color: colors.fg,
             }}
           >
-            {(programme?.title ?? m.guide_empty()).toUpperCase()}
+            {(programme?.title ?? channel?.name ?? m.guide_no_info()).toUpperCase()}
           </Text>
           {description === undefined ? null : (
             <Text
@@ -416,7 +423,11 @@ export const TvGuide = () => {
             if (programme !== undefined) setSheetFor(programme);
           }}
           hasTVPreferredFocus={!railOpen}
-          accessibilityLabel={programme === undefined ? m.guide_empty() : cellLabel(programme)}
+          accessibilityLabel={
+            programme === undefined
+              ? [channel?.name, m.guide_no_info()].filter((part) => part !== undefined).join(", ")
+              : cellLabel(programme)
+          }
           style={StyleSheet.absoluteFill}
         >
           <GuideGrid

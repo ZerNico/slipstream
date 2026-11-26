@@ -61,6 +61,8 @@ export const guide = defineArea({
     guide_this_episode: "This episode",
     guide_jump_now: "Now",
     guide_empty: "No guide data yet",
+    // The TV guide's cell on a channel that airs nothing then (OK still watches it live).
+    guide_no_info: "No guide information",
     guide_record_failed: "Couldn't schedule it.",
     guide_skip: "Skip to the guide",
 
@@ -220,6 +222,7 @@ export const guide = defineArea({
     guide_this_episode: "Diese Folge",
     guide_jump_now: "Jetzt",
     guide_empty: "Noch keine Programmdaten",
+    guide_no_info: "Keine Programminformationen",
     guide_record_failed: "Konnte nicht geplant werden.",
     guide_skip: "Zum Programm springen",
 

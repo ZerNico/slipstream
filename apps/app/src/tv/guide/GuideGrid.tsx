@@ -1,4 +1,5 @@
 import {
+  emptySpan,
   guideWindow,
   type Guide,
   type GuideConfig,
@@ -7,7 +8,7 @@ import {
   type WindowRow,
 } from "./core/index.ts";
 import { type GuideDay, MINUTE, pendingBlocks } from "@slipstream/domain";
-import { formatters } from "@slipstream/i18n";
+import { formatters, m } from "@slipstream/i18n";
 import { useEffect, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Animated, {
@@ -165,6 +166,61 @@ const Cell = ({ cell, layout, origin, viewStart, now, theme }: CellProps) => {
   );
 };
 
+/**
+ * The focused cell on a row's empty space (a channel without guide data, or a gap in it): drawn
+ * like a focused programme across the free time in view, so OK has something to watch live.
+ */
+const EmptyCell = ({
+  span,
+  row,
+  layout,
+  origin,
+  viewStart,
+  theme,
+}: {
+  readonly span: { readonly start: number; readonly end: number };
+  readonly row: number;
+  readonly layout: GuideLayout;
+  readonly origin: number;
+  readonly viewStart: number;
+  readonly theme: Theme;
+}) => {
+  const tokens = theme.tokens.components.guideCell;
+  const { em } = layout;
+  const radius = 0.5 * em;
+  const clippedStart = span.start <= viewStart;
+  return (
+    <View
+      style={{
+        position: "absolute",
+        top: row * layout.rowHeight + 0.3 * em,
+        height: layout.rowHeight - 0.6 * em,
+        left: (span.start - origin) * layout.pxPerMs,
+        width: Math.max(
+          layout.focusMinWidth,
+          (span.end - span.start) * layout.pxPerMs - layout.gap,
+        ),
+        backgroundColor: tokens.focusBg,
+        borderRadius: radius,
+        borderTopLeftRadius: clippedStart ? 0 : radius,
+        borderBottomLeftRadius: clippedStart ? 0 : radius,
+        paddingVertical: 0.4 * em,
+        paddingHorizontal: 0.75 * em,
+        justifyContent: "center",
+        overflow: "hidden",
+        zIndex: 3,
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        style={{ fontFamily: theme.fonts.fUiSemiBold, fontSize: 1.1 * em, color: tokens.focusFg }}
+      >
+        {m.guide_no_info()}
+      </Text>
+    </View>
+  );
+};
+
 interface RowProps {
   readonly row: WindowRow<AppProgramme>;
   readonly layout: GuideLayout;
@@ -233,6 +289,7 @@ export const GuideGrid = ({
   const { em } = layout;
   const origin = guide.start;
   const window = useMemo(() => guideWindow(guide, config, cursor), [guide, config, cursor]);
+  const empty = emptySpan(guide, config, cursor);
   // Measured from the origin like the cells, so a day's programmes land where its blocks were.
   const loading = pendingBlocks({
     days: pending,
@@ -409,6 +466,16 @@ export const GuideGrid = ({
                 theme={theme}
               />
             ))}
+            {empty === undefined ? null : (
+              <EmptyCell
+                span={empty}
+                row={cursor.row}
+                layout={layout}
+                origin={origin}
+                viewStart={cursor.viewStart}
+                theme={theme}
+              />
+            )}
             {loading.length === 0 ? null : (
               <Skeleton style={StyleSheet.absoluteFill}>
                 {window.rows.flatMap((row) =>
