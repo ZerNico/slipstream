@@ -42,6 +42,7 @@ import Animated, { useAnimatedStyle, useDerivedValue, withTiming } from "react-n
 import { SchemeOverride, useTheme } from "../theme/theme.ts";
 import Svg, { Defs, LinearGradient, Rect, Stop } from "react-native-svg";
 import { CaptureTimeline } from "../ui/CaptureTimeline.tsx";
+import { PhoneScrub } from "./PhoneScrub.tsx";
 import { FocusButton } from "../ui/FocusButton.tsx";
 import { StatusScreen } from "../ui/StatusScreen.tsx";
 import { useToast } from "../ui/toast.ts";
@@ -79,9 +80,9 @@ import {
   recordedText,
   recordingShown,
 } from "./record-now.ts";
-import { nowPlaying, playingSubject } from "./now-playing.ts";
+import { nowPlaying, playingMetadata, playingSubject } from "./now-playing.ts";
 import { PictureGestures } from "./PictureGestures.tsx";
-import { pauseAway, PIP_SETTLE_MS, pipArmed } from "./pip.ts";
+import { pauseOnPipExit, pipArmed, resumeAfterPipExit } from "./pip.ts";
 import { ControlsRow, TimelineFocus, TopBar } from "./PlayerControls.tsx";
 import { savePrefs, usePlayerPrefs } from "./player-prefs.ts";
 import { makeProgressSaver, progressAt, type ProgressSaver } from "./progress.ts";
@@ -197,7 +198,8 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const channelOfTarget =
     target?._tag === "Recording" ? recording.data?.channelId : target?.channelId;
   const channels = useQuery({ ...queries.channels(), enabled: channelOfTarget !== undefined });
-  const channelName = channels.data?.find((channel) => channel.id === channelOfTarget)?.name;
+  const playingChannel = channels.data?.find((candidate) => candidate.id === channelOfTarget);
+  const channelName = playingChannel?.name;
   // Record: only for a profile that may record; it needs the library (is it recorded already?)
   // and the channel's programmes around the playhead, back as far as the pause buffer reaches.
   const profile = useQuery(queries.myProfile());
@@ -218,6 +220,8 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
 
   const video = useRef<VideoRef>(null);
   const [progress, setProgress] = useState<PlayerProgress | undefined>(undefined);
+  // Where a finger dragging the phone's timeline points, 0 to 1; undefined when none does.
+  const [drag, setDrag] = useState<number | undefined>(undefined);
   const [paused, setPaused] = useState(false);
   const pausedRef = useRef(paused);
   useEffect(() => {
@@ -227,10 +231,6 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
   const [holding, setHolding] = useState(false);
   // In picture-in-picture only the picture shows: no controls, no hints.
   const [inPip, setInPip] = useState(false);
-  const inPipRef = useRef(inPip);
-  useEffect(() => {
-    inPipRef.current = inPip;
-  }, [inPip]);
   const [buffering, setBuffering] = useState(true);
   const [failed, setFailed] = useState(false);
   const [speed, setSpeed] = useState(1);
@@ -441,30 +441,26 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
     return () => subscription.remove();
   }, [isTV, apply]);
 
-  // Picture-in-picture plays on (`pip.ts`); in the background without its window, pause.
+  // Picture-in-picture plays on (`pip.ts`): closing the window pauses; expanding it plays on.
+  const pipPausedAt = useRef<number | undefined>(undefined);
+  const onPipChange = useCallback((active: boolean) => {
+    setInPip(active);
+    if (active || !pauseOnPipExit(AppState.currentState)) return;
+    pipPausedAt.current = Date.now();
+    // In the background a changed prop waits for the next frame, which never comes: tell the
+    // native player directly, and keep the state in step.
+    video.current?.pause();
+    setPaused(true);
+  }, []);
   useEffect(() => {
     if (isTV) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const check = () => {
-      if (timer !== undefined) clearTimeout(timer);
-      timer = setTimeout(() => {
-        if (pauseAway(AppState.currentState, inPipRef.current)) setPaused(true);
-      }, PIP_SETTLE_MS);
-    };
-    const subscription = AppState.addEventListener("change", check);
-    return () => {
-      subscription.remove();
-      if (timer !== undefined) clearTimeout(timer);
-    };
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      if (resumeAfterPipExit(pipPausedAt.current, Date.now())) setPaused(false);
+      pipPausedAt.current = undefined;
+    });
+    return () => subscription.remove();
   }, [isTV]);
-  useEffect(() => {
-    // The window closed while the app stays in the background: pause, once it has settled.
-    if (isTV || inPip) return;
-    const timer = setTimeout(() => {
-      if (pauseAway(AppState.currentState, inPipRef.current)) setPaused(true);
-    }, PIP_SETTLE_MS);
-    return () => clearTimeout(timer);
-  }, [isTV, inPip]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -591,6 +587,14 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
     }),
     channelName,
   );
+  // The phone's media notification and lock screen name what plays. Metadata is not part of the
+  // native player's source identity, so a new title never restarts the stream.
+  const metadata = isTV ? undefined : playingMetadata(playing, playingChannel);
+  const source = {
+    uri: session.session.uri,
+    type: "m3u8",
+    ...(metadata === undefined ? {} : { metadata }),
+  };
   const stats = prefs.stats
     ? statsRows({
         videoSize,
@@ -626,10 +630,19 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
       ? progress.seekableDuration
       : 1;
   const played = progress === undefined ? 0 : progress.currentTime / seekable;
+  // A finger dragging the phone's timeline wins over the remote's scrub.
   const preview =
-    controls.scrub === 0 || progress === undefined
+    drag !== undefined
+      ? drag
+      : controls.scrub === 0 || progress === undefined
+        ? undefined
+        : (progress.currentTime + controls.scrub) / seekable;
+  const shownTime =
+    progress === undefined
       ? undefined
-      : (progress.currentTime + controls.scrub) / seekable;
+      : drag !== undefined
+        ? drag * seekable
+        : progress.currentTime + controls.scrub;
   // TV mounts the controls only while they show (its focus lives in them); phone fades them.
   const showOverlay = isTV ? chromeShown : !inPip;
   const size = isTV ? 1.05 : 0.85;
@@ -652,7 +665,8 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
     <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}>
       <Video
         ref={video}
-        source={{ uri: session.session.uri, type: "m3u8" }}
+        source={source}
+        showNotificationControls={!isTV}
         style={StyleSheet.absoluteFill}
         resizeMode={prefs.fit === "fill" ? "cover" : "contain"}
         // A TextureView layers like any other view; the default SurfaceView draws over the
@@ -667,7 +681,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
         // keeps playing there (`pip.ts`).
         enterPictureInPictureOnLeave={pipArmed(isTV, paused)}
         playInBackground={pipArmed(isTV, paused)}
-        onPictureInPictureStatusChanged={(event) => setInPip(event.isActive)}
+        onPictureInPictureStatusChanged={(event) => onPipChange(event.isActive)}
         reportBandwidth={prefs.stats}
         onBandwidthUpdate={(event) => setNetworkBitrate(event.bitrate)}
         onVideoTracks={(event) => setVideoTracks(event.videoTracks)}
@@ -799,14 +813,34 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
               gap: 0.8 * em,
             }}
           >
-            <TimelineFocus onFocus={() => onFocusPart("timeline")}>
-              <CaptureTimeline
+            {isTV ? (
+              <TimelineFocus onFocus={() => onFocusPart("timeline")}>
+                <CaptureTimeline
+                  width={width - 2 * pad}
+                  focused={controls.mode === "timeline"}
+                  focusable
+                  marks={{ captured: 1, played, preview, ticks: [] }}
+                />
+              </TimelineFocus>
+            ) : (
+              <PhoneScrub
                 width={width - 2 * pad}
-                focused={isTV && controls.mode === "timeline"}
-                focusable={isTV}
-                marks={{ captured: 1, played, preview, ticks: [], live: !finished }}
-              />
-            </TimelineFocus>
+                onDrag={(fraction) => {
+                  setDrag(fraction);
+                  setControls((current) => keepControls(current, Date.now()));
+                }}
+                onSeek={(fraction) => {
+                  if (progress !== undefined) seek(fraction * seekable);
+                  setControls((current) => keepControls(current, Date.now()));
+                }}
+              >
+                <CaptureTimeline
+                  width={width - 2 * pad}
+                  grabbed={drag !== undefined}
+                  marks={{ captured: 1, played, preview, ticks: [] }}
+                />
+              </PhoneScrub>
+            )}
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Text
                 style={{
@@ -817,7 +851,7 @@ const PlayerBody = ({ onRetry }: { readonly onRetry: () => void }) => {
                   fontVariant: ["tabular-nums"],
                 }}
               >
-                {progress === undefined ? "" : f.clock(progress.currentTime + controls.scrub)}
+                {shownTime === undefined ? "" : f.clock(shownTime)}
               </Text>
               <Text
                 style={{

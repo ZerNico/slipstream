@@ -11,15 +11,13 @@ export interface TimelineMarks {
   readonly preview?: number | undefined;
   /** Programme start and end ticks. */
   readonly ticks: readonly number[];
-  /** Whether the captured end is a live edge (the red dot); a finished recording has none. */
-  readonly live?: boolean | undefined;
 }
 
 const clamp = (value: number) => Math.min(1, Math.max(0, Number.isFinite(value) ? value : 0));
 
 /**
  * The capture timeline from the design doc (`.tl`): captured range, played range, programme
- * ticks, the amber playhead slash and the live edge dot. `focused` grows the bar and rings it in
+ * ticks, and the amber playhead knob. Live state is the read-out's and the Watch live button's, not a dot. `focused` grows the bar and rings it in
  * the focus colour, the TV player's timeline-focused state. `focusable` keeps the room the
  * focused bar and its ring take, so focus coming and going never moves what is around it.
  * `width` is in dp.
@@ -29,11 +27,14 @@ export const CaptureTimeline = ({
   width,
   focused = false,
   focusable = false,
+  grabbed = false,
 }: {
   readonly marks: TimelineMarks;
   readonly width: number;
   readonly focused?: boolean;
   readonly focusable?: boolean;
+  /** A finger is dragging the playhead (phone): the knob grows, as the web's does. */
+  readonly grabbed?: boolean;
 }) => {
   const { colors, tokens, em } = useTheme();
   const timeline = tokens.components.timeline;
@@ -47,13 +48,9 @@ export const CaptureTimeline = ({
   const radius = height / 2;
   const captured = clamp(marks.captured);
   const head = marks.preview ?? marks.played;
-  // The live dot stays on the bar: at the edge, but never hanging off its end.
-  const edge = Math.min(0.95 * em, height + 0.35 * em);
-  const edgeLeft = Math.min(Math.max(0, width * captured - edge / 2), width - edge);
-  // The playhead is the mark's slash, taller than the bar, outlined so it reads over the picture.
-  const headWidth = (focused ? 0.55 : 0.45) * em;
-  const headHeight = height + (focused ? 1.3 : 1.0) * em;
-  const headOutline = 0.12 * em;
+  // The playhead is a round knob, as on the web's timeline (`.tl-knob`); bigger while dragged or
+  // focused.
+  const knob = (focused || grabbed ? 1.3 : 1.0) * em;
   return (
     <View style={{ width, height: box, justifyContent: "center" }}>
       <View style={{ width, height }}>
@@ -117,44 +114,19 @@ export const CaptureTimeline = ({
             }}
           />
         ))}
-        {marks.live === false ? null : (
-          <View
-            style={{
-              position: "absolute",
-              left: edgeLeft,
-              top: (height - edge) / 2,
-              width: edge,
-              height: edge,
-              borderRadius: edge / 2,
-              backgroundColor: timeline.live,
-            }}
-          />
-        )}
         {head === undefined ? null : (
           <View
             style={{
               position: "absolute",
-              left: width * clamp(head) - headWidth / 2 - headOutline,
-              top: (height - headHeight) / 2 - headOutline,
-              width: headWidth + 2 * headOutline,
-              height: headHeight + 2 * headOutline,
-              borderRadius: 0.15 * em,
-              // A ring in the page colour keeps the slash apart from the bar and the picture.
-              backgroundColor: colors.bg,
-              padding: headOutline,
-              transform: [{ skewX: "-12deg" }],
+              left: width * clamp(head) - knob / 2,
+              top: (height - knob) / 2,
+              width: knob,
+              height: knob,
+              borderRadius: knob / 2,
+              backgroundColor: timeline.playhead,
+              boxShadow: [{ offsetX: 0, offsetY: 1, blurRadius: 4, color: colors.scrim }],
             }}
-          >
-            <View
-              style={{
-                flex: 1,
-                borderRadius: 0.1 * em,
-                backgroundColor: timeline.playhead,
-                borderWidth: 1.5,
-                borderColor: tokens.colors.brand.edge,
-              }}
-            />
-          </View>
+          />
         )}
       </View>
     </View>

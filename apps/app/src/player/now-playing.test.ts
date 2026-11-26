@@ -2,7 +2,7 @@ import type { ChannelId, RecordingId } from "@slipstream/domain";
 import { formatters } from "@slipstream/i18n";
 import { describe, expect, it } from "vitest";
 import { programme } from "../../tests/fixtures.ts";
-import { nowPlaying, playingSubject } from "./now-playing.ts";
+import { nowPlaying, playingMetadata, playingSubject } from "./now-playing.ts";
 import type { PlayTarget } from "./playback.ts";
 
 const at = (hours: number, minutes: number) => Date.UTC(2026, 10, 22, hours, minutes);
@@ -73,5 +73,33 @@ describe("nowPlaying", () => {
   it("names the channel when the guide has nothing at the playhead", () => {
     expect(nowPlaying(undefined, "Das Erste")).toEqual({ title: "Das Erste", line: "" });
     expect(nowPlaying(undefined, undefined)).toEqual({ title: "", line: "" });
+  });
+});
+
+describe("playingMetadata", () => {
+  const playing = { title: "Tagesschau", line: "Das Erste · 20:00–20:15" };
+
+  it("names the programme, its line and the channel, with the channel's logo", () => {
+    expect(
+      playingMetadata(playing, { name: "Das Erste", logoUrl: "https://logos.example/ard.png" }),
+    ).toEqual({
+      title: "Tagesschau",
+      subtitle: "Das Erste · 20:00–20:15",
+      artist: "Das Erste",
+      imageUri: "https://logos.example/ard.png",
+    });
+  });
+
+  it("leaves out an SVG logo, an empty line and an unknown channel", () => {
+    expect(
+      playingMetadata(
+        { title: "Tagesschau", line: "" },
+        { name: "Das Erste", logoUrl: "https://logos.example/ard.svg?v=2" },
+      ),
+    ).toEqual({ title: "Tagesschau", artist: "Das Erste" });
+    expect(playingMetadata(playing, undefined)).toEqual({
+      title: "Tagesschau",
+      subtitle: "Das Erste · 20:00–20:15",
+    });
   });
 });

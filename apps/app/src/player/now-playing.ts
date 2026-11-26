@@ -62,3 +62,27 @@ export const nowPlaying = (
   );
   return { title: subject.title, line: parts.join(" · ") };
 };
+
+/** What the phone's media notification and lock screen show for the stream. */
+export interface PlayingMetadata {
+  readonly title: string;
+  readonly subtitle?: string;
+  readonly artist?: string;
+  readonly imageUri?: string;
+}
+
+/**
+ * The media notification's words and picture: what plays, its line, the channel, and the
+ * channel's logo unless it is an SVG, which a notification cannot draw.
+ */
+export const playingMetadata = (
+  playing: NowPlaying,
+  channel: { readonly name: string; readonly logoUrl?: string | undefined } | undefined,
+): PlayingMetadata => ({
+  title: playing.title,
+  ...(playing.line === "" ? {} : { subtitle: playing.line }),
+  ...(channel === undefined ? {} : { artist: channel.name }),
+  ...(channel?.logoUrl === undefined || /\.svg(?:$|[?#])/iu.test(channel.logoUrl)
+    ? {}
+    : { imageUri: channel.logoUrl }),
+});

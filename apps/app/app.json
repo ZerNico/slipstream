@@ -56,7 +56,7 @@
       [
         "react-native-video",
         {
-          "enableNotificationControls": false,
+          "enableNotificationControls": true,
           "enableAndroidPictureInPicture": true
         }
       ],

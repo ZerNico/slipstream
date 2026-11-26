@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  scrubFraction,
   addSkip,
   backPress,
   focusPart,
@@ -237,5 +238,15 @@ describe("one press, one effect", () => {
     expect(repeatsWhileHeld(timeline, "select")).toBe(false);
     expect(repeatsWhileHeld(shown, "right")).toBe(false);
     expect(repeatsWhileHeld(initialControls, "left")).toBe(false);
+  });
+});
+
+describe("scrubFraction", () => {
+  it("is where the finger points along the bar, held to its ends", () => {
+    expect(scrubFraction(50, 200)).toBe(0.25);
+    expect(scrubFraction(-10, 200)).toBe(0);
+    expect(scrubFraction(260, 200)).toBe(1);
+    expect(scrubFraction(10, 0)).toBe(0);
+    expect(scrubFraction(Number.NaN, 200)).toBe(0);
   });
 });

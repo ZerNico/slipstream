@@ -268,3 +268,7 @@ export const playerKeyFor = (eventType: string): PlayerKey | undefined => {
       return undefined;
   }
 };
+
+/** Where a finger at `x` on a timeline `width` wide points, 0 to 1 (outside the bar: its end). */
+export const scrubFraction = (x: number, width: number): number =>
+  width <= 0 || !Number.isFinite(x) ? 0 : Math.min(1, Math.max(0, x / width));

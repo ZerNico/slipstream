@@ -55,9 +55,12 @@ export const FocusButton = ({
   iconOnly = false,
   selected,
 }: FocusButtonProps) => {
-  const { colors, tokens, em, fonts, motion } = useTheme();
+  const { colors, tokens, em, fonts, motion, isTV } = useTheme();
   const button = tokens.components.button;
-  const [focused, setFocused] = useState(false);
+  // Only a TV shows focus: on a phone Android can still focus a button (after a sheet closes,
+  // say), and an amber button nobody pointed at reads as pressed.
+  const [focusedRaw, setFocused] = useState(false);
+  const focused = isTV && focusedRaw;
   const progress = useDerivedValue(() =>
     withTiming(focused ? 1 : 0, {
       duration: motion.tFocus,

@@ -52,7 +52,18 @@ const PhoneSheet = ({ label, onClose, children }: SheetProps) => {
     });
     return () => subscription.remove();
   }, []);
-  const dismissed = useCallback(() => onClose(), [onClose]);
+  // The modal also reports a dismiss when it unmounts. A sheet that unmounts because its owner
+  // swapped it for another (Watch → Resume or From start) must not close that owner as well.
+  const unmounted = useRef(false);
+  useEffect(() => {
+    unmounted.current = false;
+    return () => {
+      unmounted.current = true;
+    };
+  }, []);
+  const dismissed = useCallback(() => {
+    if (!unmounted.current) onClose();
+  }, [onClose]);
   return (
     <BottomSheetModal
       ref={ref}
