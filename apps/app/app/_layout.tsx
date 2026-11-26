@@ -1,5 +1,6 @@
 // What Hermes lacks of ES2023, before any module that uses it.
 import "../src/polyfills.ts";
+import "../src/tv/touch-sound.ts";
 // Per-weight entry points, so only these font files end up in the bundle.
 import { BigShoulders_700Bold } from "@expo-google-fonts/big-shoulders/700Bold";
 import { BigShoulders_800ExtraBold } from "@expo-google-fonts/big-shoulders/800ExtraBold";
