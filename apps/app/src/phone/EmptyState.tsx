@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Text, View } from "react-native";
 import { useTheme } from "../theme/theme.ts";
 
@@ -9,9 +10,12 @@ import { useTheme } from "../theme/theme.ts";
 export const EmptyState = ({
   title,
   body,
+  action,
 }: {
   readonly title: string;
   readonly body?: string | undefined;
+  /** The way on from here (a button), under the words. */
+  readonly action?: ReactNode;
 }) => {
   const { colors, em, fonts } = useTheme();
   return (
@@ -48,6 +52,7 @@ export const EmptyState = ({
           {body}
         </Text>
       )}
+      {action === undefined ? null : <View style={{ marginTop: 0.6 * em }}>{action}</View>}
     </View>
   );
 };

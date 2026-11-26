@@ -89,7 +89,8 @@ export const TvSkeleton = ({
   if (fullScreen) {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.bg }]}>
-        <Skeleton>{children}</Skeleton>
+        {/* The bones place themselves in the screen's frame, not in a wrapper of no height. */}
+        <Skeleton style={StyleSheet.absoluteFill}>{children}</Skeleton>
       </View>
     );
   }

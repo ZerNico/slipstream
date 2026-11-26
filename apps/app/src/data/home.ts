@@ -1,11 +1,14 @@
+import type { NowNext } from "@slipstream/api";
 import {
   type Channel,
   epochMs,
   isRecorded,
   padRange,
   type PlaybackState,
+  type Programme,
   type Recording,
   type RecordingId,
+  visibleChannels,
 } from "@slipstream/domain";
 
 /** Why the hero shows this recording: it is running, it is next, or it is the latest. */
@@ -39,10 +42,19 @@ export interface ContinueItem {
   readonly progress: number;
 }
 
+/** A card in "On now": a channel and what it airs right now. */
+export interface OnNowItem {
+  readonly channel: Channel;
+  readonly programme: Programme;
+  /** How far through the programme is, 0 to 1. */
+  readonly progress: number;
+}
+
 /** Everything the home screens show. */
 export interface HomeModel {
   readonly hero: Hero | undefined;
   readonly continueWatching: readonly ContinueItem[];
+  readonly onNow: readonly OnNowItem[];
 }
 
 /** The recorded window in epoch ms: the programme widened by its extra time (`padRange`). */
@@ -121,6 +133,27 @@ export const continueItems = (
     });
 };
 
+/**
+ * "On now", as the web's Home has it: what airs now on each visible channel, in channel order;
+ * a channel with nothing on air right now is left out.
+ */
+export const onAirNow = (
+  channels: readonly Channel[],
+  nowNext: readonly NowNext[],
+  now: number,
+): readonly OnNowItem[] => {
+  const airing = new Map(nowNext.map((entry) => [entry.channelId as string, entry.now]));
+  return visibleChannels(channels).flatMap((channel) => {
+    const programme = airing.get(channel.id);
+    if (programme === undefined) return [];
+    const start = epochMs(programme.start);
+    const end = epochMs(programme.end);
+    return start <= now && end > now
+      ? [{ channel, programme, progress: (now - start) / (end - start) }]
+      : [];
+  });
+};
+
 /** Channel id to name, for labels. */
 export const channelNames = (channels: readonly Channel[]): ReadonlyMap<string, string> =>
   new Map(channels.map((channel) => [channel.id as string, channel.name]));
@@ -130,11 +163,13 @@ export const homeModel = (
   recordings: readonly Recording[],
   channels: readonly Channel[],
   states: readonly PlaybackState[],
+  nowNext: readonly NowNext[],
   now: number,
 ): HomeModel => {
   const names = channelNames(channels);
   return {
     hero: pickHero(recordings, names, now),
     continueWatching: continueItems(states, recordings, names),
+    onNow: onAirNow(channels, nowNext, now),
   };
 };

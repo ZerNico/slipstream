@@ -2,8 +2,8 @@ import { HOUR, MINUTE, PlaybackState } from "@slipstream/domain";
 
 import { Schema } from "effect";
 import { describe, expect, it } from "vitest";
-import { channel, recording } from "../../tests/fixtures.ts";
-import { homeModel, pickHero } from "./home.ts";
+import { channel, programme, recording } from "../../tests/fixtures.ts";
+import { homeModel, onAirNow, pickHero } from "./home.ts";
 
 const T = Date.UTC(2026, 10, 22, 5);
 const names = new Map([["f1", "Sky Sport F1"]]);
@@ -85,6 +85,7 @@ describe("homeModel", () => {
         state("done", 60, T - 1, true),
         state("gone", 5, T),
       ],
+      [],
       T,
     );
     expect(
@@ -93,5 +94,37 @@ describe("homeModel", () => {
       ["quali", 45 * 60, 0.25],
       ["pate", 90 * 60, 0.25],
     ]);
+  });
+});
+
+describe("onAirNow", () => {
+  const f1 = channel("f1", "Sky Sport F1", 106);
+  const ard = channel("ard", "Das Erste", 1);
+  const hidden = channel("old", "Old", 50, true);
+  const race = programme("race", "f1", T - HOUR, T + HOUR, "Race");
+  const news = programme("news", "ard", T - 15 * MINUTE, T + 15 * MINUTE, "News");
+  const later = programme("later", "old", T - HOUR, T + HOUR, "Later");
+
+  it("lists what airs now on each visible channel, in channel order, with its progress", () => {
+    const items = onAirNow(
+      [f1, ard, hidden],
+      [
+        { channelId: f1.id, now: race },
+        { channelId: ard.id, now: news },
+        { channelId: hidden.id, now: later },
+      ],
+      T,
+    );
+    expect(items.map((item) => [item.channel.id, item.programme.id, item.progress])).toEqual([
+      ["ard", "news", 0.5],
+      ["f1", "race", 0.5],
+    ]);
+  });
+
+  it("leaves out channels with nothing on air now", () => {
+    expect(
+      onAirNow([f1, ard], [{ channelId: f1.id, now: race }, { channelId: ard.id }], T + 2 * HOUR),
+    ).toEqual([]);
+    expect(onAirNow([f1], [], T)).toEqual([]);
   });
 });

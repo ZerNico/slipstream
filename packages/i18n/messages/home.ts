@@ -106,7 +106,6 @@ export const home = defineArea({
       `Scheduled: ${p.title}, ${p.when}`,
     // Templates (onboarding).
     home_error_title: "Home couldn't load",
-    home_nothing_recording: "Nothing is recording right now",
     home_next_recording: (p: { start: Date }, f: F) => `Next recording · ${f.weekdayTime(p.start)}`,
   },
   de: {
@@ -184,7 +183,6 @@ export const home = defineArea({
     home_card_recording_label: (p) => `Nimmt gerade auf: ${p.channel}, ${p.title}`,
     home_card_scheduled_label: (p) => `Geplant: ${p.title}, ${p.when}`,
     home_error_title: "Home konnte nicht laden",
-    home_nothing_recording: "Gerade läuft keine Aufnahme",
     home_next_recording: (p, f) => `Nächste Aufnahme · ${f.weekdayTime(p.start)}`,
   },
   samples: {

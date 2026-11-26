@@ -2,7 +2,7 @@ import { type QueryObserverResult, useQueries, useQuery } from "@tanstack/react-
 import { useMemo, useState } from "react";
 import { apiQueries } from "../api/queries.ts";
 import { useApiRuntime } from "../session/session-context.ts";
-import { buildGuide } from "./guide-data.ts";
+import { buildGuide, guideReady } from "./guide-data.ts";
 import { channelNames, homeModel } from "./home.ts";
 import { todoItems } from "./recording-text.ts";
 import {
@@ -30,15 +30,24 @@ export const useHome = (now: number) => {
   const recordings = useQuery(queries.recordings());
   const channels = useQuery(queries.channels());
   const positions = useQuery(queries.continueWatching());
+  const nowNext = useQuery(queries.nowNext());
   const model = useMemo(
-    () => homeModel(recordings.data ?? [], channels.data ?? [], positions.data ?? [], now),
-    [recordings.data, channels.data, positions.data, now],
+    () =>
+      homeModel(
+        recordings.data ?? [],
+        channels.data ?? [],
+        positions.data ?? [],
+        nowNext.data ?? [],
+        now,
+      ),
+    [recordings.data, channels.data, positions.data, nowNext.data, now],
   );
   return {
     model,
     /** The library, for what "Watch live" opens on a channel being recorded. */
     recordings: recordings.data ?? [],
-    loading: recordings.isPending || channels.isPending,
+    // On now waits too, so its row arrives with the rest instead of pushing in under it.
+    loading: recordings.isPending || channels.isPending || nowNext.isPending,
     error: recordings.error ?? channels.error,
     retry: () => {
       void recordings.refetch();
@@ -124,6 +133,16 @@ export const useGuideWindow = (days: readonly GuideDay[], focus: string) => {
   const loaded = useGuideDays(days, focus);
   const recordings = useQuery(queries.recordings());
   const conflicts = useQuery(queries.conflicts(asked.from, asked.to));
+  // Ready once the day in view is in, and from then on (React's "adjust state while rendering").
+  const [settled, setSettled] = useState(false);
+  const ready = guideReady({
+    marksPending: channels.isPending || recordings.isPending || conflicts.isPending,
+    loaded: loaded.loaded,
+    focus,
+    failed: loaded.error !== null,
+    settled,
+  });
+  if (ready && !settled) setSettled(true);
   return {
     channels: channels.data ?? [],
     programmes: loaded.programmes,
@@ -132,8 +151,7 @@ export const useGuideWindow = (days: readonly GuideDay[], focus: string) => {
     pending: loaded.pending,
     recordings: recordings.data ?? [],
     conflicts: conflicts.data ?? [],
-    loading:
-      channels.isPending || loaded.loaded.size === 0 || recordings.isPending || conflicts.isPending,
+    loading: !ready,
     error: channels.error ?? loaded.error ?? recordings.error,
     retry: () => {
       void channels.refetch();
@@ -145,7 +163,7 @@ export const useGuideWindow = (days: readonly GuideDay[], focus: string) => {
 };
 
 /** The TV guide's days: yesterday too (late evening stays in reach after midnight). */
-const tvGuideDays = (now: number, zone: string): readonly GuideDay[] => [
+export const tvGuideDays = (now: number, zone: string): readonly GuideDay[] => [
   dayOf(now - DAY, now, zone),
   ...guideDays(now, zone),
 ];
@@ -167,6 +185,36 @@ export const useGuideData = (now: number, focus: string | undefined) => {
     [window.channels, window.programmes, window.repeats, window.recordings, window.conflicts],
   );
   return { ...window, ...data };
+};
+
+/** Keeps a query's answer in the cache without re-rendering the screen that keeps it. */
+const quiet = { notifyOnChangeProps: [] };
+
+/**
+ * Loads what a guide opens with while another screen shows (Home): the channels, the days around
+ * today, the recordings and conflicts that mark them, and with `extent` the grid's width (the
+ * phone's). The guide then draws at once instead of starting from its skeleton. The queries stay
+ * observed, so live events refresh them, and never re-render the caller.
+ */
+export const useWarmGuide = (
+  now: number,
+  pick: (now: number, zone: string) => readonly GuideDay[],
+  extent = false,
+) => {
+  const queries = useApiQueries();
+  const { days, today } = useHouseholdDays(now, pick);
+  const asked = requestWindow(days);
+  const around = daysAround(days, today);
+  useQuery({ ...queries.channels(), ...quiet });
+  useQuery({ ...queries.recordings(), ...quiet });
+  useQuery({ ...queries.conflicts(asked.from, asked.to), ...quiet });
+  useQuery({ ...queries.guideExtent(), ...quiet, enabled: extent });
+  useQueries({
+    queries: around.map((day) => ({ ...queries.guide(day.start, day.end), ...quiet })),
+  });
+  useQueries({
+    queries: around.map((day) => ({ ...queries.guideRepeats(day.start, day.end), ...quiet })),
+  });
 };
 
 /** How far conflicts are asked for: the rest of today and the two weeks after it. */

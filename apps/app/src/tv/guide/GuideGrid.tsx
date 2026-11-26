@@ -6,6 +6,7 @@ import {
   type WindowCell,
   type WindowRow,
 } from "./core/index.ts";
+import { type GuideDay, MINUTE, pendingBlocks } from "@slipstream/domain";
 import { formatters } from "@slipstream/i18n";
 import { useEffect, useMemo } from "react";
 import { StyleSheet, Text, View } from "react-native";
@@ -18,7 +19,7 @@ import Animated, {
 import Svg, { Path } from "react-native-svg";
 import type { AppProgramme, ChannelInfo } from "../../data/guide-data.ts";
 import { useTheme, type Theme } from "../../theme/theme.ts";
-import { Bone } from "../../ui/Skeleton.tsx";
+import { Bone, Skeleton } from "../../ui/Skeleton.tsx";
 import { cellRect, showsTimeLine, type GuideLayout } from "./layout.ts";
 
 interface CellProps {
@@ -206,19 +207,40 @@ export interface GuideGridProps {
   readonly cursor: GuideCursor;
   readonly layout: GuideLayout;
   readonly now: number;
+  /** The days not loaded yet: skeleton cells stand in their stretch, never an empty track. */
+  readonly pending: readonly GuideDay[];
 }
+
+/** One skeleton cell where a day still loads: an hour and a half, as on the phone. */
+const PENDING_BLOCK_MS = 90 * MINUTE;
 
 /**
  * The guide grid below the header: ruler, channel column, programme tracks and the now line.
  * Only the window around the viewport is rendered; the whole track is translated on the UI
  * thread so cursor moves scroll smoothly without re-laying out cells.
  */
-export const GuideGrid = ({ guide, info, config, cursor, layout, now }: GuideGridProps) => {
+export const GuideGrid = ({
+  guide,
+  info,
+  config,
+  cursor,
+  layout,
+  now,
+  pending,
+}: GuideGridProps) => {
   const theme = useTheme();
   const { colors, fonts, motion } = theme;
   const { em } = layout;
   const origin = guide.start;
   const window = useMemo(() => guideWindow(guide, config, cursor), [guide, config, cursor]);
+  // Measured from the origin like the cells, so a day's programmes land where its blocks were.
+  const loading = pendingBlocks({
+    days: pending,
+    window: { from: origin, to: Math.max(guide.end, ...pending.map((day) => day.end)) },
+    ppm: layout.pxPerMs * MINUTE,
+    near: { from: window.from, to: window.to },
+    blockMs: PENDING_BLOCK_MS,
+  });
   const scrollX = useSharedValue((cursor.viewStart - origin) * layout.pxPerMs);
   const scrollY = useSharedValue(cursor.topRow * layout.rowHeight);
 
@@ -387,6 +409,25 @@ export const GuideGrid = ({ guide, info, config, cursor, layout, now }: GuideGri
                 theme={theme}
               />
             ))}
+            {loading.length === 0 ? null : (
+              <Skeleton style={StyleSheet.absoluteFill}>
+                {window.rows.flatMap((row) =>
+                  loading.map((block) => (
+                    <Bone
+                      key={`${row.channel.id}:${block.x}`}
+                      width={block.width}
+                      height={layout.rowHeight - 0.6 * em}
+                      radius={0.5 * em}
+                      style={{
+                        position: "absolute",
+                        left: block.x,
+                        top: row.row * layout.rowHeight + 0.3 * em,
+                      }}
+                    />
+                  )),
+                )}
+              </Skeleton>
+            )}
           </Animated.View>
         </View>
       </View>
@@ -426,8 +467,22 @@ const BONE_CELLS: readonly (readonly (readonly [number, number])[])[] = [
 export const GuideBones = ({ layout }: { readonly layout: GuideLayout }) => {
   const { em } = layout;
   const rowsTop = layout.headerHeight + layout.rulerHeight;
+  // The ruler's half-hour labels: the loaded guide shows three hours across the track.
+  const slot = layout.trackWidth / 6;
   return (
     <>
+      {Array.from({ length: 6 }, (_, tick) => (
+        <Bone
+          key={`tick:${tick}`}
+          width={3 * em}
+          height={0.95 * em}
+          style={{
+            position: "absolute",
+            top: rowsTop - 0.5 * em - 1.2 * em,
+            left: layout.inset + layout.channelWidth + tick * slot + 0.4 * em,
+          }}
+        />
+      ))}
       <View style={{ position: "absolute", top: 2.7 * em, left: 4 * em, gap: 0.5 * em }}>
         <Bone width={18 * em} height={1.15 * em} />
         <Bone width={36 * em} height={3.4 * em} />
