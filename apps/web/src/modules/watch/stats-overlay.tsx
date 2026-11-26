@@ -1,26 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import type { PlaybackSession } from "@slipstream/api";
-import { deliveryOf, type Encoder } from "@slipstream/domain";
-import { m } from "@slipstream/i18n";
+import { deliveryOf } from "@slipstream/domain";
+import { deliveryText, m } from "@slipstream/i18n";
 import { cn } from "~/ui/utils.ts";
-import { decisionText } from "./player-text.ts";
 import type { PlaybackStats } from "./use-hls-playback.ts";
-
-/** Encoder names as their makers write them; not words to translate. */
-const encoderNames: Readonly<Record<Encoder, string>> = {
-  software: "x264",
-  qsv: "Intel Quick Sync",
-  vaapi: "VA-API",
-  nvenc: "NVENC",
-};
-
-/** How the server delivers the stream, with the encoder when it converts. */
-const deliveryText = (session: PlaybackSession | undefined): string => {
-  const { decision, encoder } = deliveryOf(session?.plan);
-  if (decision === "direct") return m.player_stats_direct();
-  const how = decisionText(decision);
-  return encoder === undefined ? how : `${how} · ${encoderNames[encoder]}`;
-};
 
 /**
  * The opt-in playback statistics (Options › Playback stats): the picture, codecs, how it is
@@ -54,7 +37,7 @@ export function StatsOverlay({
   const rows: [string, string][] = [];
   if (videoSize) rows.push([m.player_details_video(), m.player_details_size(videoSize)]);
   if (stats.codecs) rows.push([m.player_stats_codecs(), stats.codecs]);
-  rows.push([m.player_stats_delivery(), deliveryText(session)]);
+  rows.push([m.player_stats_delivery(), deliveryText(deliveryOf(session?.plan))]);
   if (stats.streamKbps) {
     rows.push([m.player_stats_stream(), m.player_stats_kbps({ kbps: stats.streamKbps })]);
   }

@@ -305,7 +305,7 @@ export const TvRecordings = () => {
               </Text>
               {filter === "unwatched" ? null : (
                 <Text style={{ fontFamily: fonts.fUi, fontSize: 1.2 * em, color: colors.fg2 }}>
-                  {m.recordings_empty_hint()}
+                  {m.recordings_empty_hint_tv()}
                 </Text>
               )}
             </View>

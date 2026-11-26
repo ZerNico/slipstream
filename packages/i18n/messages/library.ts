@@ -257,6 +257,7 @@ export const library = defineArea({
     recordings_by_hand: "By hand",
     recordings_empty: "No recordings yet",
     recordings_empty_hint: "Pick a programme in the guide and press Record.",
+    recordings_empty_hint_tv: "Pick a programme in the guide and hold OK to record it.",
     recordings_padding: (p: { beforeSeconds: number; afterSeconds: number }, f: F) =>
       `${f.duration(p.beforeSeconds)} early · ${f.duration(p.afterSeconds)} after, in case it runs over`,
     tv_library_unwatched_empty: "You have watched everything",
@@ -492,6 +493,7 @@ export const library = defineArea({
     recordings_by_hand: "Von Hand",
     recordings_empty: "Noch keine Aufnahmen",
     recordings_empty_hint: "Wähle eine Sendung im Programm und drücke Aufnehmen.",
+    recordings_empty_hint_tv: "Wähle eine Sendung im Programm und halte OK, um sie aufzunehmen.",
     recordings_padding: (p, f) =>
       `${f.duration(p.beforeSeconds)} früher · ${f.duration(p.afterSeconds)} länger, falls es überzieht`,
     tv_library_unwatched_empty: "Du hast alles gesehen",

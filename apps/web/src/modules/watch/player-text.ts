@@ -1,13 +1,8 @@
 import type { PlaybackSession } from "@slipstream/api";
-import { deviceQualityLabel, m, transcodeReasonText } from "@slipstream/i18n";
+import { decisionText, deviceQualityLabel, m, transcodeReasonText } from "@slipstream/i18n";
 import type { DetailRow } from "./panel.tsx";
 import type { PlayerMenuOption } from "./player-menu.tsx";
-import {
-  deliveryOf,
-  qualityCapHeight,
-  type QualityChoice,
-  type TranscodeDecision,
-} from "@slipstream/domain";
+import { deliveryOf, qualityCapHeight, type QualityChoice } from "@slipstream/domain";
 import { surroundAsStereo } from "./speed.ts";
 import type { MediaTrack } from "./use-hls-playback.ts";
 
@@ -63,17 +58,6 @@ export const qualityOption = (choice: QualityChoice): PlayerMenuOption => {
     ...(height === undefined ? {} : { detail: m.player_quality_cap_detail({ height }) }),
   };
 };
-
-/**
- * How the server changes the stream on its way here: "Repackaged", "Converting the sound",
- * "Converting the picture". Details and the stats overlay say it the same way.
- */
-export const decisionText = (decision: Exclude<TranscodeDecision, "direct">): string =>
-  decision === "remux"
-    ? m.player_decision_remux()
-    : decision === "audio"
-      ? m.player_decision_audio()
-      : m.player_decision_video();
 
 /**
  * The Info rows, as Infuse shows them: the picture and the sound, and only when the stream is

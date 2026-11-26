@@ -13,7 +13,7 @@ const encoderNames: Readonly<Record<Encoder, string>> = {
  * How the server changes the stream on its way to the player: "Repackaged", "Sound converted",
  * "Converted". The player's details and its playback stats say it the same way.
  */
-const decisionText = (decision: Exclude<TranscodeDecision, "direct">): string =>
+export const decisionText = (decision: Exclude<TranscodeDecision, "direct">): string =>
   decision === "remux"
     ? m.player_decision_remux()
     : decision === "audio"

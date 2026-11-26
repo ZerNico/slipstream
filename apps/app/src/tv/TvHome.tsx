@@ -181,7 +181,7 @@ const HomeHero = ({
             chip: undefined,
             eyebrow: "",
             title: m.recordings_empty(),
-            meta: m.recordings_empty_hint(),
+            meta: m.recordings_empty_hint_tv(),
           }
         : heroWords(hero, now);
   const running = hero?.kind === "recording";
