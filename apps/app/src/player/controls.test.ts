@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   addSkip,
+  backPress,
+  focusPart,
   hideControls,
   AUTO_HIDE_MS,
   initialControls,
@@ -12,6 +14,7 @@ import {
   PILL_MS,
   playerKeyFor,
   reduceKey,
+  repeatsWhileHeld,
   tickControls,
   type ControlsState,
   type PlayerCommand,
@@ -56,9 +59,12 @@ describe("controls hidden", () => {
 });
 
 describe("controls row", () => {
-  it("goes up to the timeline, Back hides, and they hide by themselves", () => {
+  it("leaves the arrows to native focus, Back hides, and they hide by themselves", () => {
     const shown = press(["select"]).state;
-    expect(press(["up"], shown).state.mode).toBe("timeline");
+    // Up moves native focus to the timeline; the focus event switches, not the key.
+    expect(press(["up"], shown).state.mode).toBe("controls");
+    expect(press(["left", "right", "select"], shown).commands).toEqual([]);
+    expect(focusPart(shown, "timeline", 0).mode).toBe("timeline");
     expect(press(["back"], shown).state.mode).toBe("hidden");
     expect(tickControls(shown, AUTO_HIDE_MS - 1).mode).toBe("controls");
     expect(tickControls(shown, AUTO_HIDE_MS).mode).toBe("hidden");
@@ -75,7 +81,7 @@ describe("controls row", () => {
 });
 
 describe("timeline", () => {
-  const timeline = press(["select", "up"]).state;
+  const timeline = focusPart(press(["select"]).state, "timeline", 100);
 
   it("scrubs a preview while held and seeks once on release", () => {
     const held = press(["right", "right", "right"], timeline, 50);
@@ -107,8 +113,38 @@ describe("timeline", () => {
     expect(tickControls(scrubbed, 60_000).mode).toBe("timeline");
   });
 
-  it("goes back down to the controls row", () => {
-    expect(press(["down"], timeline).state.mode).toBe("controls");
+  it("scrubs with left and right while it has focus, and they never reach the row", () => {
+    const { state, commands } = press(["left", "left", "right"], timeline);
+    expect(state.mode).toBe("timeline");
+    expect(state.scrub).toBe(-10);
+    expect(commands).toEqual([]);
+  });
+
+  it("goes back to the controls row when focus moves there, dropping a scrub", () => {
+    // Down alone only keeps the controls up: native focus moves, then says where it went.
+    expect(press(["down"], timeline).state.mode).toBe("timeline");
+    const scrubbed = press(["left"], timeline).state;
+    const row = focusPart(scrubbed, "controls", 500);
+    expect(row.mode).toBe("controls");
+    expect(row.scrub).toBe(0);
+    expect(press(["left", "right"], row).commands).toEqual([]);
+  });
+});
+
+describe("focusPart", () => {
+  it("ignores a late focus event once the controls are hidden, and repeats", () => {
+    expect(focusPart(initialControls, "timeline", 0)).toBe(initialControls);
+    const shown = shownControls(0);
+    expect(focusPart(shown, "controls", 100)).toBe(shown);
+  });
+});
+
+describe("backPress", () => {
+  it("hides the controls first, then closes the stats, then leaves", () => {
+    expect(backPress(shownControls(0), true, 100).state.mode).toBe("hidden");
+    expect(backPress(shownControls(0), true, 100).command).toBeUndefined();
+    expect(backPress(initialControls, true, 100).command).toEqual({ _tag: "CloseStats" });
+    expect(backPress(initialControls, false, 100).command).toEqual({ _tag: "Exit" });
   });
 });
 
@@ -157,5 +193,49 @@ describe("touch (phone)", () => {
     expect(addSkip(first, -1, 500).seconds).toBe(20);
     expect(addSkip(first, 1, 500)).toMatchObject({ direction: 1, seconds: 10 });
     expect(addSkip(first, -1, SKIP_RUN_MS + 1).seconds).toBe(10);
+  });
+});
+
+/** A whole press: the key going down, then coming up. */
+const pressOnce = (state: ControlsState, key: PlayerKey, at: number) => {
+  const down = reduceKey(state, key, "down", at);
+  const up = reduceKey(down.state, key, "up", at + 80);
+  return {
+    state: up.state,
+    commands: [down.command, up.command].filter((command) => command !== undefined),
+  };
+};
+
+describe("one press, one effect", () => {
+  const shown = shownControls(0);
+  const timeline = focusPart(shown, "timeline", 0);
+
+  it("skips once per arrow press with hidden controls", () => {
+    expect(pressOnce(initialControls, "right", 0).commands).toEqual([
+      { _tag: "SeekBy", seconds: 10 },
+    ]);
+  });
+
+  it("seeks once per arrow press on the timeline, when the key comes up", () => {
+    expect(pressOnce(timeline, "left", 100).commands).toEqual([{ _tag: "SeekBy", seconds: -10 }]);
+  });
+
+  it("toggles pause once for OK on the timeline and for play/pause anywhere", () => {
+    expect(pressOnce(timeline, "select", 100).commands).toEqual([{ _tag: "TogglePause" }]);
+    expect(pressOnce(initialControls, "playPause", 0).commands).toEqual([{ _tag: "TogglePause" }]);
+    expect(pressOnce(shown, "playPause", 0).commands).toEqual([{ _tag: "TogglePause" }]);
+  });
+
+  it("leaves OK and the arrows in the controls row to the focused button alone", () => {
+    for (const key of ["select", "left", "right", "up", "down"] as const) {
+      expect(pressOnce(shown, key, 100).commands).toEqual([]);
+    }
+  });
+
+  it("repeats a held arrow only while it scrubs the timeline", () => {
+    expect(repeatsWhileHeld(timeline, "right")).toBe(true);
+    expect(repeatsWhileHeld(timeline, "select")).toBe(false);
+    expect(repeatsWhileHeld(shown, "right")).toBe(false);
+    expect(repeatsWhileHeld(initialControls, "left")).toBe(false);
   });
 });

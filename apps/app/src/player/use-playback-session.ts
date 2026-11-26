@@ -24,6 +24,8 @@ export interface ReadySession {
   readonly uri: string;
   /** Resume or start-over instant (epoch ms), when the server named one. */
   readonly startAt: number | undefined;
+  /** How the server delivers the stream (the playback stats); a quality change replaces it. */
+  readonly plan: PlaybackSession["plan"];
 }
 
 /** Where the session stands. */
@@ -114,6 +116,7 @@ export const usePlaybackSession = (
             uri: first.uri,
             startAt:
               session.startAt === undefined ? undefined : DateTime.toEpochMillis(session.startAt),
+            plan: session.plan,
           },
         });
         running = startRenewal({
@@ -151,13 +154,15 @@ export const usePlaybackSession = (
       runAction(apiActions.updatePlayback(id, patch))
         .then((session) => {
           const uri = resolveServerUrl(baseUrl, session.playlistUrl);
-          setState((previous) =>
-            previous._tag === "Ready" &&
-            previous.session.id === id &&
-            !samePlaylist(previous.session.uri, uri)
-              ? { _tag: "Ready", session: { ...previous.session, uri } }
-              : previous,
-          );
+          setState((previous) => {
+            if (previous._tag !== "Ready" || previous.session.id !== id) return previous;
+            // The plan can change with the playlist (stereo while catching up); the URL only
+            // swaps for another playlist.
+            const next = samePlaylist(previous.session.uri, uri)
+              ? { ...previous.session, plan: session.plan }
+              : { ...previous.session, uri, plan: session.plan };
+            return { _tag: "Ready", session: next };
+          });
         })
         .catch(() => undefined);
     },
@@ -174,7 +179,7 @@ export const usePlaybackSession = (
           const uri = resolveServerUrl(baseUrl, session.playlistUrl);
           setState((previous) =>
             previous._tag === "Ready" && previous.session.id === id
-              ? { _tag: "Ready", session: { ...previous.session, uri } }
+              ? { _tag: "Ready", session: { ...previous.session, uri, plan: session.plan } }
               : previous,
           );
         })

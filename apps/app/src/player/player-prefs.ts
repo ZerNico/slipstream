@@ -2,17 +2,20 @@ import { defaultFit, type FitMode, type QualityChoice, qualityChoices } from "@s
 import { persistedStore, useStore } from "../data/store.ts";
 
 /*
- * The player's choices on this device, not the account (SPEC §7.1): Fit or Fill and the quality.
+ * The player's choices on this device, not the account (SPEC §7.1): Fit or Fill, the quality and
+ * the playback stats.
  */
 
 /** What the player remembers on this device. */
 export interface PlayerPrefs {
   readonly fit: FitMode;
   readonly quality: QualityChoice;
+  /** The playback stats overlay (Options › Playback stats). */
+  readonly stats: boolean;
 }
 
-/** A fresh device: the picture fills the screen, at the server's default quality. */
-export const defaultPrefs: PlayerPrefs = { fit: defaultFit, quality: "auto" };
+/** A fresh device: the picture fills the screen, at the server's default quality, no stats. */
+export const defaultPrefs: PlayerPrefs = { fit: defaultFit, quality: "auto", stats: false };
 
 /** Reads stored choices, keeping the default for anything missing or malformed. */
 export const parsePrefs = (raw: string | null): PlayerPrefs => {
@@ -26,9 +29,11 @@ export const parsePrefs = (raw: string | null): PlayerPrefs => {
   const record = typeof value === "object" && value !== null ? value : {};
   const fit = "fit" in record ? record.fit : undefined;
   const quality = "quality" in record ? record.quality : undefined;
+  const stats = "stats" in record ? record.stats : undefined;
   return {
     fit: fit === "fit" || fit === "fill" ? fit : defaultPrefs.fit,
     quality: qualityChoices.find((choice) => choice === quality) ?? defaultPrefs.quality,
+    stats: stats === true,
   };
 };
 

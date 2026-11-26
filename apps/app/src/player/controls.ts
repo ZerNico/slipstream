@@ -39,6 +39,7 @@ export type PlayerKey =
 export type PlayerCommand =
   | { readonly _tag: "SeekBy"; readonly seconds: number }
   | { readonly _tag: "TogglePause" }
+  | { readonly _tag: "CloseStats" }
   | { readonly _tag: "Exit" };
 
 /** Skip with hidden controls: 10 s each way. */
@@ -111,14 +112,12 @@ const keyDown = (state: ControlsState, key: PlayerKey, now: number): Result => {
     }
     case "controls": {
       if (key === "back") return { state: hide(state), command: undefined };
-      if (key === "up") return { state: show(state, "timeline", now), command: undefined };
-      // Left, right and OK move and press native focus inside the row.
+      // Every arrow and OK belong to native focus here: left and right move along the row, up
+      // focuses the timeline (and `focusPart` follows), OK presses the focused button.
       return { state: show(state, "controls", now), command: undefined };
     }
     case "timeline": {
       if (key === "back") return { state: hide(state), command: undefined };
-      if (key === "down")
-        return { state: { ...show(state, "controls", now), scrub: 0 }, command: undefined };
       if (key === "select") {
         const seconds = state.scrub;
         return {
@@ -143,6 +142,32 @@ const keyDown = (state: ControlsState, key: PlayerKey, now: number): Result => {
   }
 };
 
+/** The two parts of the shown TV controls that can hold focus. */
+export type ControlsPart = "timeline" | "controls";
+
+/**
+ * Native focus moved to the timeline or into the controls row. Focus, not the arrow that moved
+ * it, says which part the remote drives, so the two never disagree: left and right scrub only
+ * while the timeline itself has focus, and never also move along the row. Leaving the timeline
+ * drops a scrub that was not committed. Hidden controls ignore a late focus event.
+ */
+export const focusPart = (state: ControlsState, part: ControlsPart, now: number): ControlsState => {
+  if (state.mode === "hidden" || state.mode === part) return state;
+  return part === "controls"
+    ? { ...show(state, "controls", now), scrub: 0, hold: idleHold }
+    : show(state, "timeline", now);
+};
+
+/**
+ * Back on TV: hides shown controls, then closes the playback stats, then leaves the player.
+ */
+export const backPress = (state: ControlsState, statsShown: boolean, now: number): Result => {
+  const result = reduceKey(state, "back", "down", now);
+  return result.command?._tag === "Exit" && statsShown
+    ? { state: result.state, command: { _tag: "CloseStats" } }
+    : result;
+};
+
 /**
  * Applies one remote key. Scrubbing moves a preview while an arrow is held and seeks once when
  * it comes back up (or on OK), so the player is not asked to seek on every key repeat.
@@ -163,6 +188,16 @@ export const reduceKey = (
   }
   return { state: { ...state, hold: idleHold }, command: undefined };
 };
+
+/**
+ * Whether a held key keeps repeating. react-native-tvos sends a held arrow down once more (as
+ * `longLeft` and so on) and then nothing until it comes up, so the player repeats it itself while
+ * it scrubs the focused timeline, the only place a hold accelerates. Hidden controls skip once per
+ * press; the row's buttons are native focus's.
+ */
+export const repeatsWhileHeld = (state: ControlsState, key: PlayerKey): boolean =>
+  state.mode === "timeline" &&
+  (key === "left" || key === "right" || key === "rewind" || key === "fastForward");
 
 /**
  * Advances time: hides the controls and the pill when their time is up. `hold` keeps the

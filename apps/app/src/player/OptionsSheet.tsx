@@ -39,9 +39,9 @@ const Heading = ({ children }: { readonly children: string }) => {
 };
 
 /**
- * The player's Options (the web's Options menu): Fit or Fill first, as a pair, then the quality
- * and the playback speed, ticked where they stand. A pick applies at once and the sheet stays
- * open, so trying another is one more press.
+ * The player's Options (the web's Options menu): Fit or Fill first, as a pair, then the quality,
+ * the playback speed and the playback stats, ticked where they stand. A pick applies at once and
+ * the sheet stays open, so trying another is one more press.
  */
 export const OptionsSheet = ({
   prefs,
@@ -49,6 +49,7 @@ export const OptionsSheet = ({
   onQuality,
   onSpeed,
   onFit,
+  onStats,
   onClose,
 }: {
   readonly prefs: PlayerPrefs;
@@ -56,12 +57,17 @@ export const OptionsSheet = ({
   readonly onQuality: (quality: QualityChoice) => void;
   readonly onSpeed: (speed: number) => void;
   readonly onFit: (fit: FitMode) => void;
+  readonly onStats: (on: boolean) => void;
   readonly onClose: () => void;
 }) => {
   const { colors, em, fonts } = useTheme();
   const fits: readonly { readonly value: FitMode; readonly label: string }[] = [
     { value: "fit", label: m.player_fit_short() },
     { value: "fill", label: m.player_fill_short() },
+  ];
+  const stats: readonly { readonly value: "off" | "on"; readonly label: string }[] = [
+    { value: "off", label: m.player_stats_off() },
+    { value: "on", label: m.player_stats_on() },
   ];
   return (
     <Sheet label={m.action_options()} onClose={onClose}>
@@ -100,6 +106,13 @@ export const OptionsSheet = ({
             onPress={() => onSpeed(candidate)}
           />
         ))}
+        <Heading>{m.player_stats()}</Heading>
+        <Segmented
+          label={m.player_stats()}
+          segments={stats}
+          selected={prefs.stats ? "on" : "off"}
+          onPick={(value) => onStats(value === "on")}
+        />
       </View>
     </Sheet>
   );
