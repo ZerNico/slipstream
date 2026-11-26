@@ -89,6 +89,17 @@ export const apiQueries = (runtime: ApiRuntime) => ({
       Effect.flatMap(Api, (api) => api.guide.extent()),
       10 * 60_000,
     ),
+  /** What airs now and next on each visible channel: Home's On now row. */
+  nowNext: () =>
+    queryOptions({
+      ...apiQuery(
+        runtime,
+        queryKeys.nowNext,
+        Effect.flatMap(Api, (api) => api.guide.nowNext()),
+      ),
+      // What is on changes on the hour and half hour; a minute is plenty (as on the web).
+      refetchInterval: 60_000,
+    }),
   /**
    * One programme in full: what a guide entry leaves out (description, pictures), for the TV
    * guide's header and the record sheet. Without an id (nothing focused yet) it waits.

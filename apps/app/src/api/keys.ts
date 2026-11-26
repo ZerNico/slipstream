@@ -28,6 +28,8 @@ export const queryKeys = {
   ],
   /** Where the guide data ends, for a timeline as wide as its data before the days load. */
   guideExtent: ["guide", "extent"],
+  /** What airs now and next on each channel (Home's On now); under `guideAll`. */
+  nowNext: ["guide", "now-next"],
   /** One programme in full (description, pictures); under `guideAll`, so a new guide refreshes it. */
   programme: (id: string): QueryKey => ["guide", "programme", id],
   /** Every window of airings the viewer already has; under `guideAll`, so a new guide refreshes it. */

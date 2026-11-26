@@ -115,3 +115,27 @@ export const buildGuide = (
   );
   return { guide: makeGuide(rows), info };
 };
+
+/** What {@link guideReady} weighs. */
+export interface GuideProgress {
+  /** The channels, recordings or conflicts have not answered yet. */
+  readonly marksPending: boolean;
+  /** The days whose programmes and repeat marks are in. */
+  readonly loaded: ReadonlySet<string>;
+  /** The day in view (a day key). */
+  readonly focus: string;
+  /** A day's request failed: the screen says so instead of waiting. */
+  readonly failed: boolean;
+  /** The guide was ready once already. */
+  readonly settled: boolean;
+}
+
+/**
+ * Whether a guide can replace its skeleton: the channels and marks are in and the day in view
+ * has answered. Another day answering first (yesterday's, often empty) is not enough: the grid
+ * would show nothing at now and then fill. Once ready it stays ready, so a day still loading
+ * later draws skeleton cells in its stretch instead of hiding the grid.
+ */
+export const guideReady = (progress: GuideProgress): boolean =>
+  !progress.marksPending &&
+  (progress.settled || progress.failed || progress.loaded.has(progress.focus));

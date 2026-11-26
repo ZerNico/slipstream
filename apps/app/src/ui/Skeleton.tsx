@@ -17,7 +17,14 @@ const Pulse = createContext<SharedValue<number> | undefined>(undefined);
  * A screen's skeleton: the loaded screen's shapes in a quiet tone, breathing together (still
  * with reduced motion), so the content arrives in place and nothing moves. Wrap the blocks.
  */
-export const Skeleton = ({ children }: { readonly children: ReactNode }) => {
+export const Skeleton = ({
+  children,
+  style,
+}: {
+  readonly children: ReactNode;
+  /** The wrapper's frame: `StyleSheet.absoluteFill` for blocks that place themselves. */
+  readonly style?: ViewStyle;
+}) => {
   const reduced = useReducedMotion();
   const pulse = useSharedValue(1);
   useEffect(() => {
@@ -26,7 +33,11 @@ export const Skeleton = ({ children }: { readonly children: ReactNode }) => {
   }, [pulse, reduced]);
   return (
     <Pulse value={pulse}>
-      <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+      <View
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={style}
+      >
         {children}
       </View>
     </Pulse>

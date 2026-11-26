@@ -1,7 +1,7 @@
 import { focusedCell, initialCursor, defaultGuideConfig } from "../tv/guide/core/index.ts";
 import { describe, expect, it } from "vitest";
 import { channel, conflict, programme, recording } from "../../tests/fixtures.ts";
-import { buildGuide, cellLabel } from "./guide-data.ts";
+import { buildGuide, cellLabel, guideReady } from "./guide-data.ts";
 import { GuideRepeat, HOUR } from "@slipstream/domain";
 import { Schema } from "effect";
 
@@ -161,5 +161,34 @@ describe("buildGuide", () => {
     const { guide } = buildGuide(channels, programmes, noMarks);
     const cursor = initialCursor(guide, defaultGuideConfig, T + 30 * 60_000, 2);
     expect(focusedCell(guide, cursor)?.programme?.title).toBe("Live F1: Rennen");
+  });
+});
+
+describe("guideReady", () => {
+  const base = {
+    marksPending: false,
+    loaded: new Set<string>(),
+    focus: "2026-11-22",
+    failed: false,
+    settled: false,
+  };
+
+  it("waits for the day in view, not whichever day answers first", () => {
+    expect(guideReady({ ...base, loaded: new Set(["2026-11-21"]) })).toBe(false);
+    expect(guideReady({ ...base, loaded: new Set(["2026-11-21", "2026-11-22"]) })).toBe(true);
+  });
+
+  it("waits for the channels and the marks", () => {
+    expect(guideReady({ ...base, loaded: new Set(["2026-11-22"]), marksPending: true })).toBe(
+      false,
+    );
+  });
+
+  it("stays ready once it was, while a day the cursor moves to loads", () => {
+    expect(guideReady({ ...base, focus: "2026-11-25", settled: true })).toBe(true);
+  });
+
+  it("gives way to the error when a day fails", () => {
+    expect(guideReady({ ...base, failed: true })).toBe(true);
   });
 });

@@ -426,6 +426,7 @@ export const TvGuide = () => {
             cursor={cursor}
             layout={layout}
             now={now}
+            pending={data.pending}
           />
         </Pressable>
       </TVFocusGuideView>

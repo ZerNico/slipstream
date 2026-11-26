@@ -1,9 +1,10 @@
 import type { RecordingEntry } from "@slipstream/api";
+import { epochMs, guideDays } from "@slipstream/domain";
 import { formatters, m } from "@slipstream/i18n";
 import { useRouter } from "expo-router";
 import { Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { useHome } from "../data/hooks.ts";
+import { useHome, useWarmGuide } from "../data/hooks.ts";
 import { windowMarks } from "../data/capture-marks.ts";
 import { channelPlayTarget, playerParams } from "../player/playback.ts";
 import { TodoRow } from "../recordings/TodoRow.tsx";
@@ -17,6 +18,7 @@ import { FocusButton } from "../ui/FocusButton.tsx";
 import { StatusScreen } from "../ui/StatusScreen.tsx";
 import { useNow } from "../ui/use-now.ts";
 import { Thumb } from "./Thumb.tsx";
+import { EmptyState } from "./EmptyState.tsx";
 import { HomeSkeleton } from "./PhoneSkeletons.tsx";
 
 /**
@@ -32,6 +34,8 @@ export const PhoneHome = () => {
   const now = useNow(30_000);
   const { model, recordings, loading, error, retry } = useHome(now);
   const todo = useTodoSheet(now);
+  // The guide's first day loads while Home shows, so the Guide tab opens with its programmes.
+  useWarmGuide(now, guideDays, true);
 
   if (loading) return <HomeSkeleton />;
   if (error !== null) {
@@ -78,16 +82,29 @@ export const PhoneHome = () => {
           </View>
         </View>
         {hero === undefined ? (
-          <Text
+          // Nothing recorded, running or coming: the way to the guide, where recording starts.
+          <View
             style={{
-              fontFamily: fonts.fUiSemiBold,
-              fontSize: 1.2 * em,
-              color: colors.fg,
-              paddingHorizontal: side,
+              marginHorizontal: side,
+              borderRadius: radii.rL,
+              borderWidth: 1,
+              borderColor: colors.line,
             }}
           >
-            {m.home_nothing_recording()}
-          </Text>
+            <EmptyState
+              title={m.recordings_empty()}
+              body={m.recordings_empty_hint()}
+              action={
+                <FocusButton
+                  label={m.action_open_guide()}
+                  icon="guide"
+                  variant="primary"
+                  size={0.95}
+                  onPress={() => router.navigate("/guide")}
+                />
+              }
+            />
+          </View>
         ) : (
           <View style={{ gap: 0.8 * em, paddingHorizontal: side }}>
             <View
@@ -233,6 +250,60 @@ export const PhoneHome = () => {
                     style={{ fontFamily: fonts.fUi, fontSize: 0.8 * em, color: colors.fg3 }}
                   >
                     {`${m.recordings_time_left({ seconds: item.secondsLeft })} · ${f.day(new Date(item.start))}`}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
+        {/* What airs now, as on the web's Home: a tap watches the channel live. */}
+        {model.onNow.length === 0 ? null : (
+          <View style={{ gap: 0.7 * em }}>
+            <Text
+              style={{
+                fontFamily: fonts.fUiSemiBold,
+                fontSize: 1.1 * em,
+                color: colors.fg,
+                paddingHorizontal: side,
+              }}
+            >
+              {m.guide_on_now()}
+            </Text>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ gap: 0.8 * em, paddingHorizontal: side }}
+            >
+              {model.onNow.map(({ channel, programme, progress }) => (
+                <Pressable
+                  key={channel.id}
+                  accessibilityRole="button"
+                  accessibilityLabel={m.home_card_live_label({
+                    channel: channel.name,
+                    title: programme.title,
+                  })}
+                  onPress={() => {
+                    const target = channelPlayTarget(channel.id, recordings, Date.now());
+                    if (target !== undefined) play(playerParams(target));
+                  }}
+                  style={{ width: 13 * em, gap: 0.4 * em }}
+                >
+                  <Thumb subject={programme} progress={progress} width={13 * em} />
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontFamily: fonts.fUiSemiBold, fontSize: 0.9 * em, color: colors.fg }}
+                  >
+                    {programme.title}
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{ fontFamily: fonts.fUi, fontSize: 0.8 * em, color: colors.fg3 }}
+                  >
+                    {m.home_card_slot({
+                      channel: channel.name,
+                      start: new Date(epochMs(programme.start)),
+                      end: new Date(epochMs(programme.end)),
+                    })}
                   </Text>
                 </Pressable>
               ))}
