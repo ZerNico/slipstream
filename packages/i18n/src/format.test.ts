@@ -119,3 +119,15 @@ describe("numbers, plurals and lists", () => {
     expect(createFormatters("en").tag).toBe("en");
   });
 });
+
+describe("the device's clock setting", () => {
+  const at = new Date(Date.UTC(2026, 0, 1, 16, 5));
+  it("writes 24-hour times on a device set to them, whatever the language would pick", () => {
+    const f = createFormatters("en", { region: "US", timeZone: "UTC", twentyFourHour: true });
+    expect(f.time(at)).toBe("16:05");
+  });
+  it("writes 12-hour times on a device set to them", () => {
+    const f = createFormatters("de", { timeZone: "UTC", twentyFourHour: false });
+    expect(f.time(at)).toMatch(/^0?4:05\sPM$/u);
+  });
+});

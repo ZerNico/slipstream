@@ -76,5 +76,6 @@ export {
   setLocale,
   setRegion,
   setTimeZone,
+  setTwentyFourHour,
   subscribe,
 } from "./runtime.ts";

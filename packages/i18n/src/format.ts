@@ -58,6 +58,11 @@ export interface FormatOptions {
   readonly region?: string | undefined;
   /** IANA time zone; without one, the device's zone applies. */
   readonly timeZone?: string | undefined;
+  /**
+   * The device's 12- or 24-hour setting (Android's "Use 24-hour format"), which can differ
+   * from what the language and region would pick; without one, the region decides.
+   */
+  readonly twentyFourHour?: boolean | undefined;
 }
 
 /**
@@ -108,7 +113,8 @@ const decimalUnit = (value: number, scale: readonly string[]) => {
 export const createFormatters = (locale: Locale, options: FormatOptions = {}): Formatters => {
   const tag = formatTag(locale, options.region);
   const zone = options.timeZone ? { timeZone: options.timeZone } : {};
-  const timeFormat = new Intl.DateTimeFormat(tag, { timeStyle: "short", ...zone });
+  const hourCycle = options.twentyFourHour === undefined ? {} : { hour12: !options.twentyFourHour };
+  const timeFormat = new Intl.DateTimeFormat(tag, { timeStyle: "short", ...hourCycle, ...zone });
   const dayFormat = new Intl.DateTimeFormat(tag, {
     weekday: "short",
     day: "numeric",
@@ -119,6 +125,7 @@ export const createFormatters = (locale: Locale, options: FormatOptions = {}): F
     weekday: "short",
     hour: "numeric",
     minute: "2-digit",
+    ...hourCycle,
     ...zone,
   });
   const dateFormat = new Intl.DateTimeFormat(tag, { dateStyle: "medium", ...zone });

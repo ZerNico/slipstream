@@ -5,8 +5,9 @@ import {
   matchLocaleParts,
   setLocale,
   setRegion,
+  setTwentyFourHour,
 } from "@slipstream/i18n";
-import { getLocales, useLocales } from "expo-localization";
+import { getCalendars, getLocales, useCalendars, useLocales } from "expo-localization";
 import * as SecureStore from "expo-secure-store";
 import { useEffect } from "react";
 import { persistedStore, useStore } from "../data/store.ts";
@@ -37,6 +38,8 @@ const apply = (): void => {
   const language = picked === "system" ? matchLocaleParts(preferred) : picked;
   setLocale(language);
   setRegion(detectRegionParts(language, preferred));
+  // Android's own "Use 24-hour format" wins over what the language and region would pick.
+  setTwentyFourHour(getCalendars()[0]?.uses24hourClock ?? undefined);
 };
 
 /** Picks the language before the first render. */
@@ -58,8 +61,10 @@ export const applyDeviceLocale = (): void => {
 export const useFollowDeviceLanguage = (): void => {
   const locales = useLocales();
   const tags = locales.map((locale) => locale.languageTag).join(",");
-  // Re-applied when the device's list changes; the first run repeats the start's choice.
-  useEffect(apply, [tags]);
+  const clock = String(useCalendars()[0]?.uses24hourClock);
+  // Re-applied when the device's list or its clock setting changes; the first run repeats the
+  // start's choice.
+  useEffect(apply, [tags, clock]);
 };
 
 /** Switches the language now and for every later start; "system" follows the device again. */

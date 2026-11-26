@@ -15,6 +15,7 @@ interface State {
   readonly locale: Locale;
   readonly region: string | undefined;
   readonly timeZone: string | undefined;
+  readonly twentyFourHour: boolean | undefined;
   readonly f: Formatters;
 }
 
@@ -23,6 +24,7 @@ let state: State = {
   locale: baseLocale,
   region: undefined,
   timeZone: undefined,
+  twentyFourHour: undefined,
   f: createFormatters(baseLocale),
 };
 
@@ -30,14 +32,28 @@ const update = (next: Omit<State, "f">) => {
   if (
     next.locale === state.locale &&
     next.region === state.region &&
-    next.timeZone === state.timeZone
+    next.timeZone === state.timeZone &&
+    next.twentyFourHour === state.twentyFourHour
   ) {
     return;
   }
-  const { locale, region, timeZone } = next;
-  state = { locale, region, timeZone, f: createFormatters(locale, { region, timeZone }) };
+  const { locale, region, timeZone, twentyFourHour } = next;
+  state = {
+    locale,
+    region,
+    timeZone,
+    twentyFourHour,
+    f: createFormatters(locale, { region, timeZone, twentyFourHour }),
+  };
   for (const listener of listeners) listener();
 };
+
+/**
+ * Follows the device's 12- or 24-hour setting (true: 16:00, false: 4:00 PM), or undefined to
+ * let the language and region decide.
+ */
+export const setTwentyFourHour = (twentyFourHour: boolean | undefined): void =>
+  update({ ...state, twentyFourHour });
 
 /** The language in effect. */
 export const getLocale = (): Locale => state.locale;
