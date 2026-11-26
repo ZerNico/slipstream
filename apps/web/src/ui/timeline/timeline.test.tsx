@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { setLocale, setRegion } from "@slipstream/i18n";
 import { mount } from "~/test/dom.tsx";
-import type { TimelineData } from "./geometry.ts";
+import type { TimelineData } from "@slipstream/domain";
 import { Timeline } from "./timeline.tsx";
 
 /** Local wall-clock times, so labels read the same in every time zone. */

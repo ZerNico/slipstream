@@ -48,6 +48,7 @@ export * from "./stream-picker.ts";
 export * from "./streams.ts";
 export * from "./suggestions.ts";
 export * from "./time.ts";
+export * from "./timeline.ts";
 export * from "./title.ts";
 export * from "./transcode.ts";
 export * from "./user.ts";

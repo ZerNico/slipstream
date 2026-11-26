@@ -3,6 +3,7 @@ import {
   fitAfterPinch,
   isWatched,
   liveEta,
+  playbackEndsAt,
   playbackSpeeds,
   progressSaveIntervalMs,
   recordingProgress,
@@ -34,6 +35,12 @@ describe("playback speed", () => {
       liveEta({ now: 0, behindMs: 600_000, speed: 1.25, windowEnd: 1_000_000 }),
     ).toBeUndefined();
     expect(liveEta({ now: 0, behindMs: 600_000, speed: 2, windowEnd: 1_000_000 })).toBe(600_000);
+  });
+
+  it("says when a finished recording ends: what is left over the speed", () => {
+    expect(playbackEndsAt({ now: 1000, leftMs: 600_000, speed: 1 })).toBe(601_000);
+    expect(playbackEndsAt({ now: 0, leftMs: 600_000, speed: 2 })).toBe(300_000);
+    expect(playbackEndsAt({ now: 0, leftMs: -5, speed: 1 })).toBe(0);
   });
 });
 

@@ -3,6 +3,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef } from "react";
 import { DateTime } from "effect";
 import {
+  bandsIn,
   type ChannelId,
   epochMs,
   isPlayable,
@@ -20,7 +21,6 @@ import { type PlayerProps, Player } from "./player.tsx";
 import { type RecordAt, useRecordingActions, useRecordNow } from "./use-record-now.ts";
 import { programmeSubject, recordingSubject } from "~/ui/artwork/subjects.ts";
 import {
-  bandsIn,
   channelItems,
   type RecordingSearch,
   recordingStart,

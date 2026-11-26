@@ -9,7 +9,6 @@ import {
 import { formatClock, formatDay, formatDuration, formatTimeRange } from "~/i18n/formats.ts";
 import { dayPill, m, pathLabels } from "@slipstream/i18n";
 import { itemName, recordedSpan, resumeMillis } from "~/modules/library/library.ts";
-import type { Band } from "~/ui/timeline/geometry.ts";
 import type { PanelItem } from "./panel.tsx";
 import { startTarget } from "./player-model.ts";
 import { programmeSubject, recordingSubject } from "~/ui/artwork/subjects.ts";
@@ -25,16 +24,6 @@ export interface RecordingSearch {
   readonly at?: "resume" | "start" | "live" | "pos" | undefined;
   readonly t?: number | undefined;
 }
-
-/**
- * A band's name on the timeline: the programme without the series prefix and the event suffix,
- * "Qualifying" for "Live F1: Qualifying - GP Katar". Titles without either stay whole.
- */
-export const bandTitle = (title: string): string => {
-  const afterPrefix = title.includes(": ") ? title.slice(title.indexOf(": ") + 2) : title;
-  const dash = afterPrefix.lastIndexOf(" - ");
-  return dash > 0 ? afterPrefix.slice(0, dash) : afterPrefix;
-};
 
 /** Joins a short phrase with no-break spaces, so a line never breaks inside it. */
 const keepTogether = (text: string): string => text.replaceAll(" ", " ");
@@ -197,24 +186,3 @@ export const channelItems = (
       link: { to: "/watch/live/$channel", params: { channel: channel.id } },
     };
   });
-
-/** The timeline's bands: the channel's programmes inside the window, named short. */
-export const bandsIn = (
-  programmes: readonly Programme[],
-  channelId: ChannelId,
-  start: number,
-  end: number,
-): Band[] =>
-  programmes
-    .filter(
-      (programme) =>
-        programme.channelId === channelId &&
-        epochMs(programme.end) > start &&
-        epochMs(programme.start) < end,
-    )
-    .toSorted((a, b) => epochMs(a.start) - epochMs(b.start))
-    .map((programme) => ({
-      start: epochMs(programme.start),
-      end: epochMs(programme.end),
-      title: bandTitle(programme.title),
-    }));

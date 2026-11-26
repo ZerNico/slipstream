@@ -22,7 +22,7 @@ import {
 } from "~/modules/library/library.ts";
 import type { ArtworkSubject } from "~/ui/artwork/generate.ts";
 import { programmeSubject, recordingSubject } from "~/ui/artwork/subjects.ts";
-import type { TimelineData } from "~/ui/timeline/geometry.ts";
+import type { TimelineData } from "@slipstream/domain";
 import type { Hero } from "./model.ts";
 import { channelOf } from "./present.ts";
 import type { HeroBadge, HeroIcon } from "./shape.ts";

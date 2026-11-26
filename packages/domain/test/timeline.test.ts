@@ -1,5 +1,10 @@
+import { DateTime } from "effect";
 import { describe, expect, it } from "vitest";
+import { ChannelId } from "../src/ids.ts";
 import {
+  bandsIn,
+  bandTicks,
+  bandTitle,
   bottomLabelClearance,
   hoverAt,
   layoutTimeline,
@@ -10,7 +15,7 @@ import {
   seekTimeAt,
   type TimelineData,
   withOverrun,
-} from "./geometry.ts";
+} from "../src/timeline.ts";
 
 const MIN = 60_000;
 /** Minutes after 04:55, the example recording from the design language. */
@@ -296,5 +301,52 @@ describe("overrun", () => {
     expect(positionOf(withOverrun(data), 100)).toBeCloseTo(76.92, 1);
     const inside = { start: 0, end: 100, live: 50 };
     expect(withOverrun(inside)).toBe(inside);
+  });
+});
+
+const programme = (channelId: ChannelId, from: number, to: number, title: string) => ({
+  channelId,
+  start: DateTime.makeUnsafe(at(from)),
+  end: DateTime.makeUnsafe(at(to)),
+  title,
+});
+
+describe("bands", () => {
+  const f1 = ChannelId.make("sky-sport-f1");
+  const zdf = ChannelId.make("zdf");
+  it("names bands without the series prefix and the event", () => {
+    expect(bandTitle("Live F1: Qualifying - GP Katar")).toBe("Qualifying");
+    expect(bandTitle("F1: Pressekonferenz Qualifying - GP Katar")).toBe(
+      "Pressekonferenz Qualifying",
+    );
+    expect(bandTitle("Tagesschau")).toBe("Tagesschau");
+  });
+
+  it("takes the channel's programmes that touch the window, in order", () => {
+    const programmes = [
+      programme(f1, 125, 185, "Live F1: Pressekonferenz - GP Katar"),
+      programme(f1, -60, 5, "Vorbericht"),
+      programme(zdf, 0, 60, "heute"),
+      programme(f1, 5, 125, "Live F1: Qualifying - GP Katar"),
+      programme(f1, 185, 245, "Danach"),
+      programme(f1, -120, -60, "Davor"),
+    ];
+    expect(bandsIn(programmes, f1, at(0), at(185))).toEqual([
+      { start: at(-60), end: at(5), title: "Vorbericht" },
+      { start: at(5), end: at(125), title: "Qualifying" },
+      { start: at(125), end: at(185), title: "Pressekonferenz" },
+    ]);
+    expect(bandsIn(programmes, zdf, at(100), at(185))).toEqual([]);
+  });
+
+  it("ticks where one band ends and the next begins, with the marks, once each", () => {
+    const bands = [
+      { start: at(-60), end: at(5), title: "Vorbericht" },
+      { start: at(5), end: at(125), title: "Qualifying" },
+    ];
+    expect(bandTicks(bands, [at(125), at(130)])).toEqual([at(-60), at(5), at(125), at(130)]);
+    // The bar keeps only the ones inside it.
+    const layout = layoutTimeline({ start: at(0), end: at(185), marks: bandTicks(bands) });
+    expect(layout.marks).toEqual([pct(5), pct(125)]);
   });
 });

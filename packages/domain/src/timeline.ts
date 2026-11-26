@@ -1,6 +1,10 @@
+import type { GuideEntry } from "./programme.ts";
+import { epochMs } from "./time.ts";
+
 /**
- * Pure geometry for the timeline (SPEC §5). Times are epoch milliseconds; positions are
- * percentages of the bar, 0 at `start` and 100 at `end`. The component draws exactly this.
+ * Pure geometry for the timeline (SPEC §5), shared by web and app: the bar, its programme
+ * bands and ticks, the labels and seeking. Times are epoch milliseconds; positions are
+ * percentages of the bar, 0 at `start` and 100 at `end`. Each client draws exactly this.
  */
 
 /** A closed time range in epoch milliseconds. */
@@ -321,6 +325,50 @@ export const hoverAt = (data: TimelineData, fraction: number): HoverInfo => {
     band: band?.title,
   };
 };
+
+/**
+ * A band's name on the timeline: the programme without the series prefix and the event suffix,
+ * "Qualifying" for "Live F1: Qualifying - GP Katar". Titles without either stay whole.
+ */
+export const bandTitle = (title: string): string => {
+  const afterPrefix = title.includes(": ") ? title.slice(title.indexOf(": ") + 2) : title;
+  const dash = afterPrefix.lastIndexOf(" - ");
+  return dash > 0 ? afterPrefix.slice(0, dash) : afterPrefix;
+};
+
+/** The timeline's bands: the channel's programmes inside the window, in order, named short. */
+export const bandsIn = (
+  programmes: readonly Pick<GuideEntry, "channelId" | "start" | "end" | "title">[],
+  channelId: GuideEntry["channelId"],
+  start: number,
+  end: number,
+): Band[] =>
+  programmes
+    .filter(
+      (programme) =>
+        programme.channelId === channelId &&
+        epochMs(programme.end) > start &&
+        epochMs(programme.start) < end,
+    )
+    .toSorted((a, b) => epochMs(a.start) - epochMs(b.start))
+    .map((programme) => ({
+      start: epochMs(programme.start),
+      end: epochMs(programme.end),
+      title: bandTitle(programme.title),
+    }));
+
+/**
+ * The ticks on the bar: where one band ends and the next begins, and any further marks (a
+ * recording's programme start and end inside its extra time), once each and in order. Ticks at
+ * or past the bar's ends are dropped by `layoutTimeline`.
+ */
+export const bandTicks = (
+  bands: readonly TimeSpan[],
+  marks: readonly number[] = [],
+): readonly number[] =>
+  [...new Set([...bands.flatMap((band) => [band.start, band.end]), ...marks])].toSorted(
+    (a, b) => a - b,
+  );
 
 /** Arrow keys step 10 s, Shift or Page keys 60 s (SPEC §5). */
 export const keyStepMs = { small: 10_000, large: 60_000 } as const;

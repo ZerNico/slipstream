@@ -1,4 +1,4 @@
-import type { Band, TimelineData, TimeSpan } from "~/ui/timeline/geometry.ts";
+import type { Band, TimelineData, TimeSpan } from "@slipstream/domain";
 import {
   AT_LIVE_TOLERANCE,
   clockGaps,

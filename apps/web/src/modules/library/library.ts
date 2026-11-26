@@ -11,7 +11,7 @@ import {
   renderPath,
   type UserId,
 } from "@slipstream/domain";
-import type { TimelineData, TimeSpan } from "~/ui/timeline/geometry.ts";
+import type { TimelineData, TimeSpan } from "@slipstream/domain";
 
 /** A recording as the library lists it. */
 export type Entry = RecordingEntry;
