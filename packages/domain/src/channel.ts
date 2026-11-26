@@ -1,6 +1,7 @@
 import { Schema, Struct } from "effect";
 import { ChannelId, ChannelStreamId, SourceStreamId } from "./ids.ts";
 import { HttpUrl } from "./source.ts";
+import { epochMs, type Instant } from "./time.ts";
 
 /** A curated channel: what people see in the guide and tune to. */
 export const Channel = Schema.Struct({
@@ -60,6 +61,29 @@ export const guideChannelOrder = (
 export const visibleChannels = <A extends Pick<Channel, "number" | "name" | "hidden">>(
   channels: ReadonlyArray<A>,
 ): Array<A> => channels.filter((channel) => !channel.hidden).toSorted(guideChannelOrder);
+
+/**
+ * What airs at `now` on each visible channel, in guide order, from the server's now/next
+ * entries: channels with nothing on air at that moment are left out.
+ */
+export const onAirNow = <
+  C extends Pick<Channel, "id" | "number" | "name" | "hidden">,
+  P extends { readonly start: Instant; readonly end: Instant },
+>(
+  channels: ReadonlyArray<C>,
+  nowNext: ReadonlyArray<{ readonly channelId: ChannelId; readonly now?: P | undefined }>,
+  now: number,
+): Array<{ readonly channel: C; readonly programme: P }> => {
+  const airing = new Map(nowNext.map((entry) => [entry.channelId, entry.now]));
+  return visibleChannels(channels).flatMap((channel) => {
+    const programme = airing.get(channel.id);
+    return programme !== undefined &&
+      epochMs(programme.start) <= now &&
+      epochMs(programme.end) > now
+      ? [{ channel, programme }]
+      : [];
+  });
+};
 
 const markLength = 5;
 const qualityTag = /\s+(?:U?HD|FHD|SD|4K)$/iu;

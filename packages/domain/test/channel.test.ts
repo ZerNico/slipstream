@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { DateTime } from "effect";
+import { ChannelId } from "../src/ids.ts";
 import {
   channelMark,
   displayChannelName,
   guideChannelOrder,
+  onAirNow,
   visibleChannels,
 } from "../src/channel.ts";
 
@@ -91,5 +94,48 @@ describe("guideChannelOrder", () => {
       "3sat",
       "arte",
     ]);
+  });
+});
+
+const at = (millis: number) => DateTime.makeUnsafe(millis);
+const channel = (id: string, name: string, number: number, hidden = false) => ({
+  id: ChannelId.make(id),
+  name,
+  number,
+  hidden,
+});
+
+const show = (id: string, from: number, to: number) => ({ id, start: at(from), end: at(to) });
+
+describe("onAirNow", () => {
+  const T = Date.UTC(2026, 10, 26, 20);
+  const HOUR = 3_600_000;
+  const f1 = channel("f1", "Sky Sport F1", 106);
+  const ard = channel("ard", "Das Erste", 1);
+  const old = channel("old", "Old", 50, true);
+
+  it("lists what airs now on each visible channel, in channel order", () => {
+    const items = onAirNow(
+      [f1, ard, old],
+      [
+        { channelId: f1.id, now: show("race", T - HOUR, T + HOUR) },
+        { channelId: ard.id, now: show("news", T - HOUR / 4, T + HOUR / 4) },
+        { channelId: old.id, now: show("later", T - HOUR, T + HOUR) },
+      ],
+      T,
+    );
+    expect(items.map((item) => [item.channel.id, item.programme.id])).toEqual([
+      ["ard", "news"],
+      ["f1", "race"],
+    ]);
+  });
+
+  it("leaves out channels with nothing on air at that moment", () => {
+    const race = show("race", T - HOUR, T + HOUR);
+    expect(
+      onAirNow([f1, ard], [{ channelId: f1.id, now: race }, { channelId: ard.id }], T + 2 * HOUR),
+    ).toEqual([]);
+    expect(onAirNow([f1], [{ channelId: f1.id, now: race }], T + HOUR)).toEqual([]);
+    expect(onAirNow([f1], [], T)).toEqual([]);
   });
 });

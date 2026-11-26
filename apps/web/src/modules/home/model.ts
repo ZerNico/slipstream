@@ -13,8 +13,8 @@ import {
   type PlaybackState,
   type Programme,
   type Rule,
+  onAirNow,
   type UserId,
-  visibleChannels,
 } from "@slipstream/domain";
 import { recordedSpan, resumeMillis } from "~/modules/library/library.ts";
 
@@ -147,17 +147,8 @@ export const newList = (data: Pick<HomeData, "recordings">): readonly RecordingE
   data.recordings.filter(isNew).toSorted(byEndDesc);
 
 /** What airs now on each visible channel, in channel order. */
-export const onAirNow = (
-  data: Pick<HomeData, "channels" | "nowNext" | "now">,
-): readonly { readonly channel: Channel; readonly programme: Programme }[] =>
-  visibleChannels(data.channels).flatMap((channel) => {
-    const programme = data.nowNext.find((entry) => entry.channelId === channel.id)?.now;
-    return programme !== undefined &&
-      epochMs(programme.start) <= data.now &&
-      epochMs(programme.end) > data.now
-      ? [{ channel, programme }]
-      : [];
-  });
+const airingNow = (data: Pick<HomeData, "channels" | "nowNext" | "now">) =>
+  onAirNow(data.channels, data.nowNext, data.now);
 
 /** The hero's state for this profile right now (SPEC §8.1, first match wins). */
 export const selectHero = (data: HomeData): Hero => {
@@ -176,7 +167,7 @@ export const selectHero = (data: HomeData): Hero => {
   if (recent !== undefined) return { kind: "continue", entry: recent };
   const [fresh] = newList(data);
   if (fresh !== undefined) return { kind: "new", entry: fresh };
-  const airing = onAirNow(data);
+  const airing = airingNow(data);
   const favourite = airing.find((item) => item.channel.favourite) ?? airing[0];
   if (favourite !== undefined) return { kind: "live", programme: favourite.programme };
   return { kind: "idle" };
@@ -211,7 +202,7 @@ export interface OnNowItem {
 /** The On now row: every visible channel's current programme, with its running recording. */
 export const onNowRow = (data: HomeData): readonly OnNowItem[] => {
   const running = runningRecordings(data);
-  return onAirNow(data).map(({ channel, programme }) => ({
+  return airingNow(data).map(({ channel, programme }) => ({
     channel,
     programme,
     recording: running.find(

@@ -3,12 +3,12 @@ import {
   type Channel,
   epochMs,
   isRecorded,
+  onAirNow,
   padRange,
   type PlaybackState,
   type Programme,
   type Recording,
   type RecordingId,
-  visibleChannels,
 } from "@slipstream/domain";
 
 /** Why the hero shows this recording: it is running, it is next, or it is the latest. */
@@ -137,22 +137,15 @@ export const continueItems = (
  * "On now", as the web's Home has it: what airs now on each visible channel, in channel order;
  * a channel with nothing on air right now is left out.
  */
-export const onAirNow = (
+export const onNowItems = (
   channels: readonly Channel[],
   nowNext: readonly NowNext[],
   now: number,
-): readonly OnNowItem[] => {
-  const airing = new Map(nowNext.map((entry) => [entry.channelId as string, entry.now]));
-  return visibleChannels(channels).flatMap((channel) => {
-    const programme = airing.get(channel.id);
-    if (programme === undefined) return [];
+): readonly OnNowItem[] =>
+  onAirNow(channels, nowNext, now).map(({ channel, programme }) => {
     const start = epochMs(programme.start);
-    const end = epochMs(programme.end);
-    return start <= now && end > now
-      ? [{ channel, programme, progress: (now - start) / (end - start) }]
-      : [];
+    return { channel, programme, progress: (now - start) / (epochMs(programme.end) - start) };
   });
-};
 
 /** Channel id to name, for labels. */
 export const channelNames = (channels: readonly Channel[]): ReadonlyMap<string, string> =>
@@ -170,6 +163,6 @@ export const homeModel = (
   return {
     hero: pickHero(recordings, names, now),
     continueWatching: continueItems(states, recordings, names),
-    onNow: onAirNow(channels, nowNext, now),
+    onNow: onNowItems(channels, nowNext, now),
   };
 };
